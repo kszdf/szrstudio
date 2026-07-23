@@ -1,0 +1,47 @@
+# ===== 密钥 / 凭据（绝不提交！）=====
+*.env
+*.env.*
+*key*
+*secret*
+*.pem
+*.token
+
+# ===== 第三方框架（非本项目自写源码，体积大）=====
+GPT_SoVITS/
+RVC_Boss/
+tools/
+tests/
+Docker/
+
+# ===== 模型 / 训练数据（运行时或大文件，非源码）=====
+training_data/
+pretrained_models/
+voice_raw/
+natural_ref/
+auto_pipeline/
+face2face/
+covers/
+model_thumbs/
+
+# ===== 媒体 / 产物（运行时生成）=====
+*.mp4
+*.wav
+*.avi
+*.mov
+*.m4a
+*.mp3
+*.png
+*.jpg
+*.jpeg
+*.gif
+output/
+
+# ===== 临时 / 缓存 =====
+__pycache__/
+*.pyc
+.cache/
+_tmp_pil/
+_test/
+_scratch/
+ab_test/
+*.log

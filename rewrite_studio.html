@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>短视频生产工作台 · 老张讲财税</title>
+<style>
+  :root{
+    --bg:#f6f8fa; --panel:#fff; --border:#d0d7de; --ink:#1f2328;
+    --blue:#2563eb; --blue-d:#1d4ed8; --hi:#e5484d; --med:#b08800;
+    --step-on:#1d4ed8; --step-done:#1a7f37; --step-todo:#8b949e;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;
+       background:var(--bg);color:var(--ink);font-size:14px;}
+  header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;
+         padding:12px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  header h1{font-size:17px;margin:0;font-weight:600;}
+  header .sub{opacity:.85;font-size:12px;}
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-left:auto;}
+  select,button,input,textarea{font-family:inherit;font-size:13px;border-radius:6px;}
+  select{padding:6px 9px;border:1px solid var(--border);background:#fff;min-width:150px;}
+  button{padding:8px 14px;border:1px solid var(--border);background:#fff;cursor:pointer;
+         transition:.15s;font-weight:500;}
+  button:hover{border-color:var(--blue);color:var(--blue);}
+  button.primary{background:var(--blue);color:#fff;border-color:var(--blue);}
+  button.primary:hover{background:var(--blue-d);color:#fff;}
+  button:disabled{opacity:.5;cursor:not-allowed;}
+  .status{font-size:13px;font-weight:600;padding:6px 12px;border-radius:20px;}
+  .status.safe{background:#e6f6ec;color:#1a7f37;}
+  .status.warn{background:#fff3bf;color:#8a6d00;}
+  .status.danger{background:#ffe3e3;color:#cf222e;}
+
+  /* —— 三栏布局 —— */
+  main{display:grid;grid-template-columns:210px 1fr 320px;gap:14px;
+       max-width:1320px;margin:14px auto;padding:0 16px 60px;align-items:start;}
+  .col-left,.col-right{position:sticky;top:14px;}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;
+        padding:14px 16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+  /* 步骤导航 */
+  .steps{list-style:none;margin:0;padding:0;}
+  .steps li{padding:10px 12px;border-radius:8px;margin-bottom:6px;cursor:pointer;
+            display:flex;align-items:center;gap:9px;font-weight:500;color:var(--step-todo);
+            border:1px solid transparent;}
+  .steps li:hover{background:#eef2ff;}
+  .steps li.active{background:#1d4ed8;color:#fff;}
+  .steps li.done{color:var(--step-done);}
+  .steps .dot{width:18px;height:18px;border-radius:50%;background:#e6edf3;color:#57606a;
+              display:flex;align-items:center;justify-content:center;font-size:11px;flex:0 0 auto;}
+  .steps li.active .dot{background:#fff;color:#1d4ed8;}
+  .steps li.done .dot{background:#1a7f37;color:#fff;}
+
+  /* 面板 */
+  .panel{display:none;}
+  .panel.active{display:block;}
+  .panel h2{font-size:15px;margin:0 0 12px;}
+  .seg{margin-bottom:16px;}
+  .seg-label{font-weight:600;font-size:14px;margin-bottom:7px;display:flex;
+             align-items:center;gap:8px;}
+  .seg-label .tag{font-size:11px;font-weight:500;padding:2px 8px;border-radius:10px;}
+  .tag.open{background:#e0efff;color:#0969da;}
+  .tag.body{background:#e6f6ec;color:#1a7f37;}
+  .tag.end{background:#fbefff;color:#8250df;}
+  .seg-count{font-size:12px;font-weight:500;margin-left:auto;}
+
+  /* 编辑器 overlay 标红 */
+  .editor{position:relative;width:100%;height:170px;}
+  .editarea{position:absolute;inset:0;margin:0;
+    font:15px/1.7 "Microsoft YaHei","PingFang SC",system-ui,sans-serif;
+    padding:12px 14px;border:1px solid var(--border);border-radius:8px;
+    white-space:pre-wrap;word-wrap:break-word;overflow-wrap:break-word;box-sizing:border-box;}
+  textarea.editarea{resize:none;outline:none;overflow:auto;background:transparent;
+    color:transparent;caret-color:#111;z-index:2;}
+  .overlay.editarea{overflow:auto;color:var(--ink);background:#fff;z-index:1;pointer-events:none;}
+  mark.hit-high{background:#ffd6d6;color:#b00;border-bottom:2px solid var(--hi);border-radius:2px;}
+  mark.hit-med{background:#fff3bf;color:#8a6d00;border-bottom:2px solid var(--med);border-radius:2px;}
+  mark.hit-need{background:#e2e8f0;color:#475569;border-bottom:2px dotted #94a3b8;border-radius:2px;}
+  .hitlist{margin-top:6px;font-size:12.5px;}
+  .hitlist .item{padding:5px 9px;border-left:3px solid var(--hi);background:#fff5f5;
+    border-radius:0 6px 6px 0;margin-bottom:4px;}
+  .hitlist .item.med{border-left-color:var(--med);background:#fffdf5;}
+  .hitlist .item.need{border-left-color:#94a3b8;background:#f8fafc;}
+  .hitlist .item b{color:var(--hi);}
+  .hitlist .item.med b{color:var(--med);}
+  .hitlist .w{font-weight:600;}
+  .hitlist .sug{color:#1a7f37;}
+  .hitlist .ctx{color:#57606a;font-size:11.5px;}
+  .empty{color:#8b949e;font-size:12px;}
+  details{border:1px solid var(--border);border-radius:8px;background:#fff;padding:0 12px;margin-top:6px;}
+  details summary{cursor:pointer;padding:10px 0;font-weight:600;font-size:13px;}
+  details pre{white-space:pre-wrap;font-size:12px;color:#444;background:#f6f8fa;
+    padding:10px;border-radius:6px;max-height:240px;overflow:auto;line-height:1.6;}
+
+  /* 右栏产物 */
+  .col-right h3{font-size:13px;margin:0 0 8px;color:#57606a;text-transform:uppercase;letter-spacing:.5px;}
+  .preview-box{background:#0d1117;border-radius:8px;padding:8px;margin-bottom:10px;}
+  .preview-box audio,.preview-box video{width:100%;display:block;border-radius:6px;}
+  .pv-label{font-size:11px;color:#8b949e;margin-bottom:4px;display:block;}
+  .kv{font-size:12.5px;line-height:1.7;}
+  .kv .ok{color:#1a7f37;font-weight:600;}
+  .kv .bad{color:#cf222e;font-weight:600;}
+  .kv .warn{color:#8a6d00;font-weight:600;}
+  .tip{font-size:12px;color:#57606a;margin-top:6px;}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    background:#1f2328;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;
+    opacity:0;transition:.25s;pointer-events:none;z-index:99;max-width:80%;}
+  .toast.show{opacity:1;}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:6px;}
+  .progress{height:10px;background:#e6edf3;border-radius:6px;overflow:hidden;margin-top:8px;}
+  .progress > i{display:block;height:100%;background:var(--blue);width:0;transition:.3s;}
+  .progress > i.done{background:#2da44e;}
+  .models{display:flex;gap:10px;flex-wrap:wrap;}
+  .model-card{border:2px solid var(--border);border-radius:10px;padding:8px;width:150px;
+              cursor:pointer;text-align:center;transition:.15s;background:#fff;}
+  .model-card:hover{border-color:var(--blue);}
+  .model-card.sel{border-color:var(--blue);background:#eef2ff;}
+  .model-card .nm{font-weight:600;font-size:13px;margin-top:6px;}
+  .model-card .sz{font-size:11px;color:#57606a;margin-top:3px;}
+  .model-card .thumb{width:100%;height:170px;object-fit:cover;border-radius:6px;
+                     background:#0d1117;display:block;}
+  .model-card .thumb-placeholder{width:100%;height:170px;background:#0d1117;color:#8b949e;
+                     border-radius:6px;display:flex;align-items:center;justify-content:center;
+                     font-size:11px;}
+  .sub-row{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px dashed #eee;}
+  textarea.plain{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;
+    font:14px/1.6 inherit;resize:vertical;}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>短视频生产工作台</h1>
+    <div class="sub">老张讲财税 · 选题→改写→音频→模特→出片→字幕→QC→发布，一个界面跑完</div>
+  </div>
+  <div class="bar">
+    <select id="projectSel"></select>
+    <button id="newBtn">＋ 新建</button>
+    <select id="platformSel" title="按平台过滤违禁词">
+      <option value="">全平台</option>
+      <option>抖音</option><option>视频号</option><option>快手</option>
+      <option>小红书</option><option>B站</option>
+    </select>
+    <span id="statusBox" class="status safe">—</span>
+  </div>
+</header>
+
+<main>
+  <!-- 左：步骤导航 -->
+  <div class="col-left">
+    <div class="card" style="padding:10px;">
+      <ul class="steps" id="steps">
+        <li data-step="topic"><span class="dot">1</span>选题</li>
+        <li data-step="edit"><span class="dot">2</span>改写</li>
+        <li data-step="audio"><span class="dot">3</span>出音频</li>
+        <li data-step="model"><span class="dot">4</span>选模特</li>
+        <li data-step="render"><span class="dot">5</span>出片</li>
+        <li data-step="subtitle"><span class="dot">6</span>字幕</li>
+        <li data-step="qc"><span class="dot">7</span>质检</li>
+        <li data-step="publish"><span class="dot">8</span>发布文案</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 中：工作区 -->
+  <div class="col-mid">
+
+    <!-- 选题 -->
+    <div class="card panel" id="panel-topic">
+      <h2>① 选题 · 粘贴爆款素材生成二创初稿</h2>
+      <textarea id="srcText" style="width:100%;min-height:90px;padding:10px;border:1px solid var(--border);border-radius:8px;resize:vertical;"
+        placeholder="粘贴爆款视频链接，或直接粘贴其逐字稿 / 文案。系统提取可借鉴选题与知识点，生成老张视角的原创二创（不是搬运）。"></textarea>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:center;">
+        <input id="dirInput" placeholder="创作方向（如：从老板最怕的稽查角度讲）"
+          style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;">
+        <select id="lenSel"><option>约30秒</option><option selected>约60秒</option><option>约90秒</option></select>
+        <input id="keepInput" placeholder="重点保留（如：个人卡收营业款概念）"
+          style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;">
+        <button id="genBtn" class="primary">✨ 生成二创初稿</button>
+      </div>
+      <div class="tip">生成调用大模型（DeepSeek/阿里），自动填入「改写」步骤的三段编辑器，你可继续改、看实时标红、保存、出音频。</div>
+    </div>
+
+    <!-- 改写 -->
+    <div class="card panel" id="panel-edit">
+      <h2>② 改写 · 三段式 + 违禁词实时标红</h2>
+      <div class="actions">
+        <button id="saveBtn" class="primary">💾 保存定稿</button>
+        <span id="opState" class="tip"></span>
+      </div>
+      <div class="seg">
+        <div class="seg-label"><span class="tag open">开头</span> 抓眼球 / 抛痛点 <span class="seg-count" id="cnt-open"></span></div>
+        <div class="editor"><textarea id="ta-open" class="editarea" placeholder="开头…"></textarea><div id="ov-open" class="overlay editarea"></div></div>
+        <div class="hitlist" id="hl-open"></div>
+      </div>
+      <div class="seg">
+        <div class="seg-label"><span class="tag body">正文</span> 讲清风险 / 给路径 <span class="seg-count" id="cnt-body"></span></div>
+        <div class="editor"><textarea id="ta-body" class="editarea" placeholder="正文…"></textarea><div id="ov-body" class="overlay editarea"></div></div>
+        <div class="hitlist" id="hl-body"></div>
+      </div>
+      <div class="seg">
+        <div class="seg-label"><span class="tag end">结尾（钩子）</span> 留资 / 关注 <span class="seg-count" id="cnt-end"></span></div>
+        <div class="editor"><textarea id="ta-end" class="editarea" placeholder="结尾（严禁加微信/扫码等导流词）…"></textarea><div id="ov-end" class="overlay editarea"></div></div>
+        <div class="hitlist" id="hl-end"></div>
+      </div>
+      <details id="guideBox">
+        <summary>📖 各大平台违禁词红线速查卡（点击展开）</summary>
+        <pre id="guideText">加载中…</pre>
+      </details>
+    </div>
+
+    <!-- 出音频 -->
+    <div class="card panel" id="panel-audio">
+      <h2>③ 出音频 · 老张声音（阿里 CosyVoice）</h2>
+      <div class="actions">
+        <button id="ttsBtn" class="primary">🔊 一键出音频</button>
+        <span id="ttsState" class="tip"></span>
+      </div>
+      <div class="tip">用当前定稿（去标记）合成老张真人音色音频，自动存入后台集中库 audio/，下方可直接播放、反复听。通常 10–30 秒。</div>
+      <div id="ttsProgBox" style="display:none;margin-top:10px;padding:10px 12px;background:#f6f8fa;border:1px solid var(--border);border-radius:8px;">
+        <div class="actions" style="margin-bottom:6px;">
+          <span id="ttsProgLabel" style="font-size:13px;font-weight:600;">⏳ 准备合成</span>
+          <span id="ttsProgTime" class="tip" style="margin-left:auto;">0 秒</span>
+        </div>
+        <div class="progress" style="height:6px;"><i id="ttsProgBar" style="width:0%;"></i></div>
+        <div id="ttsProgTip" class="tip" style="margin-top:6px;font-size:11.5px;">调用阿里 CosyVoice v3 声音克隆接口，根据文字时长通常 10–30 秒。</div>
+      </div>
+      <div class="card" style="background:#f6f8fa;margin-bottom:0;">
+        <span class="pv-label">本条音频试听</span>
+        <audio id="audioPlayer" controls preload="none" style="width:100%">您的浏览器不支持音频</audio>
+        <div id="noAudio" class="empty">尚未生成音频，点上方「一键出音频」。</div>
+      </div>
+    </div>
+
+    <!-- 选模特 -->
+    <div class="card panel" id="panel-model">
+      <h2>④ 选模特 · 数字人形象</h2>
+      <div class="tip">选择用于驱动的数字人模特（静音版，由音频驱动嘴型）。新增模特把静音视频放到 face2face/ 即可出现在此。</div>
+      <div class="models" id="modelList"><span class="empty">加载中…</span></div>
+      <div class="tip" id="selModelTip">未选择模特。</div>
+    </div>
+
+    <!-- 出片 -->
+    <div class="card panel" id="panel-render">
+      <h2>⑤ 出片 · 音频+模特驱动数字人</h2>
+      <div class="actions">
+        <button id="renderBtn" class="primary">🎬 一键出片</button>
+        <span id="renderState" class="tip"></span>
+      </div>
+      <div class="progress"><i id="renderBar"></i></div>
+      <div id="renderStep" class="tip"></div>
+      <div class="tip">出片需 HEYGEM 本地 Docker 在跑（先开 Docker Desktop）。流程：提交渲染→去双声→嘴型对齐→烧字幕拼片头，约 1–3 分钟，可在此页面等，不用切命令行。</div>
+    </div>
+
+    <!-- 字幕 -->
+    <div class="card panel" id="panel-subtitle">
+      <h2>⑥ 字幕 · 自动生成预览</h2>
+      <div class="tip">根据定稿与音频时长自动切句生成竖屏字幕（每行≤12字，白字黑边）。</div>
+      <div id="subList"><span class="empty">暂无字幕，先出片（出片会自动生成字幕）。</span></div>
+    </div>
+
+    <!-- 质检 -->
+    <div class="card panel" id="panel-qc">
+      <h2>⑦ 质检 · 发布级硬指标</h2>
+      <button id="qcBtn" class="primary" style="margin-bottom:10px;">🔍 跑质检</button>
+      <div id="qcResult"><span class="empty">点上方按钮对当前成片跑 QC（分辨率/编码/时长/音轨/码率）。</span></div>
+    </div>
+
+    <!-- 发布文案 -->
+    <div class="card panel" id="panel-publish">
+      <h2>⑧ 发布文案 · 标题/话题/钩子</h2>
+      <div class="actions">
+        <button id="pubBtn" class="primary">✍️ 生成发布文案</button>
+      </div>
+      <div class="tip">自动生成标题、话题标签、发布文案（含自然留资钩子）。</div>
+      <div id="pubResult"><span class="empty">点上方按钮生成。</span></div>
+    </div>
+
+  </div>
+
+  <!-- 右：产物预览 -->
+  <div class="col-right">
+    <div class="card">
+      <h3>当前项目</h3>
+      <div class="kv" id="curName">—</div>
+      <div id="curFlags" class="kv" style="margin-top:4px;"></div>
+    </div>
+    <div class="card">
+      <h3>音频</h3>
+      <div class="preview-box"><span class="pv-label" id="audioLbl">未生成</span>
+        <audio id="pvAudio" controls preload="none">不支持</audio></div>
+    </div>
+    <div class="card">
+      <h3>成片视频</h3>
+      <div class="preview-box"><span class="pv-label" id="videoLbl">未出片</span>
+        <video id="pvVideo" controls preload="metadata">不支持</video>
+        <div id="videoErr" style="display:none;background:#fff5f5;border:1px solid #e5484d;border-radius:6px;padding:6px 8px;margin-top:6px;color:#b00;font-size:12px;"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>快捷状态</h3>
+      <div class="kv" id="quickStatus">
+        🎵 音频：<span id="qsAudio">—</span><br>
+        🎬 视频：<span id="qsVideo">—</span><br>
+        📋 文案：<span id="qsPub">—</span>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let currentName = null;
+let curHits = {open:[], body:[], end:[]};
+let selModel = null;
+let timer = null;
+let jobTimer = null;
+
+// video 错误监听：把真错透出来
+$("pvVideo").addEventListener("error",()=>{
+  const v=$("pvVideo"),e=v.error;
+  const code=e?e.code:"";
+  const msg=e?`code=${code} ${e.message||""}`:"未知错误";
+  $("videoErr").style.display="block";
+  $("videoErr").textContent="❌ 视频加载失败："+msg+"（code:1=网络/cancel,2=解码,3=解码,4=不支持src）";
+  $("videoLbl").textContent="加载失败";
+});
+$("pvVideo").addEventListener("loadedmetadata",()=>{
+  $("videoErr").style.display="none";
+  const v=$("pvVideo");
+  if(v.duration&&isFinite(v.duration)){
+    $("videoLbl").textContent=`成片 · ${v.duration.toFixed(1)}s 可播放`;
+  }else $("videoLbl").textContent="成片 · 可播放";
+});
+
+function toast(msg){
+  const t=$("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),2200);
+}
+function esc(s){return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+// —— 步骤切换 ——
+function gotoStep(step){
+  document.querySelectorAll(".steps li").forEach(li=>{
+    li.classList.toggle("active", li.dataset.step===step);
+  });
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+  $("panel-"+step).classList.add("active");
+  if(step==="model") loadModels();
+  if(step==="subtitle") loadSubtitle();
+  if(step==="qc") {/* 手动点 */}
+}
+document.querySelectorAll(".steps li").forEach(li=>{
+  li.addEventListener("click",()=>gotoStep(li.dataset.step));
+});
+
+// —— 标红渲染 ——
+function renderHL(taId, ovId, hits){
+  const ta=$(taId), ov=$(ovId);
+  const text=ta.value;
+  const sorted=[...hits].sort((a,b)=>a.pos-b.pos);
+  let html="", last=0;
+  for(const h of sorted){
+    const s=h.pos, e=h.pos+(h.word.length);
+    if(s<last) continue;
+    html+=esc(text.slice(last,s));
+    const cls=h.need_human?"hit-need":(h.level==="high"?"hit-high":"hit-med");
+    html+=`<mark class="${cls}" title="${esc(h.suggest||'')}">${esc(text.slice(s,e))}</mark>`;
+    last=e;
+  }
+  html+=esc(text.slice(last));
+  ov.innerHTML=html+"\n";
+}
+["open","body","end"].forEach(k=>{
+  const ta=$("ta-"+k), ov=$("ov-"+k);
+  ta.addEventListener("scroll",()=>{ov.scrollTop=ta.scrollTop;ov.scrollLeft=ta.scrollLeft;});
+  ta.addEventListener("input",()=>scheduleCheck(k));
+});
+function scheduleCheck(k){clearTimeout(timer);timer=setTimeout(()=>checkSeg(k),350);}
+async function checkSeg(k){
+  const text=$("ta-"+k).value;
+  const platform=$("platformSel").value;
+  try{
+    const r=await fetch("/api/check",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({text,platform})});
+    const d=await r.json();
+    curHits[k]=d.hits||[];
+    renderHL("ta-"+k,"ov-"+k,curHits[k]);renderHitList(k);updateStatus();
+  }catch(e){}
+}
+function renderHitList(k){
+  const box=$("hl-"+k), hits=curHits[k];
+  if(!hits.length){box.innerHTML='<div class="empty">✅ 本段无违禁词命中</div>';$("cnt-"+k).textContent="";return;}
+  $("cnt-"+k).textContent=`⚠ ${hits.length} 处`;
+  box.innerHTML=hits.map(h=>{
+    const cls=h.need_human?"need":(h.level==="high"?"":"med");
+    const tag=h.need_human?"需人工核对":(h.level==="high"?"🔴 高危":"🟡 中等");
+    const plats=h.platforms&&h.platforms.length?h.platforms.join("/"):"全平台";
+    return `<div class="item ${cls}"><span class="w">[${tag}] ${esc(h.word)}</span>
+      <span class="ctx">（${plats}）</span><br>
+      <span class="ctx">…${esc(h.context||"")}…</span><br>
+      <span class="sug">✎ 建议：${esc(h.suggest||"")}</span></div>`;
+  }).join("");
+}
+function updateStatus(){
+  let high=0,med=0;
+  for(const k of ["open","body","end"]) for(const h of curHits[k]){
+    if(h.need_human) continue;
+    if(h.level==="high") high++; else if(h.level==="medium") med++;
+  }
+  const box=$("statusBox");
+  if(high>0){box.className="status danger";box.textContent=`🔴 高危 ${high} 处`;}
+  else if(med>0){box.className="status warn";box.textContent=`🟡 中危 ${med} 处`;}
+  else{box.className="status safe";box.textContent="✅ 安全";}
+}
+
+// —— 项目加载 ——
+async function loadProjects(){
+  const r=await fetch("/api/projects"); const list=await r.json();
+  const sel=$("projectSel");
+  sel.innerHTML=list.map(p=>{
+    const badge=p.high?` 🔴${p.high}`:(p.med?` 🟡${p.med}`:" ✅");
+    const au=p.audio?" 🎵":""; const vi=p.video?" 🎬":"";
+    return `<option value="${esc(p.name)}">${esc(p.name)}${badge}${au}${vi}</option>`;
+  }).join("");
+  // 关键修复：保持当前选中项目，禁止被强制切回列表第一项。
+  // 否则在 X 项目上「保存/出音频」后，currentName 会被偷偷切回列表首项（某个旧/模板项目），
+  // 导致后续出音频作用到错误项目、音频内容变成旧模板。
+  let target=null;
+  if(currentName && list.some(p=>p.name===currentName)) target=currentName;
+  else if(list.length) target=list[0].name;
+  if(target){ sel.value=target; await loadProject(target); }
+  else toast("暂无项目，点「新建」创建一个");
+}
+async function loadProject(name){
+  currentName=name;
+  const r=await fetch("/api/project/"+encodeURIComponent(name));
+  const d=await r.json();
+  const s=d.segs||{};
+  $("ta-open").value=s.opening||"";$("ta-body").value=s.body||"";$("ta-end").value=s.ending||"";
+  for(const k of ["open","body","end"]) await checkSeg(k);
+  $("opState").textContent="已加载："+name;
+  $("curName").textContent=name;
+  refreshPreview();
+  markDoneSteps();
+}
+async function refreshPreview(){
+  // 音频：带 ?t=时间戳 强制刷新，避免浏览器缓存旧音频导致"听旧看新"
+  const ra=await fetch("/api/projects"); const list=await ra.json();
+  const pr=list.find(p=>p.name===currentName);
+  const tsb=()=> "?t="+Date.now();
+  if(pr && pr.audio){
+    $("pvAudio").src="/api/audio/"+encodeURIComponent(currentName)+tsb();
+    $("audioLbl").textContent="老张声音 · 可播放";
+    $("qsAudio").innerHTML='<span class="ok">✅ 已生成</span>';
+    $("audioPlayer").src="/api/audio/"+encodeURIComponent(currentName)+tsb();
+    $("noAudio").style.display="none";
+  } else {
+    $("pvAudio").removeAttribute("src");$("audioLbl").textContent="未生成";
+    $("qsAudio").innerHTML='<span class="bad">未生成</span>';
+    $("noAudio").style.display="block";
+  }
+  if(pr && pr.video){
+    // 注意：video 元素不要加 ?t=query，浏览器会发 Range 请求，query 会干扰 Range 解析
+    $("pvVideo").src="/api/video/"+encodeURIComponent(currentName)+".mp4";
+    $("pvVideo").load(); // 切了 src 必须 .load() 才会重新下载
+    $("videoLbl").textContent="成片 · 可播放";
+    $("qsVideo").innerHTML='<span class="ok">✅ 已出片</span>';
+  } else {
+    $("pvVideo").removeAttribute("src");$("pvVideo").load();
+    $("videoLbl").textContent="未出片";
+    $("qsVideo").innerHTML='<span class="bad">未出片</span>';
+  }
+}
+function markDoneSteps(){
+  // 简单标记：改写总是可达；其余按产物
+  document.querySelectorAll(".steps li").forEach(li=>{
+    const st=li.dataset.step;
+    if(st==="topic"||st==="edit") li.classList.add("done");
+    else li.classList.remove("done");
+  });
+}
+
+// —— 操作 ——
+$("projectSel").addEventListener("change",e=>loadProject(e.target.value));
+$("platformSel").addEventListener("change",()=>{for(const k of ["open","body","end"]) checkSeg(k);});
+$("saveBtn").addEventListener("click",async()=>{
+  if(!currentName) return;
+  const r=await fetch("/api/project/"+encodeURIComponent(currentName)+"/save",{method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({opening:$("ta-open").value,body:$("ta-body").value,ending:$("ta-end").value})});
+  const d=await r.json();
+  if(d.ok){toast(`已保存 ✅ 高危${d.high} 中危${d.med}`);await loadProjects();markDoneSteps();}
+  else toast("保存失败："+(d.error||""));
+});
+$("ttsBtn").addEventListener("click",async()=>{
+  if(!currentName) return;
+  // 锁按钮 + 显示进度卡片
+  $("ttsBtn").disabled=true;
+  $("ttsState").textContent="出音频中…";
+  const box=$("ttsProgBox"), bar=$("ttsProgBar"), lbl=$("ttsProgLabel"),
+        tip=$("ttsProgTip"), clk=$("ttsProgTime");
+  box.style.display="block";
+  let pct=0; lbl.textContent="💾 正在保存定稿…"; tip.textContent="把界面三段文本落到项目盘，确保磁盘=界面。";
+  bar.style.width="2%"; bar.classList.remove("done");
+  const t0=Date.now();
+  const timer=setInterval(()=>{
+    const sec=Math.floor((Date.now()-t0)/1000);
+    clk.textContent=sec+" 秒";
+    // 阶段 1 (0-3s) 保存：爬到 6%
+    // 阶段 2 (3s+) 合成：每 1s +3%，封顶 92%
+    if(sec<=3){ pct=Math.min(6, sec*2); }
+    else { pct=Math.min(92, 6 + (sec-3)*3); }
+    if(pct>=6 && lbl.textContent.indexOf("保存")>=0){
+      lbl.textContent="🔊 阿里 CosyVoice 合成中…";
+      tip.textContent="声音克隆调用中，按文本长度通常 10–30 秒，请勿关闭页面。";
+    }
+    bar.style.width=pct+"%";
+  }, 1000);
+
+  try{
+    // 先持久化定稿（保持磁盘与界面一致），再带实时三段文本请求合成
+    await fetch("/api/project/"+encodeURIComponent(currentName)+"/save",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({opening:$("ta-open").value,body:$("ta-body").value,ending:$("ta-end").value})});
+    // 切到合成阶段
+    lbl.textContent="🔊 阿里 CosyVoice 合成中…";
+    tip.textContent="声音克隆调用中，按文本长度通常 10–30 秒，请勿关闭页面。";
+
+    const r=await fetch("/api/project/"+encodeURIComponent(currentName)+"/tts",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({opening:$("ta-open").value,body:$("ta-body").value,ending:$("ta-end").value})});
+    const d=await r.json();
+    clearInterval(timer);
+    $("ttsBtn").disabled=false;
+
+    if(d.ok){
+      lbl.textContent="📁 存入后台库 audio/ …";
+      tip.textContent="音频已生成，正写入集中后台库。";
+      bar.style.width="96%";
+      await new Promise(r=>setTimeout(r,150));
+      bar.style.width="100%"; bar.classList.add("done");
+      const sec=Math.floor((Date.now()-t0)/1000);
+      $("ttsState").textContent=`✅ 已生成（${sec} 秒）`;
+      lbl.textContent=`✅ 合成完成（${sec} 秒）`;
+      tip.textContent="音频已存入后台 audio/，下方可直接试听。";
+      toast("🔊 音频生成成功");
+      await loadProjects();refreshPreview();gotoStep("model");
+    } else {
+      bar.style.background="var(--red,#e5484d)";
+      lbl.textContent="❌ 合成失败"; tip.textContent=d.error||"未知错误";
+      $("ttsState").textContent="出音频失败";
+      toast("出音频失败："+(d.error||"").slice(0,80));
+    }
+  }catch(e){
+    clearInterval(timer);
+    $("ttsBtn").disabled=false;
+    bar.style.background="var(--red,#e5484d)";
+    lbl.textContent="❌ 网络错误"; tip.textContent=String(e);
+    $("ttsState").textContent="出音频失败";
+  }
+});
+$("newBtn").addEventListener("click",async()=>{
+  const title=prompt("新项目标题（将作为目录名）：","新选题");
+  if(!title) return;
+  const r=await fetch("/api/new",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({title})});
+  const d=await r.json();
+  if(d.ok){await loadProjects();await loadProject(d.name);toast("已新建："+d.name);}
+});
+
+// —— 模特 ——
+async function loadModels(){
+  const r=await fetch("/api/models"); const list=await r.json();
+  const box=$("modelList");
+  if(!list.length){box.innerHTML='<span class="empty">未找到静音模特，请把 *_silent.mp4 放到 face2face/</span>';return;}
+  box.innerHTML=list.map(m=>{
+    const media = m.thumb_url
+      ? `<img class="thumb" src="${m.thumb_url}" loading="lazy" alt="${esc(m.label)}" onerror="this.outerHTML='<div class=&quot;thumb-placeholder&quot;>暂无预览</div>'">`
+      : `<div class="thumb-placeholder">暂无预览</div>`;
+    return `<div class="model-card" data-id="${esc(m.id)}">
+      ${media}
+      <div class="nm">${esc(m.label)}</div><div class="sz">${m.size_mb} MB</div></div>`;
+  }).join("");
+  box.querySelectorAll(".model-card").forEach(c=>{
+    c.addEventListener("click",()=>{
+      box.querySelectorAll(".model-card").forEach(x=>x.classList.remove("sel"));
+      c.classList.add("sel"); selModel=c.dataset.id;
+      $("selModelTip").textContent="已选模特："+c.querySelector(".nm").textContent;
+    });
+  });
+  if(selModel){const el=box.querySelector(`[data-id="${CSS.escape(selModel)}"]`);
+    if(el) el.classList.add("sel");}
+}
+
+// —— 出片 ——
+$("renderBtn").addEventListener("click",async()=>{
+  if(!currentName) return;
+  if(!selModel){toast("请先在「选模特」步骤选一个模特");gotoStep("model");return;}
+  $("renderState").textContent="提交渲染中…";$("renderBtn").disabled=true;
+  const r=await fetch("/api/project/"+encodeURIComponent(currentName)+"/render",{method:"POST",
+    headers:{"Content-Type":"application/json"},body:JSON.stringify({model:selModel})});
+  const d=await r.json();
+  if(!d.ok){$("renderState").textContent="提交失败";toast("出片失败："+(d.error||"").slice(0,90));
+    $("renderBtn").disabled=false;return;}
+  pollJob(d.job_id);
+});
+async function pollJob(jobId){
+  if(jobTimer) clearInterval(jobTimer);
+  jobTimer=setInterval(async()=>{
+    try{
+      const r=await fetch("/api/job/"+encodeURIComponent(jobId));const d=await r.json();
+      $("renderStep").textContent=d.step||"";
+      $("renderBar").style.width=(d.progress||0)+"%";
+      // 显示 HEYGEM task_code（可以拿去 HEYGEM 接口查，或给 AI 排查）
+      if(d.heygem_code){
+        const hk=d.heygem_code;
+        $("renderStep").innerHTML=esc(d.step||"")+
+          ` <span class="tip" style="font-family:monospace;font-size:11px;">task=${hk.slice(0,18)}…</span>`;
+      }
+      if(d.status==="done"){
+        clearInterval(jobTimer);
+        $("renderState").textContent="✅ 出片完成";
+        $("renderStep").innerHTML='<span class="tip">成品已在右上角预览。</span>';
+        $("renderBtn").disabled=false;
+        toast("🎬 出片完成，可在右侧播放");
+        await loadProjects();refreshPreview();gotoStep("subtitle");
+      } else if(d.status==="error"){
+        clearInterval(jobTimer);
+        $("renderState").textContent="❌ 失败";
+        const err=d.error||"未知错误";
+        $("renderStep").innerHTML='<div style="background:#fff5f5;border:1px solid #e5484d;border-radius:6px;padding:8px 10px;color:#b00;font-size:12.5px;line-height:1.6;white-space:pre-wrap;word-break:break-all;">'+esc(err)+'</div>';
+        $("renderBtn").disabled=false;
+        toast("出片失败："+err.slice(0,90));
+      }
+    }catch(e){}
+  },2000);
+}
+
+// —— 字幕 ——
+async function loadSubtitle(){
+  if(!currentName) return;
+  const r=await fetch("/api/project/"+encodeURIComponent(currentName)+"/subtitle");
+  const d=await r.json();
+  const box=$("subList");
+  if(!d.items||!d.items.length){box.innerHTML='<span class="empty">暂无字幕，先出片（出片会自动生成字幕）。</span>';return;}
+  box.innerHTML=d.items.map(i=>`<div class="sub-row"><span>${esc(i.start)}→${esc(i.end)}</span>
+    <span style="flex:1;margin-left:10px;">${esc(i.text).replace(/\n/g,"<br>")}</span></div>`).join("");
+}
+
+// —— QC ——
+$("qcBtn").addEventListener("click",async()=>{
+  if(!currentName) return;
+  const r=await fetch("/api/project/"+encodeURIComponent(currentName)+"/qc");
+  const d=await r.json();
+  const box=$("qcResult");
+  if(!d.exists){box.innerHTML='<span class="empty">尚未出片，请先「出片」。</span>';return;}
+  if(d.error){box.innerHTML=`<div class="bad">⚠️ ${esc(d.error)}</div>`;return;}
+  const c=d.checks;
+  const item=(label,ok)=>`<div class="sub-row"><span>${label}</span>
+    <span class="${ok?'ok':'bad'}">${ok?'✅':'❌'}</span></div>`;
+  box.innerHTML=`<div class="kv">
+    <div class="sub-row"><span>分辨率</span><span>${d.resolution}</span></div>
+    <div class="sub-row"><span>编码</span><span>${d.codec}/${d.audio_codec}</span></div>
+    <div class="sub-row"><span>时长</span><span>${d.duration}s</span></div>
+    <div class="sub-row"><span>码率</span><span>${d.bitrate_k}k</span></div>
+    <div class="sub-row"><span>音轨数</span><span>${d.audio_tracks}</span></div>
+    <hr style="border:none;border-top:1px dashed #ddd;margin:8px 0;">
+    ${item("分辨率 1080x1920",c.res_ok)}
+    ${item("编码 h264+aac",c.enc_ok)}
+    ${item("时长 7-60s",c.dur_ok)}
+    ${item("单音轨(无双声)",c.audio_ok)}
+    ${item("码率≥2M",c.bitrate_ok)}
+    <div class="sub-row" style="margin-top:8px;"><span><b>结论</b></span>
+      <span class="${d.pass?'ok':'warn'}">${d.pass?'✅ 全部达标':'⚠️ 有项需关注'}</span></div>
+  </div>`;
+});
+
+// —— 发布文案 ——
+$("pubBtn").addEventListener("click",async()=>{
+  if(!currentName) return;
+  const r=await fetch("/api/project/"+encodeURIComponent(currentName)+"/publish",{method:"POST"});
+  const d=await r.json();
+  const box=$("pubResult");
+  if(!d.ok){box.innerHTML=`<div class="bad">⚠️ ${esc(d.error||"")}</div>`;return;}
+  box.innerHTML=`<div class="kv">
+    <div style="margin-bottom:6px;"><b>标题</b>：${esc(d.title)}</div>
+    <div style="margin-bottom:6px;"><b>话题</b>：${esc(d.topics)}</div>
+    <div><b>文案</b>：${esc(d.body)}</div></div>`;
+  $("qsPub").innerHTML='<span class="ok">✅ 已生成</span>';
+});
+
+// —— 生成初稿 ——
+$("genBtn").addEventListener("click",async()=>{
+  const source=$("srcText").value.trim();
+  if(!source){toast("请先粘贴爆款链接或文案");return;}
+  $("genBtn").disabled=true;$("genBtn").textContent="生成中…";
+  try{
+    const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({source,direction:$("dirInput").value,length:$("lenSel").value,keep_core:$("keepInput").value})});
+    const d=await r.json();
+    if(!d.ok){toast("生成失败："+(d.error||"").slice(0,90));}
+    else{
+      const s=d.segs||{};
+      $("ta-open").value=s.opening||"";$("ta-body").value=s.body||"";$("ta-end").value=s.ending||"";
+      for(const k of ["open","body","end"]) await checkSeg(k);
+      const title=prompt("初稿已生成！给这条二创起个标题（将新建项目承接）：","爆款二创");
+      if(title){
+        const nr=await fetch("/api/new",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title})});
+        const nd=await nr.json();
+        if(nd.ok){
+          await fetch("/api/project/"+encodeURIComponent(nd.name)+"/save",{method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({opening:s.opening||"",body:s.body||"",ending:s.ending||""})});
+          await loadProjects();await loadProject(nd.name);
+          toast("已生成并存入项目："+nd.name+"，请到「改写」审核/修改后再出音频");
+          gotoStep("edit");
+        }
+      } else toast("初稿已填入编辑器，可手动保存");
+    }
+  }catch(e){toast("网络错误："+e.message);}
+  $("genBtn").disabled=false;$("genBtn").textContent="✨ 生成二创初稿";
+});
+
+// —— 初始化 ——
+(async()=>{
+  await loadProjects();
+  gotoStep("topic");
+  const g=await fetch("/api/guidance");const gd=await g.json();
+  $("guideText").textContent=gd.text||"";
+})();
+</script>
+</body>
+</html>
