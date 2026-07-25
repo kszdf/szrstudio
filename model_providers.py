@@ -84,7 +84,7 @@ def get_text_config(force_provider: str | None = None) -> dict:
             raise RuntimeError("已选择 deepseek 但未配置 DEEPSEEK_API_KEY，请在 model_keys.env 填写。")
         return {"provider": "deepseek", "key": key,
                 "base_url": "https://api.deepseek.com",
-                "model": "deepseek-chat"}
+                "model": "deepseek-v4-flash"}
     if prov == "qwen":
         key = get_key("DASHSCOPE_API_KEY")
         if not key:
@@ -99,14 +99,24 @@ def get_text_config(force_provider: str | None = None) -> dict:
 
 def deepseek_chat(prompt: str, model: str, key: str,
                   base_url: str = "https://api.deepseek.com",
-                  timeout: int = 60) -> str:
-    """DeepSeek 文本对话（OpenAI 兼容接口，纯标准库 urllib，无新依赖）。"""
+                  timeout: int = 60, enable_search: bool = False,
+                  return_meta: bool = False) -> str | dict:
+    """DeepSeek 文本对话（OpenAI 兼容接口，纯标准库 urllib，无新依赖）。
+    enable_search=True 时开启联网搜索，返回内容会带上实时检索到的信息。
+    return_meta=True 时返回 dict: {"content": ..., "search_results": [...], "raw": data}
+       —— 当 enable_search 真正生效时，DeepSeek 会在 message 里确定性地附加
+          search_results 字段（真实检索证据）。据此判断"到底有没有真联网"，
+          而不是依赖模型自觉报告。默认 False（返回纯文本字符串，兼容其他调用方）。
+    """
     url = base_url.rstrip("/") + "/chat/completions"
-    body = json.dumps({
-        "model": model or "deepseek-chat",
+    payload = {
+        "model": model or "deepseek-v4-flash",
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.7,
-    }).encode("utf-8")
+    }
+    if enable_search:
+        payload["enable_search"] = True
+    body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         url, data=body, method="POST",
         headers={"Content-Type": "application/json",
@@ -119,10 +129,57 @@ def deepseek_chat(prompt: str, model: str, key: str,
         raise RuntimeError(f"DeepSeek HTTP {e.code}: {detail}") from None
     except urllib.error.URLError as e:
         raise RuntimeError(f"DeepSeek 网络错误: {e.reason}") from None
+    content = data["choices"][0]["message"]["content"]
+    if return_meta:
+        msg = data["choices"][0]["message"]
+        search_results = msg.get("search_results") or []
+        return {"content": content, "search_results": search_results, "raw": data}
+    return content
+
+
+def tavily_search(query: str, api_key: str, topic: str = "finance",
+                  days: int = 30, max_results: int = 8,
+                  timeout: int = 30) -> dict:
+    """Tavily Search API（专为 LLM 设计的联网搜索，纯标准库 urllib，无新依赖）。
+
+    与 DeepSeek 的 enable_search 不同：Tavily 是独立搜索服务，官方 API 平台
+    当前不提供联网搜索，因此把"真实联网检索"这件事交给 Tavily 做，
+    DeepSeek 只负责基于检索结果做二创（分工清晰、确定性强）。
+
+    参数:
+      query      搜索词（如"最近一个月 公转私 税务稽查 热点"）
+      api_key    Tavily API key（TAVILY_API_KEY）
+      topic      general / news / finance（财税场景用 finance）
+      days       限定最近 N 天（对应"近7天/近30天"等）
+      max_results 返回条数
+    返回 dict: {"results": [{title,url,content,published_date}], "raw": data}
+      results 每项: title 标题 / url 来源链接 / content 内容摘要 / published_date 发布日期
+    失败时抛 RuntimeError（HTTP 错误 / 网络错误）。
+    """
+    url = "https://api.tavily.com/search"
+    payload = {
+        "query": query,
+        "topic": topic,
+        "search_depth": "advanced",
+        "days": days,
+        "max_results": max_results,
+        "include_answer": False,
+    }
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=body, method="POST",
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {api_key}"})
     try:
-        return data["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as e:
-        raise RuntimeError(f"DeepSeek 返回结构异常: {data}") from e
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")[:300]
+        raise RuntimeError(f"Tavily HTTP {e.code}: {detail}") from None
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Tavily 网络错误: {e.reason}") from None
+    results = data.get("results") or []
+    return {"results": results, "raw": data}
 
 
 # ------------------------------------------------------------------ 配音

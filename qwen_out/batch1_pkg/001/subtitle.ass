@@ -1,0 +1,26 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, Outline, Shadow, Bold, Alignment, MarginL, MarginR, MarginV
+Style: Default,SimHei,64,&H00FFFFFF,&H00000000,4,1,0,2,60,60,80
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0.30,2.96,Default,,0,0,0,,现在不少老板用发票冲成本\N，
+Dialogue: 0,2.96,4.39,Default,,0,0,0,,觉得能省点税。
+Dialogue: 0,4.39,6.03,Default,,0,0,0,,但金税四期之后，
+Dialogue: 0,6.03,7.47,Default,,0,0,0,,系统比对更严，
+Dialogue: 0,7.47,9.92,Default,,0,0,0,,发票、资金、业务不一致，
+Dialogue: 0,9.92,11.36,Default,,0,0,0,,很容易被发现。
+Dialogue: 0,11.36,12.38,Default,,0,0,0,,一旦被查，
+Dialogue: 0,12.38,13.61,Default,,0,0,0,,不仅要补税，
+Dialogue: 0,13.61,15.04,Default,,0,0,0,,还可能被处罚。
+Dialogue: 0,15.04,17.50,Default,,0,0,0,,建议还是按规矩处理成本，
+Dialogue: 0,17.50,19.55,Default,,0,0,0,,别为眼前利益冒风险。
+Dialogue: 0,19.55,21.18,Default,,0,0,0,,想了解财税风险，
+Dialogue: 0,21.18,22.21,Default,,0,0,0,,欢迎关注，
+Dialogue: 0,22.21,24.87,Default,,0,0,0,,私信“虚开风险”获取资料\N。

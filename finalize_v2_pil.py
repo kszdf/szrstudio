@@ -27,13 +27,30 @@ BASE = Path("D:/heygem_data/gpt_sovits")
 INTRO = BASE / "covers/intro.mp4"
 TMP = BASE / "_tmp_pil"
 FRAMES = TMP / "frames"
-FONT = str(BASE / "fonts/simhei.ttf")
 FPS = 30
 
 # 字幕样式（匹配 build_package.py 生成的 ass）
 SUB_SIZE = 42              # 实际视频 720x1280 下的等效字号（ass 64 in 1920 → 42.7）
 SUB_BORDER = 4             # 黑边宽度
 SUB_MARGIN_BOTTOM = 53     # 底部边距（ass 80 in 1920 → 53.3）
+
+# —— 字幕字体（多字体 fallback，根治 emoji/缺字乱码）——
+# SimHei 不含 emoji 彩色字形，会把 ✅🔥💡 等渲染成方块(tofu)=视频字幕乱码；
+# 因此 emoji 用 Segoe UI Emoji 渲染，生僻字用微软雅黑兜底，主字体仍是 SimHei。
+def _load_font(path, size):
+    p = Path(path)
+    if p.exists():
+        try:
+            return ImageFont.truetype(str(p), size)
+        except Exception:
+            return None
+    return None
+
+F_MAIN = _load_font(str(BASE / "fonts/simhei.ttf"), SUB_SIZE)
+F_EMOJI = _load_font("C:/Windows/Fonts/seguiemj.ttf", SUB_SIZE) or F_MAIN
+F_FALLBACK = _load_font("C:/Windows/Fonts/msyh.ttc", SUB_SIZE) or F_MAIN
+if F_MAIN is None:
+    F_MAIN = ImageFont.load_default()
 
 
 def run(cmd):
@@ -57,32 +74,89 @@ def parse_ass(ass_path):
         if len(parts) < 10:
             continue
         start, end = float(parts[1]), float(parts[2])
-        text = parts[9].replace(r"\N", "\n").strip()
+        text = clean_subtitle_text(parts[9].replace(r"\N", "\n"))
         events.append((start, end, text))
     return events
 
 
+import unicodedata
+
+def _has_glyph(font, ch):
+    """字符在该字体中是否有真实字形（bbox 为空=占位方块/tofu=会乱码）。"""
+    try:
+        return font.getmask(ch).getbbox() is not None
+    except Exception:
+        return False
+
+def _is_emoji(ch):
+    """判断是否为 emoji/符号字符（应交给 emoji 字体渲染，避免 SimHei 方块）。"""
+    cp = ord(ch)
+    if 0x1F000 <= cp <= 0x1FAFF:
+        return True
+    if 0x2600 <= cp <= 0x27BF:   # 杂项符号/dingbats：✅❌⚠️★☆
+        return True
+    if 0x2B00 <= cp <= 0x2BFF:   # 杂项符号和箭头
+        return True
+    if 0xFE00 <= cp <= 0xFE0F:   # 变体选择符（VS16 等）
+        return True
+    if cp == 0x200D:             # 零宽连字 ZWJ
+        return True
+    if unicodedata.category(ch) in ("So", "Cs"):
+        return True
+    return False
+
+def _font_for(ch):
+    """逐字符选字体：emoji→Segoe；中文/符号→SimHei；缺字→雅黑兜底。"""
+    if _is_emoji(ch) and _has_glyph(F_EMOJI, ch):
+        return F_EMOJI
+    if _has_glyph(F_MAIN, ch):
+        return F_MAIN
+    for f in (F_FALLBACK, F_EMOJI):
+        if _has_glyph(f, ch):
+            return f
+    return F_MAIN
+
+def clean_subtitle_text(text):
+    """清洗字幕文本：剥离 ASS 残留花括号标签、零宽/控制字符，避免被当字画上去乱码。"""
+    # 去 {…} 标签（如 {\fnSimHei\fs64}、{\c&H...}）
+    text = re.sub(r"\{[^}]*\}", "", text)
+    # 去零宽/控制字符（BOM、零宽空格、软连字符等），保留正常换行与变体选择符
+    text = "".join(
+        ch for ch in text
+        if ch == "\n" or (ord(ch) >= 0x20 and ord(ch) not in (0x200B, 0xFEFF, 0x00AD))
+    )
+    return text.strip()
+
+def _char_width(draw, ch):
+    return draw.textlength(ch, font=_font_for(ch))
+
 def draw_subtitle(img, text):
-    """在帧底部居中画白字黑边"""
+    """在帧底部居中画白字黑边；逐字符选字体，emoji 用 Segoe 渲染避免方块乱码。"""
+    text = clean_subtitle_text(text)
+    if not text:
+        return
     draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype(FONT, SUB_SIZE)
     lines = text.split("\n")
     line_h = SUB_SIZE + 8
     total_h = line_h * len(lines)
     W, H = img.size
     y0 = H - SUB_MARGIN_BOTTOM - total_h
     for i, ln in enumerate(lines):
-        bbox = draw.textbbox((0, 0), ln, font=font)
-        tw = bbox[2] - bbox[0]
+        widths = [_char_width(draw, ch) for ch in ln]
+        tw = sum(widths)
         x = (W - tw) // 2
         y = y0 + i * line_h
-        # 黑边（多次偏移）
-        for dx in range(-SUB_BORDER, SUB_BORDER + 1):
-            for dy in range(-SUB_BORDER, SUB_BORDER + 1):
-                if dx * dx + dy * dy <= SUB_BORDER * SUB_BORDER:
-                    draw.text((x + dx, y + dy), ln, font=font, fill=(0, 0, 0))
-        # 白字
-        draw.text((x, y), ln, font=font, fill=(255, 255, 255))
+        cx = x
+        for ch, w in zip(ln, widths):
+            f = _font_for(ch)
+            # 黑边（多次偏移）
+            for dx in range(-SUB_BORDER, SUB_BORDER + 1):
+                for dy in range(-SUB_BORDER, SUB_BORDER + 1):
+                    if dx * dx + dy * dy <= SUB_BORDER * SUB_BORDER:
+                        draw.text((cx + dx, y + dy), ch, font=f, fill=(0, 0, 0))
+            # 白字
+            draw.text((cx, y), ch, font=f, fill=(255, 255, 255))
+            cx += w
 
 
 def extract_frames(video):

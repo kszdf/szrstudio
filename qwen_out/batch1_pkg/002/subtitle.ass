@@ -1,0 +1,22 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, Outline, Shadow, Bold, Alignment, MarginL, MarginR, MarginV
+Style: Default,SimHei,64,&H00FFFFFF,&H00000000,4,1,0,2,60,60,80
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0.30,3.59,Default,,0,0,0,,你有没有把暂估成本一直留\N在账上？
+Dialogue: 0,3.59,4.83,Default,,0,0,0,,年底不结转，
+Dialogue: 0,4.83,7.71,Default,,0,0,0,,容易被税务系统比对发现异\N常。
+Dialogue: 0,7.71,10.18,Default,,0,0,0,,这笔成本如果来源说不清，
+Dialogue: 0,10.18,12.85,Default,,0,0,0,,可能被认定为虚开发票风险\N。
+Dialogue: 0,12.85,15.32,Default,,0,0,0,,账实不符最影响企业信誉，
+Dialogue: 0,15.32,16.56,Default,,0,0,0,,老板要重视。
+Dialogue: 0,16.56,17.56,Default,,0,0,0,,关注我，
+Dialogue: 0,17.56,19.82,Default,,0,0,0,,教你合规处理暂估成本，
+Dialogue: 0,19.82,21.47,Default,,0,0,0,,避免年底出问题。

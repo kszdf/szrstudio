@@ -81,11 +81,13 @@ def main():
 
     # 1) 复制音频到 face2face (容器可见)
     audio_in_face = FACE / f"audio_{args.name}.wav"
+    # name 可能含子目录（如 batch1/001），必须确保父目录存在，否则 shutil.copy 报 No such file
+    audio_in_face.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy(audio, audio_in_face)
     audio_container = f"/code/data/audio_{args.name}.wav"
     print(f"[1] 音频已桥接: {audio_in_face.name} -> {audio_container}")
 
-    code = f"avatar_{args.name}_{uuid.uuid4().hex[:6]}"
+    code = f"avatar_{args.name.replace('/', '_')}_{uuid.uuid4().hex[:6]}"
     # 2) 提交 HEYGEM
     print(f"[2] 提交 HEYGEM 视频生成 (code={code}) ...")
     r = requests.post(f"{VIDEO_API}/easy/submit", json={

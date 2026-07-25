@@ -71,7 +71,12 @@ def synth(text, voice, out_path, model=DEFAULT_MODEL, speech_rate=DEFAULT_SPEECH
                 f.write(audio_bytes)
             return out_path
         except Exception as e:
-            last_err = f"{type(e).__name__}: {e}"
+            le = ""
+            try:
+                le = str(getattr(synth, "last_error", "") or "")
+            except Exception:
+                pass
+            last_err = f"{type(e).__name__}: {e}" + (f" | last_error={le}" if le else "")
         time.sleep(2 * (i + 1))
     sys.exit(f"合成失败（已重试 {retries} 次）: {last_err}")
 

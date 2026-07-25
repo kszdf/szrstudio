@@ -45,3 +45,19 @@ _test/
 _scratch/
 ab_test/
 *.log
+
+# ===== 调试 / 验证脚本（本地用，非核心源码，不入库）=====
+audit_panels.js
+verify_*.js
+feat_check.js
+e2e_*.js
+e2e_*.html
+e2e_*.py
+diag_garble.py
+compare_samples.txt
+_fix_*.png
+api_v2.log
+server_std.log
+studio.err.log
+studio.log
+audit_shots/
