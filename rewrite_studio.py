@@ -454,14 +454,24 @@ def _run_render(job_id: str, cmd: list, out: Path):
             tail.append(line)
             if len(tail) > 80:
                 tail.pop(0)
-            # 解析 make_avatar_video.py 的 [N] step 描述
-            m = re.search(r"\[(\d+)\]\s*(.*)", line)
+            # 解析 make_avatar_video.py 的 [N] / finalize_v2_pil.py 的 [N/M] step 描述
+            m = re.search(r"\[(\d+)(?:/(\d+))?\]\s*(.*)", line)
             if m:
                 step = int(m.group(1))
-                desc = m.group(2)
+                total = m.group(2) or "1"
+                desc = m.group(3)
                 with JOB_LOCK:
-                    JOBS[job_id]["step"] = f"[{step}] {desc[:60]}"
-                    JOBS[job_id]["progress"] = min(90, 5 + step * 14)
+                    JOBS[job_id]["step"] = f"[{step}/{total}] {desc[:50]}"
+                    pm = re.search(r"(\d+)%", desc)
+                    if pm:
+                        # finalize 烧字幕阶段：90% 基准 + 帧进度(0-100)*0.09 → 90~99
+                        JOBS[job_id]["progress"] = min(99, 90 + int(int(pm.group(1)) * 0.09))
+                    elif any(k in desc for k in ("抽帧", "字幕", "合成", "片头", "烧字幕")):
+                        # finalize 各阶段粗略推进（HEYGEM 完成后才进入，不会和 HEYGEM 进度冲突）
+                        JOBS[job_id]["progress"] = min(99, 90 + step * 2)
+                    else:
+                        # make_avatar 阶段（提交/生成/剥离/合成嘴型），交给 HEYGEM 轮询推进，不覆盖
+                        pass
             # 抓 HEYGEM task_code（make_avatar_video.py 提交时打印 (code=avatar_<name>_<uuid>)；name 可能含中文，故用 [^)\s]+ 抓到闭括号/空白为止）
             cm = re.search(r"\(code=([^)\s]+)\)", line)
             if cm and heygem_code[0] is None:
@@ -574,6 +584,11 @@ def add_to_queue(name: str, model_id: str) -> dict:
     if not (p / "04_音频.wav").exists():
         return {"ok": False, "error": "请先在「出音频」步骤生成 04_音频.wav 再入队"}
     with QUEUE_LOCK:
+        # 关键修复：去重——同项目已在 waiting/rendering 直接返回旧 id，不重复入队
+        for x in QUEUE:
+            if x["name"] == name and x["status"] in ("waiting", "rendering"):
+                return {"ok": False, "error": f"该项目已在队列中（状态：{x['status']}），点「批量队列」看进度",
+                        "duplicate": True, "queue": get_queue()["queue"]}
         if len([x for x in QUEUE if x["status"] in ("waiting", "rendering")]) >= QUEUE_MAX:
             return {"ok": False, "error": f"队列已满（最多 {QUEUE_MAX} 个），先处理完几个再入队"}
         item = {
@@ -978,7 +993,10 @@ class Handler(BaseHTTPRequestHandler):
         stem, ext = os.path.splitext(base)
         if ext.lower() != ".mp4":
             return self._send_json({"ok": False, "error": "只支持 .mp4"}, 400)
-        safe_stem = re.sub(r"[^A-Za-z0-9_\-]", "_", stem)[:40] or "model"
+        safe_stem = re.sub(r"[^A-Za-z0-9_\-]", "_", stem)[:40]
+        # 若原名全是非字母数字（如纯中文），转义后会是一串下划线，给个可读 fallback
+        if not re.search(r"[A-Za-z0-9]", safe_stem):
+            safe_stem = "model"
 
         max_size = 500 * 1024 * 1024
         if len(data) > max_size:
@@ -1011,12 +1029,14 @@ class Handler(BaseHTTPRequestHandler):
             duration = 0.0
 
         # 转码：去原声 + 加静音音轨，libx264 重编码确保 HEYGEM 兼容
+        # 注意：-f lavfi 必须紧挨 -i anullsrc；所有 -c:v/-c:a 等输出选项须放在全部 -i 之后；
+        #       用 -map 明确「视频取输入0、音频取 anullsrc 静音」，既去原声又满足 HEYGEM 需音频流。
         cmd = [FFMPEG, "-y", "-loglevel", "error",
                "-i", str(raw_path),
+               "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono",
+               "-map", "0:v:0", "-map", "1:a:0",
                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
                "-pix_fmt", "yuv420p",
-               "-an",
-               "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono",
                "-c:a", "aac", "-b:a", "128k",
                "-shortest"]
         if duration > 0:
@@ -1220,7 +1240,8 @@ def search_and_create(category: str, period: str, direction: str = "",
             f"- 重点保留：{keep}\n"
             "- 原创优先：改写成老张第一人称口播，融合该真实热点的痛点，不照搬、不泛泛而谈\n"
             "- 深挖这条选题背后的专业风险点，形成一条完整口播\n"
-            "- 财税术语准确，概念不混淆（如个人卡收营业款≠公转私）\n\n"
+            "- 财税术语准确，概念不混淆（如个人卡收营业款≠公转私）\n"
+            "- **开头设计（重要）**：① 严禁自我介绍式开头：不写「张德富/老张今天跟您聊」「我张德富」「老张我」等以人名/人称起头；② 优先用疑问句或痛点场景切入制造悬念，例如「老板们，虚开发票这事，您真觉得查不到您头上？」；③ 每次开场根据内容重新设计，拒绝固定套路，不要寒暄铺垫，直接戳痛点/抛钩子。\n\n"
             f"{fb}\n\n"
             f"风格：\n{STYLE_GUIDE}\n\n"
             "【输出格式（严格按此，不要多余解释）】\n"
@@ -1268,7 +1289,8 @@ def generate_from_source(source: str, direction: str = "",
         f"- 篇幅：{lr}\n"
         f"- 重点保留：{keep}\n"
         "- 原创优先：改写成老张第一人称口播，不能只是洗稿/搬运，避免与原文高度相似\n"
-        "- 财税术语准确，概念不混淆（如个人卡收营业款≠公转私）\n\n"
+        "- 财税术语准确，概念不混淆（如个人卡收营业款≠公转私）\n"
+        "- **开头设计（重要）**：① 严禁自我介绍式开头：不写「张德富/老张今天跟您聊」「我张德富」「老张我」等以人名/人称起头；② 优先用疑问句或痛点场景切入制造悬念，例如「老板们，虚开发票这事，您真觉得查不到您头上？」；③ 每次开场根据内容重新设计，拒绝固定套路，不要寒暄铺垫，直接戳痛点/抛钩子。\n\n"
         f"{fb}\n\n"
         f"风格：\n{STYLE_GUIDE}\n\n"
         "【输出格式（严格按此，不要多余解释）】\n"

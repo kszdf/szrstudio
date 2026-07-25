@@ -35,6 +35,7 @@ model_thumbs/
 *.jpeg
 *.gif
 output/
+qwen_out/
 
 # ===== 临时 / 缓存 =====
 __pycache__/

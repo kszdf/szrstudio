@@ -30,6 +30,9 @@ from pathlib import Path
 
 import requests
 
+# 强制使用 full 版 ffmpeg（含 libx264），绕开系统 essentials 版缺编码器的坑
+FFMPEG = r"D:/ffmpeg/ffmpeg-8.1.2-full_build/bin/ffmpeg.exe"
+
 BASE = Path("D:/heygem_data")
 FACE = BASE / "face2face"
 TEMP = FACE / "temp"
@@ -51,13 +54,13 @@ def run(cmd):
 
 def strip_audio(src, dst):
     """物理剥离 HEYGEM 自带音轨 -> 仅视频（去双声关键一步）"""
-    run(["ffmpeg", "-y", "-i", str(src), "-an", "-c:v", "copy", str(dst)])
+    run([FFMPEG, "-y", "-i", str(src), "-an", "-c:v", "copy", str(dst)])
     return dst
 
 
 def mux(video_noaudio, audio, dst):
     """仅视频 + 千问音频 -> 嘴型对齐(音频=千问)"""
-    run(["ffmpeg", "-y", "-i", str(video_noaudio), "-i", str(audio),
+    run([FFMPEG, "-y", "-i", str(video_noaudio), "-i", str(audio),
          "-c:v", "copy", "-c:a", "aac", "-ar", "44100", "-shortest", str(dst)])
     return dst
 
@@ -87,7 +90,12 @@ def main():
     audio_container = f"/code/data/audio_{args.name}.wav"
     print(f"[1] 音频已桥接: {audio_in_face.name} -> {audio_container}")
 
-    code = f"avatar_{args.name.replace('/', '_')}_{uuid.uuid4().hex[:6]}"
+    # 关键修复：code 之前拼 args.name（含中文）→ 落到 PowerShell 5.1 终端被 GBK 解码成乱字符
+    # 改成 ASCII 短名+UUID：HEYGEM/容器/PowerShell/WebSocket 端到处都干净。
+    # 用 name 末段当"人类可读标识"（已经够用，不需要全名），不是英文时回退到 'proj'
+    raw = (args.name or '').split('/')[-1] or 'proj'
+    ascii_tag = raw.encode('ascii', 'ignore').decode('ascii').strip() or 'proj'
+    code = f"avatar_{ascii_tag}_{uuid.uuid4().hex[:6]}"
     # 2) 提交 HEYGEM
     print(f"[2] 提交 HEYGEM 视频生成 (code={code}) ...")
     r = requests.post(f"{VIDEO_API}/easy/submit", json={

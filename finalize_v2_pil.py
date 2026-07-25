@@ -19,9 +19,13 @@ import re
 import shutil
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
+
+# 强制使用 full 版 ffmpeg（含 libx264），绕开系统 essentials 版缺编码器的坑
+FFMPEG = r"D:/ffmpeg/ffmpeg-8.1.2-full_build/bin/ffmpeg.exe"
 
 BASE = Path("D:/heygem_data/gpt_sovits")
 INTRO = BASE / "covers/intro.mp4"
@@ -159,18 +163,17 @@ def draw_subtitle(img, text):
             cx += w
 
 
-def extract_frames(video):
-    FRAMES.mkdir(parents=True, exist_ok=True)
-    # 清空
-    for f in FRAMES.glob("f_*.png"):
-        f.unlink()
-    cmd = ["ffmpeg", "-y", "-i", str(video), "-vf", f"fps={FPS}", str(FRAMES / "f_%05d.png")]
+def extract_frames(video, frames_dir):
+    # 每轮用独立临时帧目录：不删旧帧，既绕开安全删除 shim，也杜绝残留帧串味
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    cmd = [FFMPEG, "-y", "-i", str(video), "-vf", f"fps={FPS}", str(frames_dir / "f_%05d.png")]
     run(cmd)
-    return sorted(FRAMES.glob("f_*.png"))
+    return sorted(frames_dir.glob("f_*.png"))
 
 
 def burn_frames(events, frames):
     print(f"  共 {len(frames)} 帧，{len(events)} 条字幕")
+    n = len(frames)
     for i, png in enumerate(frames):
         t = i / FPS
         # 找当前时间字幕
@@ -179,17 +182,21 @@ def burn_frames(events, frames):
             if s <= t < e:
                 cur = txt
                 break
-        if not cur:
-            continue
-        img = Image.open(png).convert("RGB")
-        draw_subtitle(img, cur)
-        img.save(png, "PNG")
+        if cur:
+            img = Image.open(png).convert("RGB")
+            draw_subtitle(img, cur)
+            img.save(png, "PNG")
+        # 每 50 帧回报一次进度（后端解析 [3] 烧字幕 N%）
+        if i % 50 == 0 or i == n - 1:
+            pct = int(100 * (i + 1) / n)
+            print(f"[3] 烧字幕 {pct}%")
 
 
 def compose_video(frames, audio, out, with_audio=True):
+    frames_dir = frames[0].parent if frames else FRAMES
     cmd = [
-        "ffmpeg", "-y",
-        "-r", str(FPS), "-i", str(FRAMES / "f_%05d.png"),
+        FFMPEG, "-y",
+        "-r", str(FPS), "-i", str(frames_dir / "f_%05d.png"),
     ]
     if with_audio and audio:
         cmd += ["-i", str(audio)]
@@ -211,7 +218,7 @@ def concat_intro(intro, mid, out):
         "[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]"
     )
     cmd = [
-        "ffmpeg", "-y", "-i", str(intro), "-i", str(mid),
+        FFMPEG, "-y", "-i", str(intro), "-i", str(mid),
         "-filter_complex", fc,
         "-map", "[v]", "-map", "[a]", "-pix_fmt", "yuv420p", str(out),
     ]
@@ -238,8 +245,10 @@ def main():
 
     TMP.mkdir(parents=True, exist_ok=True)
 
+    # 每轮独立帧目录，避免删旧帧触发安全删除 shim、也杜绝残留帧串味
+    frames_dir = TMP / f"frames_{uuid.uuid4().hex[:8]}"
     print(f"\n[1/4] 抽帧 ...")
-    frames = extract_frames(video)
+    frames = extract_frames(video, frames_dir)
 
     print(f"\n[2/4] 解析字幕 ...")
     events = parse_ass(ass)
@@ -259,7 +268,16 @@ def main():
         shutil.move(str(mid), str(args.out))
     else:
         concat_intro(Path(args.intro), mid, Path(args.out))
-        mid.unlink(missing_ok=True)
+        try:
+            mid.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    # 清理临时帧（失败不致命）
+    try:
+        shutil.rmtree(frames_dir, ignore_errors=True)
+    except Exception:
+        pass
     print(f"\n  成品: {args.out}")
 
 

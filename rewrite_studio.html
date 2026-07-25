@@ -290,6 +290,11 @@
   .studio-view{display:none;}
   /* 关键修复：main.studio-view.active 优先级必须压过 .studio-view.active 的 display:block，否则 main 退化成 block，grid 布局全失效。给 main 标签 + active 提升优先级 0,0,2,1 */
   main.studio-view.active{display:grid;}
+  /* 修复：右栏音频/视频卡默认隐藏，仅在出音频/出片后才显示，避免选题页面显示无关内容 + 无 src 的 <video> 触发 MEDIA_ELEMENT_ERROR code=4 */
+  .col-right .card.audio-card,
+  .col-right .card.video-card{display:none;}
+  .col-right .card.audio-card.has-audio,
+  .col-right .card.video-card.has-video{display:block;}
 
   /* Hero 双 Banner 区 */
   .hero{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:28px;}
@@ -436,8 +441,6 @@
   #statusBox.danger{color:#fca5a5 !important;}
   #featBtn{background:rgba(15,23,42,.55) !important;color:#fff !important;border:1px solid rgba(255,255,255,.32) !important;font-weight:700 !important;}
   #featBtn:hover{background:rgba(15,23,42,.7) !important;border-color:rgba(255,255,255,.5) !important;}
-  #homeBtn{background:rgba(15,23,42,.55) !important;color:#fff !important;border:1px solid rgba(255,255,255,.32) !important;font-weight:700 !important;}
-  #homeBtn:hover{background:rgba(15,23,42,.7) !important;border-color:rgba(255,255,255,.5) !important;}
 
   /* ===== 响应式适配：保证大屏不空、小屏不挤、移动端可用 ===== */
 
@@ -503,9 +506,6 @@
     </div>
   </div>
   <div class="bar">
-    <button type="button" id="homeBtn" onclick="goHome()" title="点此回首页 Dashboard" style="display:none;align-items:center;gap:5px;padding:7px 12px;background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;font-weight:600;font-size:13px;font-family:inherit;cursor:pointer;backdrop-filter:blur(4px);">
-      ← 首页
-    </button>
     <div class="view-switch" id="viewSwitch">
       <button data-view="home" class="active">🏠 首页</button>
       <button data-view="studio">🛠 工作台</button>
@@ -558,13 +558,13 @@
       <div class="h-guide" onclick="event.stopPropagation();openFeatureGuide();">📖 功能介绍（新手必看）</div>
       <div class="h-illust">🎬</div>
     </div>
-    <div class="hero-card hero-side" onclick="goStudio();setTimeout(()=>{$('catInput').focus();},150);">
+    <div class="hero-card hero-side" onclick="goStudio();setTimeout(()=>gotoStep('topic'),100);">
       <div>
         <div class="h-eyebrow">VIRAL TOPICS</div>
         <div class="h-title" style="font-size:24px;">联网找爆款</div>
         <div class="h-desc" style="margin-top:6px;">按时间段/类别，实时抓最近真实财税热点，挑一条二创。</div>
       </div>
-      <div class="h-cta" onclick="event.stopPropagation();goStudio();setTimeout(()=>{$('catInput').focus();},150);">🔥 一键选题</div>
+      <div class="h-cta" onclick="event.stopPropagation();goStudio();setTimeout(()=>gotoStep('topic'),100);">🔥 一键选题</div>
       <div class="h-illust">🔥</div>
     </div>
   </div>
@@ -667,13 +667,14 @@
       <!-- Pane 2：直接生成二创稿（不联网） -->
       <div class="topic-pane" id="pane-direct" style="display:none;">
         <textarea id="srcText" style="width:100%;min-height:120px;padding:10px;border:1px solid var(--border);border-radius:8px;resize:vertical;font-family:inherit;"
-          placeholder="粘贴爆款视频链接 / 原文逐字稿 / 创作提示词 / 任何想让 AI 改写的素材…"></textarea>
+          placeholder="粘贴原文逐字稿 / 创作提示词（粘链接没用，AI 不会访问网址。请先打开链接 Ctrl+A 复制文字）…"></textarea>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:center;">
           <input id="dirInput" placeholder="创作方向（如：从老板最怕的稽查角度讲）"
             style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;">
           <select id="lenSel" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;">
-            <option>约30秒</option><option selected>约60秒</option><option>约90秒</option><option>约3分钟</option><option>约5分钟</option><option>约10分钟</option>
+            <option>约30秒</option><option>约60秒</option><option>约90秒</option><option selected>约3分钟</option><option>约5分钟</option><option>约10分钟</option>
           </select>
+          <span id="lenHint" style="font-size:12px;color:var(--muted);white-space:nowrap;"></span>
           <input id="keepInput" placeholder="重点保留（如：个人卡收营业款概念）"
             style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;">
           <button id="directCreateBtn" class="primary">✨ 直接生成二创稿</button>
@@ -741,6 +742,11 @@
         <button id="refreshModelsBtn" class="secondary">🔄 刷新</button>
         <span class="tip">选用于驱动的数字人模特（静音版）。上传任意 mp4 后自动转码为静音模板，可用于不同场景/装束。</span>
       </div>
+      <div class="tip" style="margin-top:8px;background:rgba(15,23,42,.06);border-left:3px solid #2563eb;padding:8px 10px;border-radius:6px;line-height:1.9;">
+        📷 <b>拍摄规范</b>：① 正脸/微侧≤15°，别大角度转头　② 光线均匀、别逆光　③ 画面稳定（三脚架最好）　④ 人脸占画面适中（半身/大头）　⑤ 背景别出现第二张人脸　⑥ 时长 <b>5–15 秒</b>，手机直拍 mp4 即可。背景会原样保留到成片，换场景=上传不同背景视频。<br>
+        💾 <b>文件规则</b>：仅 <b>.mp4</b>；大小 ≤ <b>500MB</b>（建议压到 50MB 内，出片更快）；时长别超 15 秒（HEYGEM 推理耗时≈视频时长数倍，越长越慢）。<br>
+        🔤 <b>文件名规则</b>：建议 <b>英文/数字</b> 命名（如 <code>boss_office.mp4</code>）。若含中文、空格或 <code># &amp; % + ( ) ?</code> 等特殊字符，系统会自动转成下划线——但为防管理后台误识别，<b>最好直接用英文/数字命名</b>。
+      </div>
       <div id="uploadProgress" style="display:none;margin-top:8px;">
         <div class="progress"><i id="uploadBar"></i></div>
         <div class="tip" id="uploadMsg"></div>
@@ -776,7 +782,7 @@
 
       <div class="progress"><i id="renderBar"></i></div>
       <div id="renderStep" class="tip"></div>
-      <div class="tip">出片需 HEYGEM 本地 Docker 在跑（先开 Docker Desktop）。流程：提交渲染→去双声→嘴型对齐→烧字幕拼片头，约 1–3 分钟，可在此页面等，不用切命令行。</div>
+      <div class="tip">出片需 HEYGEM 本地 Docker 在跑（先开 Docker Desktop）。流程：音频驱动模特生成数字人视频→自动烧字幕→拼片头，约 1–3 分钟，可在此页面等，不用切命令行。</div>
 
       <!-- 队列概览条（主界面常驻：用户随时可见有几个在排队、自己排第几） -->
       <div class="q-overview" id="qOverview">
@@ -838,12 +844,12 @@
       <div class="kv" id="curName">—</div>
       <div id="curFlags" class="kv" style="margin-top:4px;"></div>
     </div>
-    <div class="card">
+    <div class="card audio-card">
       <h3>音频</h3>
       <div class="preview-box"><span class="pv-label" id="audioLbl">未生成</span>
         <audio id="pvAudio" controls preload="none">不支持</audio></div>
     </div>
-    <div class="card">
+    <div class="card video-card">
       <h3>成片视频
         <button id="muteBtn" title="开启/关闭声音" style="margin-left:6px;padding:2px 8px;border:1px solid var(--border);border-radius:12px;background:#fff;cursor:pointer;font-size:12px;">🔊 声音</button>
         <span class="tip" id="videoCount" style="font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;margin-left:4px;"></span>
@@ -853,7 +859,7 @@
         <span class="empty" style="font-size:12px;">暂无成片</span>
       </div>
       <div class="preview-box"><span class="pv-label" id="videoLbl">未出片</span>
-        <video id="pvVideo" controls preload="metadata">不支持</video>
+        <video id="pvVideo" controls preload="none" style="display:none">不支持</video>
         <div id="videoErr" style="display:none;background:#fff5f5;border:1px solid #e5484d;border-radius:6px;padding:6px 8px;margin-top:6px;color:#b00;font-size:12px;"></div>
       </div>
     </div>
@@ -1102,6 +1108,8 @@ function gotoStep(step){
   if(step==="qc") {/* 手动点 */}
   // 队列相关：所有步骤都用全局 pollQueue，步骤9 额外 renderQueue 一次（已由 pollQueue 触发）
   if(step==="queue") pollQueue();
+  // 关键修复：切步骤时重刷右栏，确保音频/视频卡按新步骤显隐（否则从出片页切回选题页视频卡不消失）
+  refreshPreview();
 }
 document.querySelectorAll(".steps li").forEach(li=>{
   li.addEventListener("click",()=>{ gotoStep(li.dataset.step); if(!guideNoMore) showGuide(li.dataset.step); });
@@ -1273,16 +1281,27 @@ async function refreshPreview(){
   const ra=await fetch("/api/projects"); const list=await ra.json();
   const pr=list.find(p=>p.name===currentName);
   const tsb=()=> "?t="+Date.now();
+  // 关键修复：音频/视频卡跟随“当前步骤”显隐，而不只是“有数据就显示”。
+  // 选题/改写/选模特 属上游步骤，右侧不该出现音频播放器/成片视频（即使历史项目有产物也隐藏）。
+  const _stepEl=document.querySelector(".steps li.active");
+  const _step=_stepEl?_stepEl.dataset.step:"";
+  const audioSteps=new Set(["audio","render","subtitle","qc","publish","queue"]);
+  const videoSteps=new Set(["render","subtitle","qc","publish","queue"]);
+  const showAudio=audioSteps.has(_step);
+  const showVideo=videoSteps.has(_step);
   if(pr && pr.audio){
     $("pvAudio").src="/api/audio/"+encodeURIComponent(currentName)+tsb();
     $("audioLbl").textContent="品牌主播音 · 可播放";
     $("qsAudio").innerHTML='<span class="ok">✅ 已生成</span>';
     $("audioPlayer").src="/api/audio/"+encodeURIComponent(currentName)+tsb();
     $("noAudio").style.display="none";
+    // 显示音频卡片（默认隐藏），但仅当当前步骤属于“出音频及之后”
+    const ac=document.querySelector(".col-right .card.audio-card"); if(ac) ac.classList.toggle("has-audio", showAudio);
   } else {
     $("pvAudio").removeAttribute("src");$("audioLbl").textContent="未生成";
     $("qsAudio").innerHTML='<span class="bad">未生成</span>';
     $("noAudio").style.display="block";
+    const ac=document.querySelector(".col-right .card.audio-card"); if(ac) ac.classList.remove("has-audio");
   }
   if(pr && pr.video){
     $("pvVideo").style.display="block";
@@ -1296,6 +1315,8 @@ async function refreshPreview(){
     const pp = $("pvVideo").play();
     syncMuteBtn();
     if(pp && pp.catch){ pp.catch(()=>{ $("videoLbl").textContent="成片 · 点 ▶ 播放"; }); }
+    // 显示视频卡片（默认隐藏），但仅当当前步骤属于“出片及之后”
+    const vc=document.querySelector(".col-right .card.video-card"); if(vc) vc.classList.toggle("has-video", showVideo);
   } else {
     // 关键修复：无视频时不要 removeAttribute("src")+load()——会触发 video.error code=4 永久污染错误态。
     // 改用：先 pause+移除 src，再隐藏（display:none 后浏览器不会去加载空 src），最后**不调 .load()**。
@@ -1312,6 +1333,8 @@ async function refreshPreview(){
     $("videoLbl").textContent="未出片";
     $("qsVideo").innerHTML='<span class="bad">未出片</span>';
     vv.dataset.loadedKey="";
+    // 隐藏视频卡片（整卡不见，避免选题页等无视频步骤显示错误空卡片）
+    const vc=document.querySelector(".col-right .card.video-card"); if(vc) vc.classList.remove("has-video");
   }
 }
 function markDoneSteps(){
@@ -1645,6 +1668,27 @@ function renderQOverview(d){
     }
   } else $("qOvMine").textContent = "";
 
+  // 关键修复：同步「加入批量队列」按钮文字+行为，让用户一眼看到当前项目状态，避免重复入队
+  const qb = $("queueBtn");
+  if(qb && currentName){
+    const mine = q.find(x=>x.name===currentName && (x.status==="waiting"||x.status==="rendering"));
+    if(mine){
+      qb.textContent = mine.status==="rendering" ? "🎬 你这条正在渲染中（点这里看进度）" : "⏳ 你这条已入队（点这里看进度）";
+      qb.classList.remove("primary","secondary"); qb.classList.add("secondary");
+      qb.dataset.duplicate = "1"; // 标记：点了不重复入队
+    } else {
+      const done = q.find(x=>x.name===currentName && x.status==="done");
+      if(done){
+        qb.textContent = "✅ 你这条已出片（再排一次重渲）";
+        qb.dataset.duplicate = "0";
+      } else {
+        qb.textContent = "📋 加入批量队列";
+        qb.dataset.duplicate = "0";
+      }
+      qb.classList.remove("primary","secondary"); qb.classList.add("primary");
+    }
+  }
+
   // 队首小胶囊（最多显示 12 个）
   const list = $("qOvList");
   if(!q.length){
@@ -1772,12 +1816,25 @@ async function addToQueue(){
   const mode=document.querySelector('input[name="renderMode"]:checked').value;
   if(mode==="thirdparty"){toast("批量队列仅支持本地数字人，请切回「本地数字人」或直接点一键出片");return;}
   if(!selModel){toast("请先在「选模特」步骤选一个模特");gotoStep("model");return;}
+  // 关键修复：先查队列是否已有该项目，避免重复入队
+  const r0=await fetch("/api/queue"); const d0=await r0.json();
+  const exist=(d0.queue||[]).find(x=>x.name===currentName && (x.status==="waiting"||x.status==="rendering"));
+  if(exist){
+    toast("⏳ 该项目已在队列中（"+ (exist.status==="rendering"?"渲染中":"等待中") +"），去队列页看进度");
+    gotoStep("queue");
+    return;
+  }
   $("qState").textContent="入队中…";
   const r=await fetch("/api/queue",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({name:currentName,model:selModel})});
   const d=await r.json();
-  if(d.ok){toast("✅ 已加入队列，详见「出片」步骤的队列概览");$("qState").textContent="已加入队列";pollQueue();}
-  else{$("qState").textContent="";toast("入队失败："+(d.error||"").slice(0,90));}
+  if(d.ok){toast("✅ 已加入队列，详见「出片」步骤的队列概览");$("qState").textContent="已加入队列";pollQueue();gotoStep("queue");}
+  else{
+    $("qState").textContent="";
+    // 后端返回 duplicate=true 时也跳队列页（双保险，前端先查了后端也再挡一次）
+    if(d.duplicate){toast("⏳ 该项目已在队列中");gotoStep("queue");}
+    else{toast("入队失败："+(d.error||"").slice(0,90));}
+  }
 }
 $("queueBtn").addEventListener("click",addToQueue);
 $("qAddBtn").addEventListener("click",addToQueue);
@@ -1848,12 +1905,23 @@ async function loadSubtitle(){
 
 // —— QC ——
 $("qcBtn").addEventListener("click",async()=>{
-  if(!currentName) return;
-  const r=await fetch("/api/project/"+encodeURIComponent(currentName)+"/qc");
-  const d=await r.json();
   const box=$("qcResult");
-  if(!d.exists){box.innerHTML='<span class="empty">尚未出片，请先「出片」。</span>';return;}
-  if(d.error){box.innerHTML=`<div class="bad">⚠️ ${esc(d.error)}</div>`;return;}
+  // 之前 !currentName 时静默 return，用户看不到原因。现在给反馈
+  if(!currentName){
+    box.innerHTML='<div class="warn">⚠️ 请先在「选题」步骤选个项目（点左侧列表里的项目卡）</div>';
+    return;
+  }
+  // 加载态：禁用按钮 + 显示"跑质检中"
+  const btn=$("qcBtn");
+  const orig=btn.textContent;
+  btn.disabled=true; btn.textContent="⏳ 跑质检中...";
+  box.innerHTML='<span class="empty">正在调 ffprobe 检测视频指标...</span>';
+  try{
+    const r=await fetch("/api/project/"+encodeURIComponent(currentName)+"/qc");
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const d=await r.json();
+    if(!d.exists){box.innerHTML='<span class="empty">尚未出片，请先「出片」。</span>';return;}
+    if(d.error){box.innerHTML=`<div class="bad">⚠️ ${esc(d.error)}</div>`;return;}
   const c=d.checks;
   const item=(label,ok)=>`<div class="sub-row"><span>${label}</span>
     <span class="${ok?'ok':'bad'}">${ok?'✅':'❌'}</span></div>`;
@@ -1872,6 +1940,11 @@ $("qcBtn").addEventListener("click",async()=>{
     <div class="sub-row" style="margin-top:8px;"><span><b>结论</b></span>
       <span class="${d.pass?'ok':'warn'}">${d.pass?'✅ 全部达标':'⚠️ 有项需关注'}</span></div>
   </div>`;
+  }catch(e){
+    box.innerHTML=`<div class="bad">⚠️ 质检请求失败：${esc(e.message||String(e))}<br><span style="color:#666;font-size:12px;">可能原因：ffprobe 路径错、视频文件被占用、网络中断。打开 F12 → Console 看完整堆栈。</span></div>`;
+  }finally{
+    btn.disabled=false; btn.textContent=orig;
+  }
 });
 
 // —— 发布文案 ——
@@ -1887,6 +1960,18 @@ $("pubBtn").addEventListener("click",async()=>{
     <div><b>文案</b>：${esc(d.body)}</div></div>`;
   $("qsPub").innerHTML='<span class="ok">✅ 已生成</span>';
 });
+
+// —— 时长下拉 → 实时显示目标字数（让"时长控制长短"看得见）——
+const LEN_HINT = {
+  "约30秒":"目标 60-90 字", "约60秒":"目标 100-150 字", "约90秒":"目标 150-220 字",
+  "约3分钟":"目标 450-700 字", "约5分钟":"目标 800-1200 字", "约10分钟":"目标 1500-2200 字"
+};
+function updateLenHint(){
+  const v=$("lenSel").value;
+  $("lenHint").textContent = LEN_HINT[v] || "";
+}
+$("lenSel").addEventListener("change", updateLenHint);
+updateLenHint();
 
 // —— 双入口 Tab 切换：🌐 联网找爆款 vs ✍️ 直接生成二创稿 ——
 function switchTopicTab(pane){
@@ -2071,7 +2156,7 @@ function goHome(){
   });
   homeViewMode="home";
   // 工作台专属控件在首页隐藏
-  ["projSwitch","newBtn","platformSel","homeBtn"].forEach(id=>{
+  ["projSwitch","newBtn","platformSel"].forEach(id=>{
     const el=$(id); if(el) el.style.display="none";
   });
   if($("projPopup")) $("projPopup").style.display="none";
@@ -2088,7 +2173,6 @@ function goStudio(){
   const setDisp=(id,v)=>{const el=$(id); if(el) el.style.display=v;};
   setDisp("projSwitch","inline-flex");
   setDisp("newBtn","");
-  setDisp("homeBtn","inline-flex");
   setDisp("platformSel","");
   // 关键修复：进入工作台必须保证至少有一个面板可见，否则整个工作区空白
   // （用户感知为「点选题没反应 / 步骤区空白」）。已有激活面板则保持当前步骤。
