@@ -1140,12 +1140,86 @@ def _parse_topics_json(text: str) -> list:
     return arr if isinstance(arr, list) else []
 
 
+# 选题相关度过滤用的停用词（与主题无关的通用词、后缀）
+_TOPIC_STOPWORDS = {
+    "的", "了", "和", "与", "或", "等", "在", "是", "有", "及", "而", "但", "为", "对",
+    "关于", "如何", "怎么", "什么", "为什么", "多少", "哪些", "好处", "优势", "劣势",
+    "风险", "影响", "实务", "解读", "案例", "政策", "热点", "讨论", "相关", "最新", "最近"
+}
+
+# 字符重叠兜底时忽略的高频虚字/标点
+_TOPIC_CHAR_STOP = set("  \t\n的了吗呢吧啊哦了在和与或等是有及而为但对关于如何怎么什么为什么多少哪些")
+
+
+def _topic_keywords(category: str) -> list:
+    """从用户输入的类别/主题中提取有效关键词，用于后续相关度过滤。"""
+    if not category:
+        return []
+    # 把停用词作为分隔符切分，去掉通用后缀/前缀
+    pattern = "|".join(re.escape(w) for w in _TOPIC_STOPWORDS)
+    parts = [p.strip() for p in re.split(pattern, category) if p.strip()]
+    keywords = []
+    for part in parts:
+        if len(part) < 2:
+            continue
+        keywords.append(part)
+        # 对纯中文长片段再提取前缀，提高命中（如“小微企业身份”可拆出“小微企业”）
+        if re.match(r"^[\u4e00-\u9fa5]+$", part):
+            if len(part) >= 2:
+                keywords.append(part[:2])
+            if len(part) >= 4:
+                keywords.append(part[:4])
+            if len(part) >= 6:
+                keywords.append(part[:6])
+    # 去重并按长度降序（越长越具体，优先匹配）
+    seen = set()
+    result = []
+    for k in keywords:
+        kl = k.lower()
+        if kl not in seen:
+            seen.add(kl)
+            result.append(k)
+    return sorted(result, key=lambda x: len(x), reverse=True)
+
+
+def _topic_text_chars(category: str) -> set:
+    """返回 category 中有区分度的字符集合（用于兜底字符重叠计算）。"""
+    return set(category) - _TOPIC_CHAR_STOP
+
+
+def _filter_relevant_topics(topics: list, category: str, min_keep: int = 1) -> list:
+    """按关键词命中 + 字符重叠兜底，确保返回选题与 category 相关；过滤后无命中则回退原始。"""
+    keywords = _topic_keywords(category)
+    cat_chars = _topic_text_chars(category)
+    if not topics or (not keywords and not cat_chars):
+        return topics
+    kept = []
+    for t in topics:
+        text = " ".join([
+            str(t.get("title", "")), str(t.get("why_hot", "")),
+            str(t.get("risk_point", "")), str(t.get("audience", ""))
+        ])
+        text_lower = text.lower()
+        # 1) 关键词命中（支持拆分后的前缀/片段）
+        keyword_hit = any(k.lower() in text_lower for k in keywords) if keywords else False
+        # 2) 字符重叠兜底（处理“个人所得税”→“个税”等同义/缩略）
+        text_chars = set(text) - _TOPIC_CHAR_STOP
+        union = len(cat_chars | text_chars)
+        overlap = (len(cat_chars & text_chars) / union) if union else 0
+        if keyword_hit or overlap >= 0.18:
+            kept.append(t)
+    # 若过滤太狠（只剩 0/1/2 条且原始足够多），说明关键词可能过严，回退原始列表
+    if len(kept) < min_keep and len(topics) >= min_keep:
+        return topics
+    return kept
+
+
 def search_and_create(category: str, period: str, direction: str = "",
                       length: str = "约60秒", keep_core: str = "",
                       mode: str = "list", topic_index: int = -1,
-                      topics_cache: list = None) -> dict:
+                      topics_cache: list = None, max_topics: int = 10) -> dict:
     """智能选题两阶段：
-      mode="list"  → 仅联网检索+提炼 10 个候选选题（不二创），用户挑选后再走 create
+      mode="list"  → 仅联网检索+提炼最多 max_topics 个候选选题（不二创），用户挑选后再走 create
       mode="create" → 基于 topics_cache[topic_index] 那一条做二创，返回三段稿
     返回 dict 含 ok / topics / source_label / segs(仅 create) / raw(仅 create)
     """
@@ -1165,8 +1239,8 @@ def search_and_create(category: str, period: str, direction: str = "",
         tavily_key = get_key("TAVILY_API_KEY")
         if tavily_key:
             try:
-                sq = (f"最近 {period}（截至{now}）关于「{category}」的财税热点、税务稽查案例、"
-                      f"老板财务合规痛点、最新政策变化讨论")
+                # 搜索词聚焦用户输入主题，不再硬塞「稽查/痛点/政策变化」等宽泛词，避免结果跑偏
+                sq = f"最近 {period}（截至{now}）「{category}」财税实务、政策解读、热点案例讨论"
                 sr = tavily_search(sq, tavily_key, topic="finance", days=days, max_results=10)
                 items = sr["results"]
                 if items:
@@ -1182,17 +1256,20 @@ def search_and_create(category: str, period: str, direction: str = "",
 
         if real_material:
             brief_intro = (
-                f"以下是联网检索到的「{category}」最近（{period}）真实财税热点素材（含来源链接）：\n"
+                f"以下是联网检索到的「{category}」最近（{period}）真实财税素材（含来源链接）：\n"
                 f"{real_material}\n\n"
-                "请基于以上真实素材，提炼出 10 个最适合「老张讲财税」做的爆款选题，"
+                f"请基于以上真实素材，提炼与「{category}」高度相关、适合「老张讲财税」做的爆款选题。"
             )
         else:
             brief_intro = (
                 f"未启用联网检索（未配置 TAVILY_API_KEY 或检索失败），请基于你的财税知识，"
-                f"给出最近关于「{category}」最值得做的 10 个爆款选题。"
+                f"给出与「{category}」高度相关的爆款选题。"
             )
         topic_prompt = (
             brief_intro +
+            f"注意：所有选题必须紧紧围绕「{category}」这一主题；"
+            "如果检索素材与该主题直接相关的内容不足，宁可少选也不要生成无关的泛财税热点凑数。"
+            f"请按相关性和爆款潜力从高到低排序，最多给出 {max_topics} 个选题。\n"
             "每个选题严格按 JSON 结构：\n"
             '{"title":"口语化、带钩子感的选题标题","why_hot":"为什么火（老板痛点/社会情绪）",'
             '"risk_point":"可切入的专业风险点或争议点","audience":"目标人群（如个体户/企业主/财务）"}\n'
@@ -1203,6 +1280,9 @@ def search_and_create(category: str, period: str, direction: str = "",
         except Exception as e:  # noqa
             return {"ok": False, "error": f"选题生成失败: {type(e).__name__}: {e}"}
         topics = _parse_topics_json(raw_topics)
+        # 强制相关度过滤：确保返回的选题与 category 真正有关，宁可少也不要滥竽充数
+        topics = _filter_relevant_topics(topics, category)
+        topics = topics[:max_topics]
         return {"ok": True, "topics": topics, "source_label": source_label,
                 "stage": "list"}
 

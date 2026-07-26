@@ -646,7 +646,7 @@
 
       <!-- Tab 双入口：联网找爆款 vs 直接生成二创稿，两个独立模式互不混淆 -->
       <div class="topic-tabs" id="topicTabs" style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--border);">
-        <button type="button" class="topic-tab active" data-pane="hot">🌐 联网找爆款（按维度列 10 条候选）</button>
+        <button type="button" class="topic-tab active" data-pane="hot">🌐 联网找爆款（按维度列候选，最多 10 条）</button>
         <button type="button" class="topic-tab" data-pane="direct">✍️ 直接生成二创稿（粘贴原文/提示词）</button>
       </div>
 
@@ -660,7 +660,7 @@
           </select>
           <button id="findHotBtn" class="primary">🔍 联网找爆款</button>
         </div>
-        <div class="tip">按上面"类别 + 时间段"自动联网检索最近财税爆款话题，列出 10 条候选。点选某条卡片 → 按其角度生成二创稿 → 自动填入「② 改写」三段。</div>
+        <div class="tip">按上面"类别 + 时间段"自动联网检索最近财税爆款话题，列出与主题高度相关的候选（最多 10 条，素材不足或相关度不够时自动减少）。点选某条卡片 → 按其角度生成二创稿 → 自动填入「② 改写」三段。</div>
         <div id="hotList" style="margin-top:12px;"></div>
       </div>
 
