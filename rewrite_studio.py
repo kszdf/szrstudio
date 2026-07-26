@@ -1313,8 +1313,23 @@ def generate_from_source(source: str, direction: str = "",
     return {"ok": True, "segs": segs, "raw": raw}
 
 
+class StudioServer(ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        # 吞掉客户端断开/断管等连接级异常，避免刷 stderr 且不致命
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionAbortedError, BrokenPipeError, ConnectionResetError)):
+            return
+        # 其它异常仍落盘便于排查
+        try:
+            import traceback
+            with open("D:/heygem_data/server_err.log", "a", encoding="utf-8") as _f:
+                _f.write(f"[{time.strftime('%H:%M:%S')}] server error {client_address}: {traceback.format_exc()}\n")
+        except Exception:
+            pass
+
+
 def main():
-    httpd = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    httpd = StudioServer(("0.0.0.0", PORT), Handler)
     print(f"二创改写台 v2 已启动: http://localhost:{PORT}  (Ctrl+C 停止)")
     try:
         httpd.serve_forever()

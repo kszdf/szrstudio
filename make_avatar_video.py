@@ -96,16 +96,27 @@ def main():
     raw = (args.name or '').split('/')[-1] or 'proj'
     ascii_tag = raw.encode('ascii', 'ignore').decode('ascii').strip() or 'proj'
     code = f"avatar_{ascii_tag}_{uuid.uuid4().hex[:6]}"
-    # 2) 提交 HEYGEM
+    # 2) 提交 HEYGEM（遇到 code=10001「忙碌中」自动重试 3 次，间隔递增）
+    # HEYGEM 的 TransDhTask.run_flag 是内存标志，偶发异常退出后没复位会一直 busy
     print(f"[2] 提交 HEYGEM 视频生成 (code={code}) ...")
-    r = requests.post(f"{VIDEO_API}/easy/submit", json={
-        "audio_url": audio_container,
-        "video_url": args.model,
-        "code": code,
-    }, timeout=30)
-    data = r.json()
-    if data.get("code") != 10000:
-        sys.exit(f"提交失败: {data}")
+    submit_data = None
+    for attempt, wait_s in enumerate([0, 10, 15, 20], start=1):
+        if wait_s:
+            print(f"    上次提交被拒（忙碌中），{wait_s}s 后重试（第 {attempt}/4 次）...")
+            time.sleep(wait_s)
+        r = requests.post(f"{VIDEO_API}/easy/submit", json={
+            "audio_url": audio_container,
+            "video_url": args.model,
+            "code": code,
+        }, timeout=30)
+        submit_data = r.json()
+        if submit_data.get("code") == 10000:
+            break
+        # 10001=忙碌中 → 重试；其它错（参数错等）→ 立即失败
+        if submit_data.get("code") != 10001:
+            sys.exit(f"提交失败: {submit_data}")
+    if not submit_data or submit_data.get("code") != 10000:
+        sys.exit(f"提交失败（4 次仍忙碌）：{submit_data}。前面可能还有长任务在跑，请稍后手动重试，或执行 `docker restart heygem-gen-video` 清掉内存锁。")
     print("    提交成功，开始渲染...")
 
     # 3) 轮询
