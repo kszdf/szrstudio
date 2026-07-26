@@ -6,7 +6,7 @@ Set-Location $repo
 $st = & $git status --porcelain
 if ($st) {
     & $git add -A
-    $msg = "auto sync: " + (Get-Date -Format "yyyy-MM-dd HH:mm")
+    $msg = "daily backup: " + (Get-Date -Format "yyyy-MM-dd HH:mm")
     & $git commit -q -m $msg
     & $git push -u origin main -q *>> $log
     Add-Content $log ("$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $msg -> pushed")
