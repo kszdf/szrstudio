@@ -240,6 +240,11 @@
                         box-shadow:0 0 0 2px rgba(34,197,94,.18);}
   .topic-card .use-topic-btn{margin-top:8px;padding:5px 10px;font-size:12px;
                               border-radius:6px;cursor:pointer;}
+  .rel-chip{display:inline-block;margin-left:8px;padding:1px 7px;border-radius:10px;
+            font-size:11px;font-weight:600;vertical-align:middle;}
+  .rel-high{background:#dcfce7;color:#15803d;}
+  .rel-mid{background:#fef9c3;color:#a16207;}
+  .rel-low{background:#fee2e2;color:#b91c1c;}
   /* 紧急按钮（也可放别处，保留兼容） */
   .primary{background:linear-gradient(180deg,#2563eb,#1d4ed8);color:#fff;border:none;
            padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;}
@@ -658,6 +663,8 @@
           <select id="periodSel" title="检索时间段" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;">
             <option>近7天</option><option selected>近30天</option><option>近3个月</option><option>2026年以来</option><option>近1年</option>
           </select>
+          <input id="hotTargetSec" type="number" value="60" min="10" max="600" title="男女对话稿目标时长（秒）"
+            style="width:120px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;">
           <button id="findHotBtn" class="primary">🔍 联网找爆款</button>
         </div>
         <div class="tip">按上面"类别 + 时间段"自动联网检索最近财税爆款话题，列出与主题高度相关的候选（最多 10 条，素材不足或相关度不够时自动减少）。点选某条卡片 → 按其角度生成二创稿 → 自动填入「② 改写」三段。</div>
@@ -677,6 +684,8 @@
           <span id="lenHint" style="font-size:12px;color:var(--muted);white-space:nowrap;"></span>
           <input id="keepInput" placeholder="重点保留（如：个人卡收营业款概念）"
             style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;">
+          <input id="directTargetSec" type="number" value="60" min="10" max="600" title="男女对话稿目标时长（秒）"
+            style="width:120px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;">
           <button id="directCreateBtn" class="primary">✨ 直接生成二创稿</button>
         </div>
         <div class="tip">不联网，AI 按「专业视角」直接对上面素材做原创二创稿 → 自动填入「② 改写」三段。如果只是想"按维度找爆款再二创"，请切到「🌐 联网找爆款」Tab。</div>
@@ -686,9 +695,16 @@
     <!-- 改写 -->
     <div class="card panel" id="panel-edit">
       <h2>② 改写 · 三段式 + 违禁词实时标红</h2>
-      <div class="actions">
+      <div class="actions" style="align-items:flex-start;flex-wrap:wrap;gap:10px;">
         <button id="saveBtn" class="primary">💾 保存定稿</button>
-        <span id="opState" class="tip"></span>
+        <button id="rewriteBtn" class="secondary">✨ AI 按设定改写</button>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-left:auto;max-width:100%;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap;">
+            目标时长 <input id="targetDuration" type="number" value="60" min="10" max="600" style="width:70px;text-align:center;padding:6px 8px;border:1px solid var(--border);border-radius:6px;"> 秒
+          </label>
+          <span id="targetWordCount" class="tip" style="white-space:nowrap;color:var(--blue-d);font-weight:600;"></span>
+          <input id="extraPrompt" placeholder="补充提示词（如：突出罚款金额、更口语化、多举案例…）" style="min-width:220px;flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;">
+        </div>
       </div>
       <div class="seg">
         <div class="seg-label"><span class="tag open">开头</span> 抓眼球 / 抛痛点 <span class="seg-count" id="cnt-open"></span></div>
@@ -705,6 +721,14 @@
         <div class="editor"><textarea id="ta-end" class="editarea" placeholder="结尾（严禁加微信/扫码等导流词）…"></textarea><div id="ov-end" class="overlay editarea"></div></div>
         <div class="hitlist" id="hl-end"></div>
       </div>
+      <div class="seg">
+        <div class="seg-label"><span class="tag body">男女对话稿</span> 用于「不出镜·滚动字幕卡」出片（女：/男：） <span class="seg-count" id="cnt-dialogue"></span></div>
+        <div class="editor"><textarea id="ta-dialogue" class="editarea" placeholder="女：张老师，我想请教一下…&#10;男：嗯，这个关键看…&#10;（每行以 女：/男： 开头；留空则滚动字幕卡自动回退单声）" style="min-height:120px;"></textarea></div>
+        <div class="tip" style="margin-top:6px;background:rgba(15,23,42,.06);border-left:3px solid #2563eb;padding:8px 10px;border-radius:6px;line-height:1.7;">
+          填了对话稿，⑤ 出片 选「📜 滚动字幕卡」即按 <b>男女双声 + 滚动字幕</b> 出片；不填也能出片（自动用独白单声）。<br>
+          <span id="dialogueDurationTip" style="color:var(--muted);"></span>
+        </div>
+      </div>
       <details id="guideBox">
         <summary>📖 各大平台违禁词红线速查卡（点击展开）</summary>
         <pre id="guideText">加载中…</pre>
@@ -713,12 +737,13 @@
 
     <!-- 出音频 -->
     <div class="card panel" id="panel-audio">
-      <h2>③ 出音频 · 品牌主播音</h2>
+      <h2>③ 出音频 · 品牌主播音 / 男女双声</h2>
       <div class="actions">
-        <button id="ttsBtn" class="primary">🔊 一键出音频</button>
+        <button id="ttsBtn" class="primary">🔊 一键出音频（独白）</button>
+        <button id="ttsDialogueBtn" class="primary" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);">🎙 一键出对话双声（女/男）</button>
         <span id="ttsState" class="tip"></span>
       </div>
-      <div class="tip">用当前定稿（去标记）合成品牌主播真人音色音频，自动存入后台集中库 audio/，下方可直接播放、反复听。通常 10–30 秒。</div>
+      <div class="tip">「一键出音频」用当前三段定稿合成张老师独白品牌音；「对话双声」用「改写」里的男女对话稿合成女声+男声，固定音色无需再选。通常 10–30 秒。</div>
       <div id="ttsProgBox" style="display:none;margin-top:10px;padding:10px 12px;background:#f6f8fa;border:1px solid var(--border);border-radius:8px;">
         <div class="actions" style="margin-bottom:6px;">
           <span id="ttsProgLabel" style="font-size:13px;font-weight:600;">⏳ 准备合成</span>
@@ -727,10 +752,15 @@
         <div class="progress" style="height:6px;"><i id="ttsProgBar" style="width:0%;"></i></div>
         <div id="ttsProgTip" class="tip" style="margin-top:6px;font-size:11.5px;">根据文字内容合成品牌主播真人音色，通常 10–30 秒。</div>
       </div>
-      <div class="card" style="background:#f6f8fa;margin-bottom:0;">
-        <span class="pv-label">本条音频试听</span>
+      <div class="card" style="background:#f6f8fa;margin-bottom:12px;">
+        <span class="pv-label">独白音频试听</span>
         <audio id="audioPlayer" controls preload="none" style="width:100%">您的浏览器不支持音频</audio>
-        <div id="noAudio" class="empty">尚未生成音频，点上方「一键出音频」。</div>
+        <div id="noAudio" class="empty">尚未生成独白音频，点上方「一键出音频」。</div>
+      </div>
+      <div class="card" style="background:#f6f8fa;margin-bottom:0;">
+        <span class="pv-label">男女对话双声音频试听</span>
+        <audio id="dialogueAudioPlayer" controls preload="none" style="width:100%">您的浏览器不支持音频</audio>
+        <div id="noDialogueAudio" class="empty">尚未生成对话音频，点上方「一键出对话双声」。</div>
       </div>
     </div>
 
@@ -769,7 +799,8 @@
       <div class="render-mode" style="margin:12px 0 4px;padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
         <div style="font-weight:600;margin-bottom:8px;">出片方式</div>
         <label style="margin-right:18px;cursor:pointer;font-size:13.5px;"><input type="radio" name="renderMode" value="heygem" checked> 🧑 本地数字人（主播形象/声 · 需 Docker）</label>
-        <label style="cursor:pointer;font-size:13.5px;"><input type="radio" name="renderMode" value="thirdparty"> 🤖 第三方官方数字人（不出主播面 · 广告/营销类）</label>
+        <label style="margin-right:18px;cursor:pointer;font-size:13.5px;"><input type="radio" name="renderMode" value="thirdparty"> 🤖 第三方官方数字人（不出主播面 · 广告/营销类）</label>
+        <label style="cursor:pointer;font-size:13.5px;"><input type="radio" name="renderMode" value="scroll"> 📜 不出镜·滚动字幕卡（男女对话）</label>
         <div id="tpBox" style="display:none;margin-top:12px;padding-top:10px;border-top:1px dashed #cbd5e1;">
           <div style="font-size:12.5px;color:#475569;margin-bottom:6px;">选官方形象（平台提供，不用你出镜）：</div>
           <select id="tpAvatar" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;min-width:220px;max-width:100%;"></select>
@@ -778,11 +809,23 @@
           <label style="cursor:pointer;font-size:13px;"><input type="radio" name="tpVoice" value="brand"> 品牌克隆音（驱动嘴型）</label>
           <div id="tpNote" class="tip" style="margin-top:8px;"></div>
         </div>
+        <div id="scrollBox" style="display:none;margin-top:12px;padding-top:10px;border-top:1px dashed #cbd5e1;">
+          <div style="font-size:12.5px;color:#475569;margin-bottom:6px;">背景：</div>
+          <select id="scrollBg" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;">
+            <option value="seaside">🌊 滚动海浪（默认）</option>
+            <option value="gif">🌊 我的GIF海景（20260721TP.gif）</option>
+          </select>
+          <div style="font-size:12.5px;color:#475569;margin:10px 0 6px;">标题（≤10字，留空自动生成）：</div>
+          <input id="scrollTitle" type="text" maxlength="10" placeholder="自动生成" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;width:240px;">
+          <div style="font-size:12.5px;color:#475569;margin:10px 0 6px;">副标题（标题下方一行小字，可留空）：</div>
+          <input id="scrollSubtitle" type="text" maxlength="40" placeholder="如：建筑财税·避坑指南" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;width:320px;">
+          <div id="scrollNote" class="tip" style="margin-top:8px;">不出镜、不用模特、不用 Docker；自动男女双声 + 滚动字幕，约 1–2 分钟。成品与数字人出片走同一预览/字幕/质检/发布链路。</div>
+        </div>
       </div>
 
       <div class="progress"><i id="renderBar"></i></div>
       <div id="renderStep" class="tip"></div>
-      <div class="tip">出片需 HEYGEM 本地 Docker 在跑（先开 Docker Desktop）。流程：音频驱动模特生成数字人视频→自动烧字幕→拼片头，约 1–3 分钟，可在此页面等，不用切命令行。</div>
+      <div class="tip">本地数字人 / 第三方出片需 Docker 或平台账号；选「📜 滚动字幕卡」则无需 Docker 与模特，自动生成男女双声 + 滚动字幕。出片后可在右侧预览，下游字幕/质检/发布链路通用。</div>
 
       <!-- 队列概览条（主界面常驻：用户随时可见有几个在排队、自己排第几） -->
       <div class="q-overview" id="qOverview">
@@ -1139,8 +1182,10 @@ function renderHL(taId, ovId, hits){
 });
 function scheduleCheck(k){clearTimeout(timer);timer=setTimeout(()=>checkSeg(k),350);}
 async function checkSeg(k){
-  const text=$("ta-"+k).value;
-  const platform=$("platformSel").value;
+  const ta=$("ta-"+k); if(!ta) return;
+  const platformSel=$("platformSel"); if(!platformSel) return;
+  const text=ta.value;
+  const platform=platformSel.value;
   try{
     const r=await fetch("/api/check",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({text,platform})});
@@ -1150,9 +1195,11 @@ async function checkSeg(k){
   }catch(e){}
 }
 function renderHitList(k){
-  const box=$("hl-"+k), hits=curHits[k];
-  if(!hits.length){box.innerHTML='<div class="empty">✅ 本段无违禁词命中</div>';$("cnt-"+k).textContent="";return;}
-  $("cnt-"+k).textContent=`⚠ ${hits.length} 处`;
+  const box=$("hl-"+k); if(!box) return;
+  const cnt=$("cnt-"+k); if(!cnt) return;
+  const hits=curHits[k];
+  if(!hits.length){box.innerHTML='<div class="empty">✅ 本段无违禁词命中</div>';cnt.textContent="";return;}
+  cnt.textContent=`⚠ ${hits.length} 处`;
   box.innerHTML=hits.map(h=>{
     const cls=h.need_human?"need":(h.level==="high"?"":"med");
     const tag=h.need_human?"需人工核对":(h.level==="high"?"🔴 高危":"🟡 中等");
@@ -1169,7 +1216,7 @@ function updateStatus(){
     if(h.need_human) continue;
     if(h.level==="high") high++; else if(h.level==="medium") med++;
   }
-  const box=$("statusBox");
+  const box=$("statusBox"); if(!box) return;
   if(high>0){box.className="status danger";box.textContent=`🔴 高危 ${high} 处`;}
   else if(med>0){box.className="status warn";box.textContent=`🟡 中危 ${med} 处`;}
   else{box.className="status safe";box.textContent="✅ 安全";}
@@ -1250,6 +1297,7 @@ async function loadProject(name){
   const d=await r.json();
   const s=d.segs||{};
   $("ta-open").value=s.opening||"";$("ta-body").value=s.body||"";$("ta-end").value=s.ending||"";
+  const td=$("ta-dialogue"); if(td) td.value=d.dialogue||"";
   for(const k of ["open","body","end"]) await checkSeg(k);
   $("opState").textContent="已加载："+name;
   $("curName").textContent=name;
@@ -1292,7 +1340,7 @@ async function refreshPreview(){
   if(pr && pr.audio){
     $("pvAudio").src="/api/audio/"+encodeURIComponent(currentName)+tsb();
     $("audioLbl").textContent="品牌主播音 · 可播放";
-    $("qsAudio").innerHTML='<span class="ok">✅ 已生成</span>';
+    $("qsAudio").innerHTML='<span class="ok">✅ 独白已生成</span>';
     $("audioPlayer").src="/api/audio/"+encodeURIComponent(currentName)+tsb();
     $("noAudio").style.display="none";
     // 显示音频卡片（默认隐藏），但仅当当前步骤属于“出音频及之后”
@@ -1300,9 +1348,21 @@ async function refreshPreview(){
   } else {
     $("pvAudio").removeAttribute("src");$("audioLbl").textContent="未生成";
     $("qsAudio").innerHTML='<span class="bad">未生成</span>';
+    $("audioPlayer").removeAttribute("src");
     $("noAudio").style.display="block";
     const ac=document.querySelector(".col-right .card.audio-card"); if(ac) ac.classList.remove("has-audio");
   }
+  // 男女对话双声音频试听
+  try{
+    const dlgR=await fetch("/api/audio/"+encodeURIComponent(currentName)+"_dialogue"+tsb(),{method:"HEAD"});
+    if(dlgR.ok){
+      $("dialogueAudioPlayer").src="/api/audio/"+encodeURIComponent(currentName)+"_dialogue"+tsb();
+      $("noDialogueAudio").style.display="none";
+    } else {
+      $("dialogueAudioPlayer").removeAttribute("src");
+      $("noDialogueAudio").style.display="block";
+    }
+  }catch(_){ $("dialogueAudioPlayer").removeAttribute("src"); $("noDialogueAudio").style.display="block"; }
   if(pr && pr.video){
     $("pvVideo").style.display="block";
     $("pvVideo").muted = false; // 强制取消静音：用户主动点项目卡，应出声
@@ -1374,11 +1434,105 @@ $("saveBtn").addEventListener("click",async()=>{
   if(!currentName) return;
   const r=await fetch("/api/project/"+encodeURIComponent(currentName)+"/save",{method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({opening:$("ta-open").value,body:$("ta-body").value,ending:$("ta-end").value})});
+    body:JSON.stringify({opening:$("ta-open").value,body:$("ta-body").value,ending:$("ta-end").value,dialogue:$("ta-dialogue").value})});
   const d=await r.json();
   if(d.ok){toast(`已保存 ✅ 高危${d.high} 中危${d.med}`);await loadProjects();markDoneSteps();}
   else toast("保存失败："+(d.error||""));
 });
+
+// —— 改写区：目标时长 ↔ 字数换算 + 实时统计 ——
+const CHARS_PER_SEC = 4.2;
+function countCJK(text){
+  // 中文字符 + 连续英文/数字单词按整体计 1 个「节奏单位」，标点不计
+  if(!text) return 0;
+  const cn = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+  const en = (text.match(/[a-zA-Z0-9]+/g) || []).length;
+  return cn + en;
+}
+function updateTargetWordCount(){
+  const sec = parseFloat($("targetDuration").value) || 60;
+  const chars = Math.round(sec * CHARS_PER_SEC);
+  $("targetWordCount").textContent = `≈ ${chars} 字`;
+}
+function updateAllCounts(){
+  const o = countCJK($("ta-open").value);
+  const b = countCJK($("ta-body").value);
+  const e = countCJK($("ta-end").value);
+  const total = o + b + e;
+  $("cnt-open").textContent = `${o} 字 · ${(o/CHARS_PER_SEC).toFixed(1)}s`;
+  $("cnt-body").textContent = `${b} 字 · ${(b/CHARS_PER_SEC).toFixed(1)}s`;
+  $("cnt-end").textContent = `${e} 字 · ${(e/CHARS_PER_SEC).toFixed(1)}s`;
+  const dlg = $("ta-dialogue").value || "";
+  const dlgChars = countCJK(dlg);
+  $("cnt-dialogue").textContent = dlgChars ? `${dlgChars} 字 · ${(dlgChars/CHARS_PER_SEC).toFixed(1)}s` : "";
+  $("dialogueDurationTip").textContent = `当前独白共 ${total} 字≈${(total/CHARS_PER_SEC).toFixed(1)}s；对话稿 ${dlgChars} 字≈${(dlgChars/CHARS_PER_SEC).toFixed(1)}s`;
+}
+$("targetDuration").addEventListener("input", updateTargetWordCount);
+for(const id of ["ta-open","ta-body","ta-end","ta-dialogue"]){
+  $(id).addEventListener("input", ()=>{ updateAllCounts(); for(const k of ["open","body","end"]) if(id==="ta-"+k) checkSeg(k); });
+}
+updateTargetWordCount(); updateAllCounts();
+
+// —— AI 按设定改写：生成三段稿 + 自动拆男女对话稿（支持中途中止 + 超时保护）——
+let rewriteAbortCtrl = null;     // 进行中的请求控制器
+let rewriteTimer = null;         // 超时计时器
+let rewriteAbortedByTimeout = false;
+function resetRewriteBtn(){
+  if(rewriteTimer){ clearTimeout(rewriteTimer); rewriteTimer = null; }
+  rewriteAbortCtrl = null; rewriteAbortedByTimeout = false;
+  $("rewriteBtn").disabled = false;
+  $("rewriteBtn").textContent = "✨ AI 按设定改写";
+  $("opState").textContent = "";
+}
+$("rewriteBtn").addEventListener("click",async()=>{
+  // 改写进行中再次点击 = 中止
+  if(rewriteAbortCtrl){ rewriteAbortCtrl.abort(); return; }
+  if(!currentName){ toast("请先新建或打开一个项目"); return; }
+  const sec = parseFloat($("targetDuration").value) || 60;
+  if(sec < 10 || sec > 600){ toast("目标时长请填 10-600 秒"); return; }
+  rewriteAbortCtrl = new AbortController();
+  $("rewriteBtn").disabled = false;
+  $("rewriteBtn").textContent = "⏹ 中止改写";
+  $("opState").textContent = `按 ${sec}s（≈${Math.round(sec*CHARS_PER_SEC)}字）改写中…可点按钮中止`;
+  // 120 秒超时自动中止，避免永久卡在「改写中」
+  rewriteTimer = setTimeout(()=>{
+    if(rewriteAbortCtrl){ rewriteAbortedByTimeout = true; rewriteAbortCtrl.abort(); toast("改写超时（>120s），已自动中止"); }
+  }, 120000);
+  try{
+    const r = await fetch("/api/rewrite", {
+      method:"POST",
+      signal: rewriteAbortCtrl.signal,
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        opening: $("ta-open").value, body: $("ta-body").value, ending: $("ta-end").value,
+        target_seconds: sec,
+        extra_prompt: $("extraPrompt").value,
+        account_type: projAcctMap[currentName] || "财税IP打造类"
+      })});
+    const d = await r.json();
+    if(!d.ok){ toast("改写失败："+(d.error||"").slice(0,90)); return; }
+    const s = d.segs || {};
+    $("ta-open").value = s.opening || ""; $("ta-body").value = s.body || ""; $("ta-end").value = s.ending || "";
+    if($("ta-dialogue") && d.dialogue){ $("ta-dialogue").value = d.dialogue; }
+    for(const k of ["open","body","end"]) await checkSeg(k);
+    updateAllCounts();
+    // 自动保存，避免用户忘了点保存
+    await fetch("/api/project/"+encodeURIComponent(currentName)+"/save", {method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({opening:$("ta-open").value, body:$("ta-body").value, ending:$("ta-end").value, dialogue:$("ta-dialogue").value})});
+    toast(`改写完成 ✅ 目标 ${sec}s ≈ ${d.target_chars} 字`);
+  }catch(e){
+    if(e.name === "AbortError"){
+      if(!rewriteAbortedByTimeout) toast("已中止改写");   // 超时场景已在计时器里提示过
+    }else{
+      toast("网络错误："+e.message);
+    }
+  }finally{
+    resetRewriteButtonSafe();
+  }
+});
+function resetRewriteButtonSafe(){ resetRewriteBtn(); }
+
 $("ttsBtn").addEventListener("click",async()=>{
   if(!currentName) return;
   // 锁按钮 + 显示进度卡片
@@ -1408,7 +1562,7 @@ $("ttsBtn").addEventListener("click",async()=>{
     // 先持久化定稿（保持磁盘与界面一致），再带实时三段文本请求合成
     await fetch("/api/project/"+encodeURIComponent(currentName)+"/save",{method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({opening:$("ta-open").value,body:$("ta-body").value,ending:$("ta-end").value})});
+      body:JSON.stringify({opening:$("ta-open").value,body:$("ta-body").value,ending:$("ta-end").value,dialogue:$("ta-dialogue").value})});
     // 切到合成阶段
     lbl.textContent="🔊 合成中…";
     tip.textContent="声音克隆调用中，按文本长度通常 10–30 秒，请勿关闭页面。";
@@ -1444,6 +1598,66 @@ $("ttsBtn").addEventListener("click",async()=>{
     bar.style.background="var(--red,#e5484d)";
     lbl.textContent="❌ 网络错误"; tip.textContent=String(e);
     $("ttsState").textContent="出音频失败";
+  }
+});
+$("ttsDialogueBtn").addEventListener("click",async()=>{
+  if(!currentName) return;
+  const dialogueText=$("ta-dialogue").value||"";
+  if(!dialogueText.trim()){ toast("请先填写「改写」里的男女对话稿"); return; }
+  // 复用独白合成的进度卡片，标题自适应
+  $("ttsDialogueBtn").disabled=true;
+  $("ttsState").textContent="出对话双声中…";
+  const box=$("ttsProgBox"), bar=$("ttsProgBar"), lbl=$("ttsProgLabel"),
+        tip=$("ttsProgTip"), clk=$("ttsProgTime");
+  box.style.display="block";
+  let pct=0; lbl.textContent="💾 正在保存对话稿…"; tip.textContent="女声（江老师）+ 男声（张老师）克隆音合成，按句数通常 15–40 秒。";
+  bar.style.width="2%"; bar.classList.remove("done");
+  const t0=Date.now();
+  const timer=setInterval(()=>{
+    const sec=Math.floor((Date.now()-t0)/1000);
+    clk.textContent=sec+" 秒";
+    if(sec<=3){ pct=Math.min(6, sec*2); }
+    else { pct=Math.min(92, 6 + (sec-3)*3); }
+    if(pct>=6 && lbl.textContent.indexOf("保存")>=0){
+      lbl.textContent="🎙 双声合成中…";
+      tip.textContent="女声（江老师）+ 男声（张老师）克隆音合成，按句数通常 15–40 秒。";
+    }
+    bar.style.width=pct+"%";
+  }, 1000);
+  try{
+    // 先保存对话稿
+    await fetch("/api/project/"+encodeURIComponent(currentName)+"/save",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({opening:$("ta-open").value,body:$("ta-body").value,ending:$("ta-end").value,dialogue:dialogueText})});
+    lbl.textContent="🎙 双声合成中…";
+    const r=await fetch("/api/project/"+encodeURIComponent(currentName)+"/tts_dialogue",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({dialogue:dialogueText})});
+    const d=await r.json();
+    clearInterval(timer);
+    $("ttsDialogueBtn").disabled=false;
+    if(d.ok){
+      bar.style.width="100%"; bar.classList.add("done");
+      const sec=Math.floor((Date.now()-t0)/1000);
+      $("ttsState").textContent=`✅ 对话双声已生成（${sec} 秒）`;
+      lbl.textContent=`✅ 合成完成（${sec} 秒）`;
+      tip.textContent="音频已存入后台 audio/，下方可直接试听。";
+      toast("🎙 对话双声音频生成成功");
+      $("dialogueAudioPlayer").src="/api/audio/"+encodeURIComponent(currentName)+"_dialogue"+"?t="+Date.now();
+      $("noDialogueAudio").style.display="none";
+      await loadProjects();refreshPreview();
+    } else {
+      bar.style.background="var(--red,#e5484d)";
+      lbl.textContent="❌ 合成失败"; tip.textContent=d.error||"未知错误";
+      $("ttsState").textContent="出对话音频失败";
+      toast("出对话音频失败："+(d.error||"").slice(0,80));
+    }
+  }catch(e){
+    clearInterval(timer);
+    $("ttsDialogueBtn").disabled=false;
+    bar.style.background="var(--red,#e5484d)";
+    lbl.textContent="❌ 网络错误"; tip.textContent=String(e);
+    $("ttsState").textContent="出对话音频失败";
   }
 });
 $("newBtn").addEventListener("click",()=>{ openNewModal(); });
@@ -1555,6 +1769,11 @@ $("renderBtn").addEventListener("click",async()=>{
     body.provider="thirdparty";
     body.avatar_id=$("tpAvatar").value||"";
     body.voice_mode=document.querySelector('input[name="tpVoice"]:checked').value;
+  } else if(mode==="scroll"){
+    body.provider="scroll";
+    body.bg=$("scrollBg")?$("scrollBg").value:"seaside";
+    body.title=$("scrollTitle")?($("scrollTitle").value||""):"";
+    body.subtitle=$("scrollSubtitle")?($("scrollSubtitle").value||""):"";
   }
   const r=await fetch("/api/project/"+encodeURIComponent(currentName)+"/render",{method:"POST",
     headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
@@ -1595,10 +1814,11 @@ async function pollJob(jobId){
   },2000);
 }
 
-// —— 第三方数字人出片方式切换（新增，不影响本地数字人流程）——
+// —— 出片方式切换（本地数字人 / 第三方 / 滚动字幕卡）——
 function toggleRenderMode(){
   const mode=document.querySelector('input[name="renderMode"]:checked').value;
   $("tpBox").style.display = mode==="thirdparty" ? "block":"none";
+  $("scrollBox").style.display = mode==="scroll" ? "block":"none";
 }
 async function initThirdparty(){
   try{
@@ -1815,6 +2035,7 @@ async function addToQueue(){
   if(!currentName) return;
   const mode=document.querySelector('input[name="renderMode"]:checked').value;
   if(mode==="thirdparty"){toast("批量队列仅支持本地数字人，请切回「本地数字人」或直接点一键出片");return;}
+  if(mode==="scroll"){toast("滚动字幕卡暂走「一键出片」（不入批量队列）");return;}
   if(!selModel){toast("请先在「选模特」步骤选一个模特");gotoStep("model");return;}
   // 关键修复：先查队列是否已有该项目，避免重复入队
   const r0=await fetch("/api/queue"); const d0=await r0.json();
@@ -1993,11 +2214,13 @@ function esc(s){return (s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">
 function renderHotList(topics, label, onPick){
   const box=$("hotList");
   if(!topics||!topics.length){box.innerHTML='<div class="tip">未找到候选选题，请换个类别或时间段再试</div>';return;}
-  const head=`<div class="topic-label">${label==="联网检索"?"🌐 联网检索到的最近爆款话题":"📚 近期热门选题"} · 共 ${topics.length} 条（按热度排序），点选下方任一条「用此二创」开始创作</div>`;
+  const head=`<div class="topic-label">${label==="联网检索"?"🌐 联网检索到的最近爆款话题":"📚 近期热门选题"} · 共 ${topics.length} 条（已按「与主题的相关度」从高到低排序，相关度低的沉底），点选下方任一条「用此二创」开始创作</div>`;
   const cards=topics.map((t,i)=>{
     const why=t.why_hot||"";const risk=t.risk_point||"";const aud=t.audience||"";
+    const rel=(t.relevance!=null)?t.relevance:"";
+    const relChip=rel!==""?`<span class="rel-chip ${rel>=60?'rel-high':(rel>=30?'rel-mid':'rel-low')}">相关度 ${rel}</span>`:"";
     return `<div class="topic-card" data-idx="${i}">
-      <div class="tt">${i+1}. ${esc(t.title)}</div>
+      <div class="tt">${i+1}. ${esc(t.title)} ${relChip}</div>
       <div class="tx">${(why?`<b>为什么火：</b>${esc(why)}<br>`:"")}`+
       `${(risk?`<b>切入点：</b>${esc(risk)}<br>`:"")}`+
       `${(aud?`<b>人群：</b>${esc(aud)}`:"")}</div>
@@ -2028,7 +2251,10 @@ $("findHotBtn").addEventListener("click",async()=>{
   try{
     const payload={mode:"list", category, period, direction:$("dirInput").value, length:$("lenSel").value, keep_core:$("keepInput").value};
     const r=await fetch("/api/topic_search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-    const d=await r.json();
+    let d;
+    try{ d=await r.json(); }
+    catch(_){ const txt=await r.text().catch(()=> ""); throw new Error("服务端返回异常("+r.status+")："+txt.slice(0,120)); }
+    if(!r.ok){ throw new Error((d&&d.error)||("HTTP "+r.status)); }
     if(!d.ok){toast("联网检索失败："+(d.error||"").slice(0,90));return;}
     lastHotList=d.topics||[];
     lastHotPayload=payload;
@@ -2037,7 +2263,7 @@ $("findHotBtn").addEventListener("click",async()=>{
       doCreateFromHot(idx);
     });
     toast(`已找到 ${lastHotList.length} 条候选爆款选题，请挑 1 条开始二创`);
-  }catch(e){toast("网络错误："+e.message);}
+  }catch(e){toast("联网检索出错："+e.message);}
   $("findHotBtn").disabled=false;$("findHotBtn").textContent="🔍 联网找爆款";
 });
 
@@ -2047,13 +2273,17 @@ $("directCreateBtn").addEventListener("click",async()=>{
   if(!source){toast("请先在文本框粘贴爆款链接 / 原文逐字稿 / 创作提示词");return;}
   $("directCreateBtn").disabled=true;$("directCreateBtn").textContent="AI 改写中…";
   try{
-    const payload={source, direction:$("dirInput").value, length:$("lenSel").value, keep_core:$("keepInput").value};
+    const payload={source, direction:$("dirInput").value, length:$("lenSel").value, keep_core:$("keepInput").value, target_seconds:parseFloat($("directTargetSec").value)||0};
     const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-    const d=await r.json();
+    let d;
+    try{ d=await r.json(); }
+    catch(_){ const txt=await r.text().catch(()=> ""); throw new Error("服务端返回异常("+r.status+")："+txt.slice(0,120)); }
+    if(!r.ok){ throw new Error((d&&d.error)||("HTTP "+r.status)); }
     if(!d.ok){toast("生成失败："+(d.error||"").slice(0,90));return;}
     const s=d.segs||{};
+    const dlg=d.dialogue||"";
     $("ta-open").value=s.opening||"";$("ta-body").value=s.body||"";$("ta-end").value=s.ending||"";
-    for(const k of ["open","body","end"]) await checkSeg(k);
+    $("ta-dialogue").value=dlg;
     const title=prompt("初稿已生成！给这条二创起个标题（将新建项目承接）：","爆款二创");
     if(title){
       const nr=await fetch("/api/new",{method:"POST",headers:{"Content-Type":"application/json"},
@@ -2062,13 +2292,16 @@ $("directCreateBtn").addEventListener("click",async()=>{
       if(nd.ok){
         await fetch("/api/project/"+encodeURIComponent(nd.name)+"/save",{method:"POST",
           headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({opening:s.opening||"",body:s.body||"",ending:s.ending||""})});
+          body:JSON.stringify({opening:s.opening||"",body:s.body||"",ending:s.ending||"",dialogue:dlg})});
         await loadProjects();await loadProject(nd.name);
+        const st=$("scrollTitle"); if(st) st.value=title.slice(0,10);
         toast("已生成并存入项目："+nd.name+" → 跳到「改写」");
-        gotoStep("edit");
       }
     } else toast("初稿已填入编辑器，可手动保存");
-  }catch(e){toast("网络错误："+e.message);}
+    gotoStep("edit");
+    for(const k of ["open","body","end"]) await checkSeg(k);
+    $("ta-dialogue").dispatchEvent(new Event("input"));
+  }catch(e){toast("生成出错："+e.message);}
   $("directCreateBtn").disabled=false;$("directCreateBtn").textContent="✨ 直接生成二创稿";
 });
 
@@ -2077,18 +2310,23 @@ async function doCreateFromHot(idx){
   if(!lastHotPayload||!lastHotList.length){toast("请先点「🔍 联网找爆款」列出候选选题");return;}
   $("findHotBtn").disabled=true;$("findHotBtn").textContent="二创中…";
   try{
+    const ts=parseFloat($("hotTargetSec").value)||0;
     const r=await fetch("/api/topic_search",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({...lastHotPayload, mode:"create", topic_index:idx, topics_cache:lastHotList})});
-    const d=await r.json();
+      body:JSON.stringify({...lastHotPayload, mode:"create", topic_index:idx, topics_cache:lastHotList, target_seconds:ts})});
+    let d;
+    try{ d=await r.json(); }
+    catch(_){ const txt=await r.text().catch(()=> ""); throw new Error("服务端返回异常("+r.status+")："+txt.slice(0,120)); }
+    if(!r.ok){ throw new Error((d&&d.error)||("HTTP "+r.status)); }
     if(!d.ok){toast("二创失败："+(d.error||"").slice(0,90));return;}
     const s=d.segs||{};
+    const dlg=d.dialogue||"";
     $("ta-open").value=s.opening||"";$("ta-body").value=s.body||"";$("ta-end").value=s.ending||"";
-    for(const k of ["open","body","end"]) await checkSeg(k);
+    $("ta-dialogue").value=dlg;
     $("hotList").querySelectorAll(".topic-card").forEach((c,i)=>{
       c.classList.toggle("selected", i===idx);
     });
     const chosen=lastHotList[idx]&&lastHotList[idx].title||"";
-    toast(`已基于「${chosen.slice(0,20)}…」生成二创稿，请到「改写」审核`);
+    toast(`已基于「${chosen.slice(0,20)}…」生成二创稿（含男女对话稿），请到「改写」审核`);
     const title=prompt("二创已生成！给这条视频起个标题（将新建项目承接）：", chosen.slice(0,18)||"爆款二创");
     if(title){
       const nr=await fetch("/api/new",{method:"POST",headers:{"Content-Type":"application/json"},
@@ -2097,13 +2335,16 @@ async function doCreateFromHot(idx){
       if(nd.ok){
         await fetch("/api/project/"+encodeURIComponent(nd.name)+"/save",{method:"POST",
           headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({opening:s.opening||"",body:s.body||"",ending:s.ending||""})});
+          body:JSON.stringify({opening:s.opening||"",body:s.body||"",ending:s.ending||"",dialogue:dlg})});
         await loadProjects();await loadProject(nd.name);
+        const st=$("scrollTitle"); if(st) st.value=(chosen||"").slice(0,10);
         toast("已生成并存入项目："+nd.name+" → 跳到「改写」");
-        gotoStep("edit");
       }
     } else toast("二创稿已填入编辑器，可手动保存");
-  }catch(e){toast("网络错误："+e.message);}
+    gotoStep("edit");
+    for(const k of ["open","body","end"]) await checkSeg(k);
+    $("ta-dialogue").dispatchEvent(new Event("input"));
+  }catch(e){toast("二创出错："+e.message);}
   $("findHotBtn").disabled=false;$("findHotBtn").textContent="🔍 联网找爆款";
 }
 

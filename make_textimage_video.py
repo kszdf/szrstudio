@@ -101,6 +101,20 @@ def parse_dialogue(path):
     return segs
 
 
+def _wav_duration(path):
+    """用 ffprobe 取真实音频时长；某些 TTS 返回的 wav 头 nframes 异常，ffprobe 按实际数据解码更准确。"""
+    ffprobe = r"D:\ffmpeg\ffmpeg-8.1.2-full_build\bin\ffprobe.exe"
+    try:
+        r = subprocess.run(
+            [ffprobe, "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", path],
+            capture_output=True, text=True, check=True)
+        return float(r.stdout.strip())
+    except Exception:
+        with wave.open(path, "rb") as wf:
+            return wf.getnframes() / wf.getframerate()
+
+
 def tts_one(text, role, out_wav, dry, female_voice, female_model, male_voice, male_model):
     voice = female_voice if role == "F" else male_voice
     model = female_model if role == "F" else male_model
@@ -110,8 +124,7 @@ def tts_one(text, role, out_wav, dry, female_voice, female_model, male_voice, ma
                        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return 2.4
     _qwen_synth(text, voice, out_wav, model=model, speech_rate=1.0, pitch_rate=1.0, volume=50)
-    with wave.open(out_wav, "rb") as wf:
-        return wf.getnframes() / wf.getframerate()
+    return _wav_duration(out_wav)
 
 
 def make_slide(text, idx, total, bg_image=None):

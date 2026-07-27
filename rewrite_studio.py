@@ -44,6 +44,13 @@ PORT = 8385
 HTML_FILE = BASE / "rewrite_studio.html"
 PY310 = r"D:/heygem/py310/Scripts/python.exe"      # 出片网关线用 py310
 MAKE_AVATAR = BASE / "make_avatar_video.py"
+MAKE_SCROLL = BASE / "make_scroll_video.py"          # 不出镜·滚动字幕卡（男女对话）
+PY313 = r"C:/Users/lenovo/.workbuddy/binaries/python/versions/3.13.12/python.exe"  # 滚动字幕卡用 3.13（自带 dashscope+Pillow+numpy）
+SCROLL_DEFAULT_GIF = r"D:/heygem_data/face2face/20260721TP.gif"   # 用户默认 GIF 海景背景
+SCROLL_MALE_VOICE = "cosyvoice-v3-plus-zhangc2-28a7c3541e1c45518a03046c11baeb1d"
+SCROLL_FEMALE_VOICE = "cosyvoice-v3-plus-jiangnv3-991b204c1d564ac7a60f0cb9a8fd78bd"
+SCROLL_MALE_MODEL = "cosyvoice-v3-plus"
+SCROLL_FEMALE_MODEL = "cosyvoice-v3-plus"
 FFPROBE = r"D:/ffmpeg/ffmpeg-8.1.2-full_build/bin/ffprobe"
 FFMPEG = r"D:/ffmpeg/ffmpeg-8.1.2-full_build/bin/ffmpeg.exe"
 
@@ -249,6 +256,36 @@ def do_tts(name: str, segs: dict | None = None) -> dict:
     return {"ok": True, "out": str(out), "audio_url": f"/api/audio/{name}"}
 
 
+def do_tts_dialogue(name: str, dialogue_text: str = "") -> dict:
+    """用男女对话稿合成双声试听音频，保存 04_对话音频.wav + 复制到集中库。
+    固定音色：男=张老师克隆音 zhangc2，女=江老师克隆音 jiangnv3，不再弹窗确认。"""
+    p = project_path(name)
+    if not dialogue_text or not dialogue_text.strip():
+        # 未提供对话文本：回退到已有的对话稿文件
+        dlg_p = p / "dialogue.txt"
+        if not dlg_p.exists():
+            return {"ok": False, "error": "对话稿为空，请先在「改写」填写男女对话稿"}
+        dialogue_text = dlg_p.read_text(encoding="utf-8")
+    dialogue_text = dialogue_text.strip()
+    if not dialogue_text:
+        return {"ok": False, "error": "对话稿为空，无法合成双声试听"}
+    # 保存/更新对话稿
+    dlg_p = p / "dialogue.txt"
+    dlg_p.write_text(dialogue_text, encoding="utf-8")
+    out = p / "04_对话音频.wav"
+    try:
+        import make_scroll_video as smv
+        smv.synth_dialogue_audio(dialogue_text, str(out), dry=False, gap=0.18)
+    except SystemExit as e:
+        return {"ok": False, "error": friendly_tts_error(str(e))}
+    except Exception as e:  # noqa
+        return {"ok": False, "error": friendly_tts_error(f"{type(e).__name__}: {e}")}
+    dest = AUDIO_DIR / f"{name}_dialogue.wav"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(out, dest)
+    return {"ok": True, "out": str(out), "audio_url": f"/api/audio/{name}_dialogue"}
+
+
 def subtitle_preview(ass_path: Path) -> list:
     if not ass_path.exists():
         return []
@@ -337,11 +374,16 @@ JOB_LOCK = threading.Lock()
 
 
 def start_render(name: str, model_id: str, provider: str = "heygem",
-                 avatar_id: str | None = None, voice_mode: str = "official") -> dict:
+                 avatar_id: str | None = None, voice_mode: str = "official",
+                 bg: str | None = None, title: str | None = None,
+                 subtitle: str | None = None) -> dict:
     """出片入口。provider 默认 heygem（原本地流程，零改动）；
-    provider=thirdparty 走第三方官方数字人，不动 HEYGEM 任何逻辑。"""
+    provider=thirdparty 走第三方官方数字人，不动 HEYGEM 任何逻辑；
+    provider=scroll 走不出镜·滚动字幕卡（男女对话），输出同一 VIDEO_DIR/<name>.mp4，下游无缝复用。"""
     if provider == "thirdparty":
         return _start_render_thirdparty(name, avatar_id, voice_mode)
+    if provider == "scroll":
+        return _start_render_scroll(name, bg, title, subtitle)
     models = {m["id"]: m for m in list_models()}
     if model_id not in models:
         return {"ok": False, "error": "模特不存在，请刷新模特列表"}
@@ -431,6 +473,76 @@ def _start_render_thirdparty(name: str, avatar_id: str | None,
     threading.Thread(target=_run, daemon=True).start()
     return {"ok": True, "job_id": job_id,
             "hint": f"已选第三方数字人：{av_name} / {voice_name}"}
+
+
+def _start_render_scroll(name: str, bg: str | None = None,
+                          title: str | None = None,
+                          subtitle: str | None = None) -> dict:
+    """不出镜·滚动字幕卡（男女对话）出片：调 make_scroll_video.py，输出到 VIDEO_DIR/<name>.mp4。
+    下游（预览/字幕/质检/发布/队列）只认这个 mp4，与数字人出片零差别复用。"""
+    p = project_path(name)
+    dlg = p / "dialogue.txt"
+    # 优雅回退：无对话稿时用独白三段稿生成单声对话，避免平台死路（提示已注明）
+    if not dlg.exists() or not dlg.read_text(encoding="utf-8-sig").strip():
+        md = p / "03_逐字稿定稿.md"
+        if not md.exists():
+            return {"ok": False, "error": "请先在「改写」步骤填写内容（独白或男女对话稿）"}
+        clean = fw.clean_script(md.read_text(encoding="utf-8"))
+        if not clean.strip():
+            return {"ok": False, "error": "定稿为空，无法出片"}
+        dlg = p / "_auto_dialogue.txt"
+        dlg.write_text("男：" + clean.replace("\n", " ") + "\n", encoding="utf-8")
+    out = VIDEO_DIR / f"{name}.mp4"
+    cmd = [PY313, "-u", str(MAKE_SCROLL), "--dialogue", str(dlg), "--out", str(out)]
+    # 背景：seaside(默认，省略)/gif(用户GIF)/其他=自定义路径
+    if bg == "gif":
+        cmd += ["--bg", SCROLL_DEFAULT_GIF]
+    elif bg and bg not in ("seaside", ""):
+        cmd += ["--bg", bg]
+    if title and title.strip():
+        cmd += ["--title", title.strip()[:20]]
+    if subtitle and subtitle.strip():
+        cmd += ["--subtitle", subtitle.strip()[:40]]
+    job_id = "job_" + os.urandom(4).hex()
+    with JOB_LOCK:
+        JOBS[job_id] = {"status": "running", "step": "滚动字幕卡渲染中（TTS+合成）",
+                        "progress": 10, "video_url": None, "error": None,
+                        "provider": "scroll"}
+    threading.Thread(target=_run_render_scroll, args=(job_id, cmd, out),
+                     daemon=True).start()
+    return {"ok": True, "job_id": job_id,
+            "hint": "不出镜·滚动字幕卡（男女对话），无需 Docker 与模特"}
+
+
+def _run_render_scroll(job_id: str, cmd: list, out: Path):
+    """运行 make_scroll_video.py，解析「成品」行标记完成。"""
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True,
+                                encoding="utf-8", errors="replace")
+        tail: list[str] = []
+        for line in proc.stdout:
+            line = line.strip()
+            if line:
+                tail.append(line)
+                if len(tail) > 60:
+                    tail.pop(0)
+                if "成品" in line:
+                    _update_job(job_id, "✅ 滚动字幕卡已生成", 100)
+        rc = proc.wait()
+        if rc == 0 and out.exists():
+            rel = out.relative_to(VIDEO_DIR).as_posix()
+            with JOB_LOCK:
+                JOBS[job_id].update({"status": "done", "progress": 100,
+                                     "video_url": f"/api/video/{rel}"})
+        else:
+            err = "\n".join(tail[-20:])
+            with JOB_LOCK:
+                JOBS[job_id].update({"status": "error",
+                                     "error": f"出片失败(rc={rc}): {err[:400]}"})
+    except Exception as e:  # noqa
+        with JOB_LOCK:
+            JOBS[job_id].update({"status": "error", "error": str(e)[:400]})
 
 
 def _run_render(job_id: str, cmd: list, out: Path):
@@ -864,11 +976,16 @@ class Handler(BaseHTTPRequestHandler):
             if action == "publish":
                 return self._send_json(do_publish(name))
         m = re.match(r"^/api/project/(.+)$", path)
-        if m:  # 读三段
+        if m:  # 读三段 + 男女对话稿
             name = unquote(m.group(1))
             p = project_path(name)
             md = (p / "03_逐字稿定稿.md").read_text(encoding="utf-8")
-            return self._send_json({"name": name, "segs": parse_three(md), "raw": md})
+            dlg = ""
+            dp = p / "dialogue.txt"
+            if dp.exists():
+                dlg = dp.read_text(encoding="utf-8-sig")
+            return self._send_json({"name": name, "segs": parse_three(md),
+                                    "raw": md, "dialogue": dlg})
         self._send_json({"error": "not found"}, 404)
 
     def do_DELETE(self):
@@ -904,17 +1021,38 @@ class Handler(BaseHTTPRequestHandler):
             r = generate_from_source(body.get("source", ""),
                                      body.get("direction", ""),
                                      body.get("length", ""),
-                                     body.get("keep_core", ""))
+                                     body.get("keep_core", ""),
+                                     float(body.get("target_seconds", 0) or 0))
+            return self._send_json(r)
+        if path == "/api/rewrite":
+            r = rewrite_with_duration(
+                opening=body.get("opening", ""),
+                body=body.get("body", ""),
+                ending=body.get("ending", ""),
+                source=body.get("source", ""),
+                topic=body.get("topic", ""),
+                target_seconds=float(body.get("target_seconds", 60) or 60),
+                extra_prompt=body.get("extra_prompt", ""),
+                account_type=body.get("account_type", "财税IP打造类"),
+            )
             return self._send_json(r)
         if path == "/api/topic_search":
-            r = search_and_create(body.get("category", ""),
-                                  body.get("period", ""),
-                                  body.get("direction", ""),
-                                  body.get("length", ""),
-                                  body.get("keep_core", ""),
-                                  body.get("mode", "list"),
-                                  int(body.get("topic_index", -1)),
-                                  body.get("topics_cache") or None)
+            try:
+                r = search_and_create(body.get("category", ""),
+                                      body.get("period", ""),
+                                      body.get("direction", ""),
+                                      body.get("length", ""),
+                                      body.get("keep_core", ""),
+                                      float(body.get("target_seconds", 0) or 0),
+                                      body.get("mode", "list"),
+                                      int(body.get("topic_index", -1)),
+                                      body.get("topics_cache") or None)
+            except Exception as e:  # noqa
+                import traceback as _tb
+                return self._send_json({"ok": False,
+                    "error": f"联网检索异常: {type(e).__name__}: {e}"})
+            if not isinstance(r, dict):
+                r = {"ok": False, "error": "检索返回格式异常"}
             return self._send_json(r)
         if path == "/api/new":
             return self._send_json(do_new(body.get("title", ""), body.get("account_type", "")))
@@ -931,14 +1069,15 @@ class Handler(BaseHTTPRequestHandler):
                                               body.get("direction", "")))
         if path == "/api/queue":
             return self._send_json({"error": "method not allowed"}, 405)
-        m = re.match(r"^/api/project/(.+?)/(save|tts|publish-check|render|publish|account)$", path)
+        m = re.match(r"^/api/project/(.+?)/(save|tts|tts_dialogue|publish-check|render|publish|account)$", path)
         if m:
             name = unquote(m.group(1))
             action = m.group(2)
             if action == "save":
                 return self._send_json(do_save(name, body.get("opening", ""),
                                                body.get("body", ""),
-                                               body.get("ending", "")))
+                                               body.get("ending", ""),
+                                               dialogue=body.get("dialogue", "")))
             if action == "account":
                 return self._send_json(do_set_account(name, body.get("account_type", "")))
             if action == "tts":
@@ -947,12 +1086,17 @@ class Handler(BaseHTTPRequestHandler):
                     "body": body.get("body", ""),
                     "ending": body.get("ending", ""),
                 }))
+            if action == "tts_dialogue":
+                return self._send_json(do_tts_dialogue(name, body.get("dialogue", "")))
             if action == "render":
                 return self._send_json(start_render(
                     name, body.get("model", ""),
                     provider=body.get("provider", "heygem"),
                     avatar_id=body.get("avatar_id"),
-                    voice_mode=body.get("voice_mode", "official")))
+                    voice_mode=body.get("voice_mode", "official"),
+                    bg=body.get("bg"),
+                    title=body.get("title"),
+                    subtitle=body.get("subtitle")))
             if action == "publish":
                 return self._send_json(do_publish(name, generate=True))
             if action == "publish-check":
@@ -1075,7 +1219,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 # ------------------------------------------------------------------ 业务处理（生成初稿/保存/新建 放末尾避免循环依赖问题）
-def do_save(name: str, opening: str, body: str, ending: str) -> dict:
+def do_save(name: str, opening: str, body: str, ending: str, dialogue: str = "") -> dict:
     p = project_path(name)
     p.mkdir(parents=True, exist_ok=True)  # 关键：先建项目目录，否则写03定稿会 FileNotFoundError
     md = serialize_three({"opening": opening, "body": body, "ending": ending})
@@ -1084,6 +1228,15 @@ def do_save(name: str, opening: str, body: str, ending: str) -> dict:
     high = sum(1 for h in hits if h["level"] == "high" and not h.get("need_human"))
     med = sum(1 for h in hits if h["level"] == "medium")
     (p / "03_违禁词检查.md").write_text(fw.format_report(hits), encoding="utf-8")
+    # 男女对话稿（用于滚动字幕卡出片）；留空则删除旧对话稿，避免脏数据
+    dlg_p = p / "dialogue.txt"
+    if dialogue and dialogue.strip():
+        dlg_p.write_text(dialogue, encoding="utf-8")
+    elif dlg_p.exists():
+        try:
+            dlg_p.unlink()
+        except Exception:
+            pass
     return {"ok": True, "high": high, "med": med,
             "saved": str(p / "03_逐字稿定稿.md")}
 
@@ -1214,8 +1367,33 @@ def _filter_relevant_topics(topics: list, category: str, min_keep: int = 1) -> l
     return kept
 
 
+def _score_topic_relevance(t: dict, category: str) -> int:
+    """返回 0-100 的相关度分：综合「关键词命中」+「字符重叠」，用于排序（不用于硬过滤）。
+
+    排序标准说明：Tavily 返回的是网页文章而非视频，没有播放/评论/转发量，
+    因此排序仅依据「与用户输入主题的相关度」+「LLM 判定的爆款潜力」，不引入社交指标。
+    """
+    keywords = _topic_keywords(category)
+    cat_chars = _topic_text_chars(category)
+    text = " ".join([
+        str(t.get("title", "")), str(t.get("why_hot", "")),
+        str(t.get("risk_point", "")), str(t.get("audience", ""))
+    ])
+    text_lower = text.lower()
+    # 关键词命中得分（每个命中 +18，封顶 60）
+    kwhits = sum(1 for k in keywords if k.lower() in text_lower)
+    kw_score = min(60, kwhits * 18)
+    # 字符重叠得分（0-40）
+    text_chars = set(text) - _TOPIC_CHAR_STOP
+    union = len(cat_chars | text_chars)
+    overlap = (len(cat_chars & text_chars) / union) if union else 0
+    char_score = int(overlap * 40)
+    return min(100, kw_score + char_score)
+
+
 def search_and_create(category: str, period: str, direction: str = "",
                       length: str = "约60秒", keep_core: str = "",
+                      target_seconds: float = 0.0,
                       mode: str = "list", topic_index: int = -1,
                       topics_cache: list = None, max_topics: int = 10) -> dict:
     """智能选题两阶段：
@@ -1282,6 +1460,17 @@ def search_and_create(category: str, period: str, direction: str = "",
         topics = _parse_topics_json(raw_topics)
         # 强制相关度过滤：确保返回的选题与 category 真正有关，宁可少也不要滥竽充数
         topics = _filter_relevant_topics(topics, category)
+        # —— 相关度优先重排 ——
+        # 给每条打相关度分(0-100)，按「相关度降序」重排；相关度并列时保留 LLM 原排序。
+        # 排序标准：仅依据与用户输入主题的相关度（Tavily 返回网页文章、无播放/评论/转发量，
+        # 故不引入社交指标），相关度低的选题自然沉底，避免泛财税热点挤占前排。
+        for _i, _t in enumerate(topics):
+            _t["relevance"] = _score_topic_relevance(_t, category)
+            _t["_order"] = _i
+        topics.sort(key=lambda _t: (_t.get("relevance", 0), -_t.get("_order", 0)),
+                    reverse=True)
+        for _t in topics:
+            _t.pop("_order", None)
         topics = topics[:max_topics]
         return {"ok": True, "topics": topics, "source_label": source_label,
                 "stage": "list"}
@@ -1302,6 +1491,10 @@ def search_and_create(category: str, period: str, direction: str = "",
         }
         lr = length_map.get(length, "约 60 秒口播量，100-150 字")
         keep = keep_core or "保留核心知识点与关键判断，不编造数字与政策条文"
+        if target_seconds and target_seconds > 0:
+            dlg_hint = f"约 {target_seconds:.0f} 秒，{int(target_seconds*CHARS_PER_SECOND)} 字左右"
+        else:
+            dlg_hint = f"按上面同样的知识点与篇幅「{lr}」"
         fb = fw.build_guidance()
         topic_brief = (
             f"题目：{t.get('title','')}\n"
@@ -1328,7 +1521,11 @@ def search_and_create(category: str, period: str, direction: str = "",
             "=== 开头 ===\n（抓眼球 / 痛点引入，1-2句）\n"
             "=== 正文 ===\n（核心讲解，3-5句，一句一意、节奏清晰）\n"
             "=== 结尾（钩子） ===\n（留资引导 / 关注，自然不生硬，1-2句，严禁加微信/扫码等导流词）\n\n"
-            "直接输出三段式内容（含 === 标记），不要额外解释。"
+            "=== 男女对话稿 ===\n"
+            f"（{dlg_hint}，改写成女问男答的对话：每行以 女： 或 男： 开头；"
+            "女为提问/引发好奇，男为张老师解答；称呼男为「张老师」，女用「我/您」自然对话；"
+            "整体口语化、节奏与三段稿一致，覆盖同样的核心风险点）\n\n"
+            "直接输出（含 === 标记），不要额外解释。"
         )
         try:
             raw = deepseek_chat(p, model="deepseek-v4-flash", key=key, timeout=120)
@@ -1336,7 +1533,11 @@ def search_and_create(category: str, period: str, direction: str = "",
             return {"ok": False, "error": f"二创生成失败: {type(e).__name__}: {e}",
                     "topics": topics, "source_label": "联网检索"}
         segs = parse_three(raw)
-        return {"ok": True, "segs": segs, "raw": raw,
+        dialogue = extract_dialogue(raw)
+        # 兜底：LLM 没给对话稿时，用三段稿轻量拆出男女对话
+        if not dialogue:
+            dialogue = auto_dialogue_from_segs(segs)
+        return {"ok": True, "segs": segs, "dialogue": dialogue, "raw": raw,
                 "topics": topics, "source_label": "联网检索",
                 "chosen_index": topic_index, "chosen_title": t.get("title", ""),
                 "stage": "create"}
@@ -1344,8 +1545,136 @@ def search_and_create(category: str, period: str, direction: str = "",
     return {"ok": False, "error": f"未知 mode: {mode}（仅支持 list/create）"}
 
 
+# ------------------------------------------------------------------ 时长/字数估算与对话稿解析
+# 实测老张/江老师克隆音口播节奏约 4.2 字/秒（滚动字幕卡已验证）
+CHARS_PER_SECOND = 4.2
+
+
+def estimate_chars(seconds: float) -> int:
+    return int(seconds * CHARS_PER_SECOND)
+
+
+def extract_dialogue(text: str) -> str:
+    """从 LLM 输出中抓取 === 男女对话稿 === 区域。"""
+    m = re.search(r"={2,}\s*男女对话稿\s*={2,}\s*\n?(.*?)(?:\n?={2,}|$)", text, re.S)
+    if not m:
+        return ""
+    lines = []
+    for ln in m.group(1).splitlines():
+        ln = ln.strip()
+        if not ln:
+            continue
+        if ln.startswith("女：") or ln.startswith("男："):
+            lines.append(ln)
+    return "\n".join(lines)
+
+
+def _llm_with_timeout(prompt: str, seconds: int = 110):
+    """独立线程跑 llm，超时返回 None，避免后端永久挂起导致前端「改写中」卡死。"""
+    import concurrent.futures as _cf
+    with _cf.ThreadPoolExecutor(max_workers=1) as ex:
+        fut = ex.submit(llm, prompt)
+        try:
+            return fut.result(timeout=seconds)
+        except _cf.TimeoutError:
+            return None
+
+
+def rewrite_with_duration(opening: str = "", body: str = "", ending: str = "",
+                          source: str = "", topic: str = "",
+                          target_seconds: float = 60.0,
+                          extra_prompt: str = "",
+                          account_type: str = "财税IP打造类") -> dict:
+    """按目标时长（秒）重新改写三段稿，并同步生成男女对话稿。"""
+    try:
+        get_text_config()
+    except RuntimeError as e:
+        return {"ok": False, "error": f"{e} —— 请用记事本打开 model_keys.env，把 DEEPSEEK_API_KEY（推荐）或 DASHSCOPE_API_KEY 等号右边填上真实 key 保存（不要把 key 发到对话里）。"}
+
+    ref_text = ""
+    if opening or body or ending:
+        ref_text = serialize_three({"opening": opening, "body": body, "ending": ending})
+    elif source:
+        ref_text = source
+    elif topic:
+        ref_text = f"选题：{topic}"
+    else:
+        return {"ok": False, "error": "请先在改写区填写初稿，或提供原始素材/选题"}
+
+    target_chars = estimate_chars(target_seconds)
+    fb = fw.build_guidance()
+    prompt = (
+        "你是「老张讲财税」短视频账号的资深编剧。主讲人张德富，苏州实战派财税专家，"
+        "风格像朋友聊天叙事、不居高临下说教。\n\n"
+        f"【账号定位】{account_type}\n"
+        f"【参考文案】\n{ref_text}\n\n"
+        f"【目标时长】约 {target_seconds} 秒（按口播节奏约 {target_chars} 字）。"
+        f"请严格控制总字数在 {max(20, target_chars - 10)} 到 {target_chars + 15} 字之间。\n"
+        f"【补充要求】{extra_prompt or '自然口语化、一句一意、节奏清晰、专业可信'}\n\n"
+        "【创作要求】\n"
+        "- 基于参考文案重新组织，不要照搬原句；优先用疑问句或痛点场景开头，严禁自我介绍式开头\n"
+        "- 财税术语准确，概念不混淆；定性稳妥，不绝对化、不编造数字与政策条文\n"
+        "- 输出两段内容：\n"
+        "  1) 三段式独白稿（=== 开头 === / === 正文 === / === 结尾（钩子） ===）\n"
+        "  2) 男女对话稿（每行以 女： 或 男： 开头；女为提问者/引发好奇，男为张老师解答；"
+        "整体覆盖同样知识点，保持目标时长，称呼男为「张老师」，女用「我/您」自然对话）\n\n"
+        f"{fb}\n\n"
+        f"风格：\n{STYLE_GUIDE}\n\n"
+        "【输出格式（严格按此，不要多余解释）】\n"
+        "=== 开头 ===\n...\n=== 正文 ===\n...\n=== 结尾（钩子） ===\n...\n\n"
+        "=== 男女对话稿 ===\n女：...\n男：...\n女：...\n男：...\n\n"
+        "直接输出，不要额外解释。"
+    )
+    try:
+        raw = _llm_with_timeout(prompt, seconds=110)
+        if raw is None:
+            return {"ok": False, "error": "改写超时（>110 秒），大模型未响应，请重试或缩短目标时长"}
+    except SystemExit as e:
+        return {"ok": False, "error": f"改写失败（检查 KEY 或网络）: {e}"}
+    except Exception as e:  # noqa
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    segs = parse_three(raw)
+    dialogue = extract_dialogue(raw)
+    # 如果没解析到对话稿，按三段稿兜底拆几句简单对话
+    if not dialogue:
+        dialogue = auto_dialogue_from_segs(segs)
+    return {
+        "ok": True,
+        "segs": segs,
+        "dialogue": dialogue,
+        "raw": raw,
+        "target_seconds": target_seconds,
+        "target_chars": target_chars,
+    }
+
+
+def auto_dialogue_from_segs(segs: dict) -> str:
+    """LLM 没返回对话稿时的轻量兜底：把开头/正文/结尾拆成女问男答。"""
+    parts = [segs.get("opening", "").strip(), segs.get("body", "").strip(), segs.get("ending", "").strip()]
+    parts = [p for p in parts if p]
+    lines = []
+    for i, p in enumerate(parts):
+        # 简单按句号/问号/叹号切第一句给女，剩余给男
+        first, _, rest = re.split(r"([。！？])", p, maxsplit=1) if re.search(r"[。！？]", p) else (p, "", "")
+        delim = _ if _ else ""
+        if i == 0:
+            lines.append(f"女：张老师，{first}{delim}" if not first.startswith("张老师") else f"女：{first}{delim}")
+            if rest.strip():
+                lines.append(f"男：{rest.strip()}")
+        elif i == len(parts) - 1:
+            lines.append(f"女：{first}{delim}" if first else f"女：那张老师，最后再提醒一句？")
+            if rest.strip():
+                lines.append(f"男：{rest.strip()}")
+        else:
+            lines.append(f"女：{first}{delim}")
+            if rest.strip():
+                lines.append(f"男：{rest.strip()}")
+    return "\n".join([ln for ln in lines if ln.strip()])
+
+
 def generate_from_source(source: str, direction: str = "",
-                         length: str = "约60秒", keep_core: str = "") -> dict:
+                         length: str = "约60秒", keep_core: str = "",
+                         target_seconds: float = 0.0) -> dict:
     if not source or not source.strip():
         return {"ok": False, "error": "请先粘贴爆款链接或文案"}
     length_map = {
@@ -1357,6 +1686,10 @@ def generate_from_source(source: str, direction: str = "",
         "约10分钟": "约 10 分钟口播量（1500-2200 字），结构清晰：开头 80 字钩子 / 正文 1200-1800 字分 5-7 段，每段一个小主题并配案例 / 结尾 100 字留资钩子。允许长达数十分钟，只要节奏不拖沓。",
     }
     lr = length_map.get(length, "约 60 秒口播量，100-150 字")
+    if target_seconds and target_seconds > 0:
+        dlg_hint = f"约 {target_seconds:.0f} 秒，{int(target_seconds*CHARS_PER_SECOND)} 字左右"
+    else:
+        dlg_hint = f"按上面同样的知识点与篇幅「{lr}」"
     keep = keep_core or "保留原文核心知识点与关键判断，不编造数字与政策条文"
     fb = fw.build_guidance()
     p = (
@@ -1377,7 +1710,11 @@ def generate_from_source(source: str, direction: str = "",
         "=== 开头 ===\n（抓眼球 / 痛点引入，1-2句）\n"
         "=== 正文 ===\n（核心讲解，3-5句，一句一意、节奏清晰）\n"
         "=== 结尾（钩子） ===\n（留资引导 / 关注，自然不生硬，1-2句，严禁加微信/扫码等导流词）\n\n"
-        "直接输出三段式内容（含 === 标记），不要额外解释。"
+        "=== 男女对话稿 ===\n"
+        f"（{dlg_hint}，改写成女问男答的对话：每行以 女： 或 男： 开头；"
+        "女为提问/引发好奇，男为张老师解答；称呼男为「张老师」，女用「我/您」自然对话；"
+        "整体口语化、节奏与三段稿一致，覆盖同样的核心风险点）\n\n"
+        "直接输出（含 === 标记），不要额外解释。"
     )
     try:
         get_text_config()
@@ -1390,7 +1727,10 @@ def generate_from_source(source: str, direction: str = "",
     except Exception as e:  # noqa
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
     segs = parse_three(raw)
-    return {"ok": True, "segs": segs, "raw": raw}
+    dialogue = extract_dialogue(raw)
+    if not dialogue:
+        dialogue = auto_dialogue_from_segs(segs)
+    return {"ok": True, "segs": segs, "dialogue": dialogue, "raw": raw}
 
 
 class StudioServer(ThreadingHTTPServer):
