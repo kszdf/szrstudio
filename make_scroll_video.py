@@ -57,11 +57,12 @@ PANEL_BOTTOM = 1560
 N_ROWS = 5
 ROW_H = (PANEL_BOTTOM - PANEL_TOP) / N_ROWS  # 200
 MAX_W = W - 120  # 文字最大宽度（留出描边余量，避免长句贴边/溢出）
+LEFT_X = 80      # 字幕统一左对齐起始 x（右侧留 40px 余量，安全不溢出）
 
 # 字号（再放大 1.5 倍，提升可读性）
 HL_SIZE = 105      # 当前句（卡拉OK）
 HIST_SIZE = 82     # 历史句
-STROKE_W = 3       # 黑边加粗，黄色字在浅背景更清晰
+STROKE_W = 6       # 黑边加粗，黄色字更醒目（已加粗）
 STROKE_FILL = (0, 0, 0)   # 黑边，确保黄字对比度
 
 # 颜色：全部黄色系（视频号常用亮黄 #FFEB00），重点词红色，黑边保证可读性
@@ -458,6 +459,32 @@ def _find_current_line(flat, tc):
     return idx
 
 
+def _fit_bg(im, mode="fill"):
+    """把背景图按缩放模式适配到画布 (W,H)。
+    fill(填充/cover)   : 等比放大到覆盖全屏，居中裁切（全幅铺满，无黑边，最常用）
+    contain(适应)      : 等比缩放到完整可见，居中放置，多余处填黑（留黑边）
+    stretch(拉伸)      : 直接拉满画布（可能变形，原默认行为）
+    """
+    im = im.convert("RGB")
+    iw, ih = im.size
+    if mode == "stretch":
+        return im.resize((W, H))
+    if mode == "fill":  # cover
+        scale = max(W / iw, H / ih)
+        nw, nh = max(1, int(iw * scale)), max(1, int(ih * scale))
+        scaled = im.resize((nw, nh))
+        left = (nw - W) // 2
+        top = (nh - H) // 2
+        return scaled.crop((left, top, left + W, top + H))
+    # contain
+    scale = min(W / iw, H / ih)
+    nw, nh = max(1, int(iw * scale)), max(1, int(ih * scale))
+    scaled = im.resize((nw, nh))
+    base = Image.new("RGB", (W, H), (0, 0, 0))
+    base.paste(scaled, ((W - nw) // 2, (H - nh) // 2))
+    return base
+
+
 def render_frame(bg_rgb, flat, tc, t,
                  bg_static=None, bg_frames=None, bg_fps=1.0, intro=False,
                  title="", subtitle=""):
@@ -545,7 +572,7 @@ def render_frame(bg_rgb, flat, tc, t,
 def _draw_karaoke_line(draw, line, y, font, done_start, done_end):
     """绘制当前段落的单个物理行；done_start/end 是相对当前段落首字符的已读范围。"""
     lw = sum(draw.textlength(ch, font=font) for ch, _ in line)
-    x = (W - lw) / 2
+    x = LEFT_X
     for idx, (ch, emph) in enumerate(line):
         gi = done_start + idx
         if done_start <= gi < done_end:
@@ -559,28 +586,28 @@ def _draw_karaoke_line(draw, line, y, font, done_start, done_end):
 def _draw_history_line(draw, line, y, font, alpha=255):
     """绘制历史段落的单个物理行；alpha 越低越淡（已读越久越隐去）。"""
     lw = sum(draw.textlength(ch, font=font) for ch, _ in line)
-    x = (W - lw) / 2
+    x = LEFT_X
     fill_base = HIST_RGB + (alpha,)
     emph_fill = EMPH_HIST + (alpha,)
     stroke_fill = STROKE_FILL + (alpha,)
     for ch, emph in line:
         _draw_text_with_stroke(draw, (x, y), ch, font,
                                emph_fill if emph else fill_base,
-                               stroke_w=1, stroke_fill=stroke_fill)
+                               stroke_w=2, stroke_fill=stroke_fill)
         x += draw.textlength(ch, font=font)
 
 
 def _draw_next_line(draw, line, y, font, alpha=255):
     """绘制未读行：暗黄、低存在感，提示"还没讲到"。"""
     lw = sum(draw.textlength(ch, font=font) for ch, _ in line)
-    x = (W - lw) / 2
+    x = LEFT_X
     fill_base = NEXT_RGB + (alpha,)
     emph_fill = EMPH_HIST + (alpha,)
     stroke_fill = STROKE_FILL + (alpha,)
     for ch, emph in line:
         _draw_text_with_stroke(draw, (x, y), ch, font,
                                emph_fill if emph else fill_base,
-                               stroke_w=1, stroke_fill=stroke_fill)
+                               stroke_w=2, stroke_fill=stroke_fill)
         x += draw.textlength(ch, font=font)
 
 
@@ -658,6 +685,7 @@ def _draw_title(draw, title, subtitle=""):
 # ---------------------------------------------------------------- 主流程
 def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
                gap=0.18, no_intro=False, bgm=None, title=None, subtitle=None,
+               bg_fit="fill",
                female_voice=FEMALE_VOICE, female_model=FEMALE_MODEL,
                male_voice=MALE_VOICE, male_model=MALE_MODEL):
     segs = parse_dialogue(dialogue)
@@ -714,11 +742,11 @@ def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
             for i in range(im.n_frames):
                 im.seek(i)
                 durations.append(im.info.get("duration", 100))
-                bg_frames.append(im.convert("RGB").resize((W, H)))
+                bg_frames.append(_fit_bg(im, bg_fit))
             avg_dur = sum(durations) / max(1, len(durations))
             bg_fps = 1000.0 / avg_dur if avg_dur > 0 else 10.0
         else:
-            bg_static = Image.open(bg_image).convert("RGB")
+            bg_static = _fit_bg(Image.open(bg_image).convert("RGB"), bg_fit)
 
     cmd = [FFMPEG, "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
            "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
@@ -798,6 +826,8 @@ def main():
     ap.add_argument("--bg-style", default="seaside", choices=["seaside"],
                     help="背景风格，固定为滚动海浪(seaside)，不再提供黑金等其他底色")
     ap.add_argument("--bg", default=None, help="自定义背景图片路径（覆盖 --bg-style）")
+    ap.add_argument("--bg-fit", default="fill", choices=["fill", "contain", "stretch"],
+                    help="背景缩放模式：fill=填充/覆盖(默认) contain=适应/留边 stretch=拉伸/变形")
     ap.add_argument("--dry-tts", action="store_true", help="跳过真实TTS，用静音占位快速验画面")
     ap.add_argument("--gap", type=float, default=0.18, help="句间静音秒数")
     ap.add_argument("--no-intro", action="store_true", help="不生成开头标题页")
@@ -812,6 +842,7 @@ def main():
 
     make_video(args.dialogue, args.out, bg_style=args.bg_style, bg_image=args.bg,
                dry=args.dry_tts, gap=args.gap, no_intro=args.no_intro, bgm=args.bgm,
+               bg_fit=args.bg_fit,
                title=args.title, subtitle=args.subtitle,
                female_voice=args.female_voice, female_model=args.female_model,
                male_voice=args.male_voice, male_model=args.male_model)

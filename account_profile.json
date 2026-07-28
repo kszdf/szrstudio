@@ -1,0 +1,26 @@
+{
+  "account": "老张讲财税",
+  "persona": "张德富，苏州，20+年财税实战，税务风险咨询",
+  "audience": "B端老板 / 中小微企业主",
+  "tone": "实战派、口语化、去AI痕迹、站在老板视角讲风险",
+  "hit_topics": [
+    "公转私",
+    "虚开发票",
+    "个人卡流水",
+    "暂估成本",
+    "股东借款",
+    "金税四期",
+    "社保入税",
+    "异常凭证",
+    "买卖发票",
+    "私户收款"
+  ],
+  "subtitle": "老张讲财税 · 老板避坑",
+  "weekly_count": 14,
+  "publish_slots": [
+    "15:00",
+    "20:00"
+  ],
+  "bg": "C:/Users/lenovo/WorkBuddy/2026-07-27-09-14-15/videos/ocean_rolling_9x16_deepblue.gif",
+  "bg_fit": "fill"
+}

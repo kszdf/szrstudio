@@ -6,24 +6,27 @@
 <title>财税短视频生产 SaaS · 慧根堂·财税智造</title>
 <style>
   :root{
-    --bg:#ffffff; --panel:#fff; --border:#e6e9ef; --ink:#1f2937;
-    --blue:#2563eb; --blue-d:#1d4ed8; --blue-l:#eef3ff;
-    --hi:#e5484d; --med:#b08800;
-    --green:#16a34a; --green-l:#ecfdf3;
-    --red:#dc2626; --amber:#d97706; --amber-l:#fffbeb;
-    --muted:#6b7280; --muted-l:#9ca3af;
-    --step-on:#1d4ed8; --step-done:#16a34a; --step-todo:#9ca3af;
-    --shadow-sm:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.06);
-    --shadow-md:0 6px 20px rgba(16,24,40,.08);
-    --radius:12px;
+    --bg:#f4f6fb; --panel:#fff; --border:#e7ebf2; --ink:#16202e;
+    --blue:#2f54eb; --blue-d:#1d3ab8; --blue-l:#eef2ff;
+    --hi:#e5484d; --med:#a9790a;
+    --green:#15a05a; --green-l:#ecfdf3;
+    --red:#e23b3b; --amber:#d98a06; --amber-l:#fff7e6;
+    --muted:#69748a; --muted-l:#9aa4b2;
+    --step-on:#1d3ab8; --step-done:#15a05a; --step-todo:#9aa4b2;
+    --surface:#f7f9fc; --surface-2:#eef2f8;
+    --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+    --shadow-sm:0 1px 3px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+    --shadow-md:0 8px 22px rgba(16,24,40,.07);
+    --shadow-lg:0 18px 48px rgba(16,24,40,.11);
+    --radius:14px; --radius-lg:18px; --radius-sm:10px;
   }
   *{box-sizing:border-box;}
   body{margin:0;font-family:"Microsoft YaHei","PingFang SC",system-ui,-apple-system,sans-serif;
        background:var(--bg);color:var(--ink);font-size:14.5px;line-height:1.5;
        -webkit-font-smoothing:antialiased;}
-  header{background:linear-gradient(120deg,#0f2557 0%,#1d4ed8 55%,#2563eb 100%);color:#fff;
-         padding:14px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
-         box-shadow:0 2px 12px rgba(15,37,87,.25);
+  header{background:linear-gradient(120deg,#0b1f47 0%,#1b2f7a 52%,#2742b8 100%);color:#fff;
+         padding:13px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+         box-shadow:0 2px 16px rgba(11,31,71,.28);border-bottom:1px solid rgba(255,255,255,.06);
          position:sticky;top:0;z-index:100;}
   header .brand{display:flex;align-items:center;gap:13px;}
   header .logo{width:44px;height:44px;border-radius:10px;
@@ -44,10 +47,10 @@
   button{padding:9px 16px;border:1px solid var(--border);background:#fff;cursor:pointer;
          transition:.18s;font-weight:600;color:var(--ink);border-radius:8px;}
   button:hover{border-color:var(--blue);color:var(--blue);box-shadow:var(--shadow-sm);}
-  button.primary{background:linear-gradient(180deg,#3b82f6,#2563eb);color:#fff;border-color:#2563eb;
-         box-shadow:0 2px 8px rgba(37,99,235,.35);}
-  button.primary:hover{background:linear-gradient(180deg,#2563eb,#1d4ed8);color:#fff;
-         transform:translateY(-1px);box-shadow:0 4px 14px rgba(37,99,235,.45);}
+  button.primary{background:linear-gradient(180deg,#3a5bff,#2f47d9);color:#fff;border-color:#2f47d9;
+         box-shadow:0 2px 10px rgba(47,71,217,.30);}
+  button.primary:hover{background:linear-gradient(180deg,#2f47d9,#1d35b8);color:#fff;
+         transform:translateY(-1px);box-shadow:0 6px 18px rgba(47,71,217,.40);}
   button.secondary{background:#fff;color:var(--blue);border-color:var(--blue);}
   button.secondary:hover{background:var(--blue);color:#fff;transform:translateY(-1px);}
   button.mini{padding:5px 11px;font-size:12px;font-weight:500;}
@@ -71,17 +74,17 @@
   .col-right{position:sticky;top:16px;}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
         box-shadow:var(--shadow-sm);
-        padding:16px 18px;margin-bottom:16px;box-shadow:var(--shadow-sm);
-        transition:box-shadow .2s,transform .2s;}
-  .card:hover{box-shadow:var(--shadow-md);}
+        padding:18px 20px;margin-bottom:16px;
+        transition:box-shadow .22s,transform .22s,border-color .22s;}
+  .card:hover{box-shadow:var(--shadow-md);border-color:#dbe2ee;}
   /* 步骤导航 */
   .steps{list-style:none;margin:0;padding:0;}
   .steps li{padding:6px 10px;border-radius:7px;margin-bottom:3px;cursor:pointer;
             display:flex;align-items:center;gap:8px;font-weight:600;color:var(--step-todo);
             border:1px solid transparent;transition:.15s;font-size:12.5px;line-height:1.2;}
   .steps li:hover{background:var(--blue-l);color:var(--blue-d);}
-  .steps li.active{background:linear-gradient(90deg,#2563eb,#1d4ed8);color:#fff;
-            box-shadow:0 3px 10px rgba(37,99,235,.35);}
+  .steps li.active{background:linear-gradient(90deg,#2f54eb,#1d3ab8);color:#fff;
+            box-shadow:0 4px 12px rgba(47,71,217,.38);}
   .steps li.done{color:var(--step-done);}
   .steps .dot{width:18px;height:18px;border-radius:50%;background:#eef1f5;color:var(--muted);
               display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;
@@ -96,9 +99,9 @@
   /* 面板 */
   .panel{display:none;scroll-margin-top:12px;}
   .panel.active{display:block;}
-  .panel h2{font-size:16px;margin:0 0 14px;padding-left:12px;position:relative;font-weight:700;color:#111827;letter-spacing:.2px;}
-  .panel h2::before{content:"";position:absolute;left:0;top:1px;bottom:1px;width:4px;border-radius:3px;
-       background:linear-gradient(180deg,#3b82f6,#1d4ed8);}
+  .panel h2{font-size:16px;margin:0 0 14px;padding:0 0 12px 14px;position:relative;font-weight:700;color:#1a2330;letter-spacing:.2px;border-bottom:1px solid var(--border);}
+  .panel h2::before{content:"";position:absolute;left:0;top:0;bottom:12px;width:4px;border-radius:3px;
+       background:linear-gradient(180deg,#3a5bff,#1d3ab8);}
   .seg{margin-bottom:16px;}
   .seg-label{font-weight:600;font-size:14px;margin-bottom:7px;display:flex;
              align-items:center;gap:8px;}
@@ -218,8 +221,8 @@
          box-shadow:0 4px 14px rgba(217,119,6,.45);}
 
   /* —— 左栏步骤导航：深蓝渐变「菜单块」，白底上形成强对比与层次 —— */
-  .col-left .card{background:linear-gradient(180deg,#0f2557 0%,#1e3a8a 100%);
-         border-color:#1e3a8a;box-shadow:0 8px 26px rgba(15,37,87,.28);}
+  .col-left .card{background:linear-gradient(180deg,#0b1f47 0%,#1b2f7a 100%);
+         border-color:#1b2f7a;box-shadow:0 10px 30px rgba(11,31,71,.30);}
   .col-left .card .steps li{color:#cbd5e1;background:rgba(255,255,255,.06);border:1px solid transparent;}
   .col-left .card .steps li:hover{background:rgba(255,255,255,.16);color:#fff;}
   .col-left .card .steps li.active{background:linear-gradient(90deg,#06b6d4,#0891b2);color:#fff;
@@ -232,7 +235,9 @@
   /* —— 智能选题：联网检索到的爆款话题卡片 —— */
   .topic-label{font-size:12px;font-weight:600;color:#57606a;margin:2px 0 6px;}
   .topic-card{border:1px solid var(--border);border-left:3px solid var(--blue);
-         border-radius:8px;padding:8px 10px;margin-bottom:8px;background:#fbfdff;}
+         border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fbfdff;
+         transition:box-shadow .2s,transform .2s,border-color .2s;}
+  .topic-card:hover{box-shadow:var(--shadow-sm);transform:translateY(-1px);border-color:#cdd7ea;}
   .topic-card .tt{font-weight:700;font-size:13.5px;color:#111827;margin-bottom:3px;}
   .topic-card .tx{font-size:12px;color:#44505f;line-height:1.55;}
   .topic-card .tx b{color:var(--blue-d);}
@@ -246,10 +251,10 @@
   .rel-mid{background:#fef9c3;color:#a16207;}
   .rel-low{background:#fee2e2;color:#b91c1c;}
   /* 紧急按钮（也可放别处，保留兼容） */
-  .primary{background:linear-gradient(180deg,#2563eb,#1d4ed8);color:#fff;border:none;
-           padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;}
-  .primary:hover{filter:brightness(1.08);}
-  .primary:disabled{opacity:.5;cursor:not-allowed;}
+  .primary{background:linear-gradient(180deg,#3a5bff,#2f47d9);color:#fff;border:none;
+           padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:600;box-shadow:0 2px 10px rgba(47,71,217,.30);}
+  .primary:hover{background:linear-gradient(180deg,#2f47d9,#1d35b8);transform:translateY(-1px);box-shadow:0 6px 18px rgba(47,71,217,.40);}
+  .primary:disabled{opacity:.5;cursor:not-allowed;transform:none;}
 
   /* ========== 首页 Dashboard（仿 Duix 大气专业风格）========== */
   /* 首页底部公司信息 */
@@ -303,12 +308,16 @@
 
   /* Hero 双 Banner 区 */
   .hero{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:28px;}
-  .hero-card{position:relative;border-radius:18px;overflow:hidden;padding:32px 30px;
-             color:#fff;min-height:200px;display:flex;flex-direction:column;justify-content:space-between;
-             box-shadow:0 8px 28px rgba(15,23,42,.10);transition:transform .2s,box-shadow .2s;cursor:pointer;}
-  .hero-card:hover{transform:translateY(-3px);box-shadow:0 14px 40px rgba(15,23,42,.16);}
-  .hero-main{background:linear-gradient(120deg,#6d28d9 0%,#9333ea 45%,#c026d3 100%);}
-  .hero-side{background:linear-gradient(120deg,#0ea5e9 0%,#2563eb 60%,#1d4ed8 100%);}
+  .hero-card{position:relative;border-radius:20px;overflow:hidden;padding:34px 32px;
+             color:#fff;min-height:210px;display:flex;flex-direction:column;justify-content:space-between;
+             box-shadow:var(--shadow-lg);transition:transform .25s,box-shadow .25s;cursor:pointer;
+             border:1px solid rgba(255,255,255,.08);}
+  .hero-card::before{content:"";position:absolute;inset:0;
+             background:radial-gradient(120% 120% at 0% 0%,rgba(255,255,255,.18),transparent 45%);
+             pointer-events:none;}
+  .hero-card:hover{transform:translateY(-4px);box-shadow:0 24px 60px rgba(15,23,42,.20);}
+  .hero-main{background:linear-gradient(125deg,#5b21b6 0%,#7c3aed 48%,#a855f7 100%);}
+  .hero-side{background:linear-gradient(125deg,#0369a1 0%,#2563eb 58%,#1e40af 100%);}
   .hero-card .h-eyebrow{font-size:13px;letter-spacing:2px;opacity:.85;font-weight:500;text-transform:uppercase;}
   .hero-card .h-title{font-size:30px;font-weight:800;margin:8px 0 10px;line-height:1.25;letter-spacing:.5px;}
   .hero-card .h-desc{font-size:14px;opacity:.92;line-height:1.6;max-width:520px;}
@@ -379,8 +388,9 @@
   /* 卡片网格 */
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;}
   .g-card{background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden;
-          box-shadow:0 1px 3px rgba(15,23,42,.04);transition:transform .2s,box-shadow .2s;
+          box-shadow:var(--shadow-sm);transition:transform .2s,box-shadow .2s,border-color .2s;
           cursor:pointer;display:flex;flex-direction:column;}
+  .g-card:hover{border-color:#dbe2ee;}
   .g-card:hover{transform:translateY(-4px);box-shadow:0 12px 28px rgba(15,23,42,.12);}
   .g-thumb{position:relative;aspect-ratio:9/16;background:linear-gradient(135deg,#eef2ff,#e0e7ff);
            display:flex;align-items:center;justify-content:center;overflow:hidden;}
@@ -499,6 +509,30 @@
     .feat-md-body{padding:14px 16px;font-size:13px;}
     .feat-md-head{padding:12px 16px;}
   }
+  /* 模式切换骨架 + 草稿保护 */
+  .mode-bar{display:flex;align-items:center;gap:12px;margin:6px 0 14px;flex-wrap:wrap;}
+  .mode-switch{display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#fff;}
+  .mode-switch .mode-btn{padding:9px 18px;border:0;background:transparent;cursor:pointer;font-family:inherit;font-weight:600;font-size:13px;color:var(--muted);transition:background .15s,color .15s;}
+  .mode-switch .mode-btn:hover{background:rgba(37,99,235,.08);}
+  .mode-switch .mode-btn.active{background:var(--blue-d);color:#fff;}
+  .mode-switch .mode-btn.active:hover{background:var(--blue-d);}
+  .mode-group[hidden]{display:none!important;}
+  /* —— 对话稿格式规范框 —— */
+  .fmt-box{border:1px solid var(--border);border-radius:10px;background:rgba(37,99,235,.04);margin:4px 0 10px;overflow:hidden;}
+  .fmt-box>summary{cursor:pointer;padding:9px 14px;font-weight:700;font-size:13px;color:var(--blue-d);list-style:none;user-select:none;}
+  .fmt-box>summary::-webkit-details-marker{display:none;}
+  .fmt-box>summary::before{content:"▸ ";color:var(--blue-d);}
+  .fmt-box[open]>summary::before{content:"▾ ";}
+  .fmt-body{padding:0 14px 12px;}
+  .fmt-rules{margin:2px 0 10px;padding-left:18px;line-height:1.85;font-size:12.5px;color:var(--text);}
+  .fmt-rules li{margin:2px 0;}
+  .fmt-rules code{background:rgba(15,23,42,.08);border-radius:4px;padding:1px 5px;font-size:12px;color:#b91c1c;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+  .fmt-rules b{color:var(--text);}
+  .fmt-example{border:1px dashed #93c5fd;background:#fff;border-radius:8px;overflow:hidden;}
+  .fmt-example-head{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#eff6ff;font-size:12px;font-weight:600;color:#1d4ed8;}
+  .fmt-copy{border:1px solid #93c5fd;background:#fff;color:#1d4ed8;border-radius:6px;padding:3px 9px;font-size:11.5px;cursor:pointer;font-family:inherit;}
+  .fmt-copy:hover{background:#dbeafe;}
+  .fmt-example pre{margin:0;padding:10px 12px;font-size:12.5px;line-height:1.7;white-space:pre-wrap;word-break:break-all;color:#0f172a;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
 </style>
 </head>
 <body>
@@ -706,6 +740,14 @@
           <input id="extraPrompt" placeholder="补充提示词（如：突出罚款金额、更口语化、多举案例…）" style="min-width:220px;flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;">
         </div>
       </div>
+      <div class="mode-bar" style="display:flex;align-items:center;gap:12px;margin:6px 0 14px;flex-wrap:wrap;">
+        <div class="mode-switch" id="modeSwitch">
+          <button type="button" class="mode-btn" data-mode="monologue">🎙️ 独白模式</button>
+          <button type="button" class="mode-btn" data-mode="dialogue">💬 对话模式</button>
+        </div>
+        <span id="modeHint" class="tip" style="color:var(--blue-d);font-weight:600;"></span>
+      </div>
+      <div id="monologueGroup" class="mode-group">
       <div class="seg">
         <div class="seg-label"><span class="tag open">开头</span> 抓眼球 / 抛痛点 <span class="seg-count" id="cnt-open"></span></div>
         <div class="editor"><textarea id="ta-open" class="editarea" placeholder="开头…"></textarea><div id="ov-open" class="overlay editarea"></div></div>
@@ -721,14 +763,48 @@
         <div class="editor"><textarea id="ta-end" class="editarea" placeholder="结尾（严禁加微信/扫码等导流词）…"></textarea><div id="ov-end" class="overlay editarea"></div></div>
         <div class="hitlist" id="hl-end"></div>
       </div>
+      <div class="actions" style="margin-top:10px;">
+        <button type="button" id="previewMonoBtn" class="secondary">🔊 试听独白（当前草稿）</button>
+        <span id="pvMonoState" class="tip"></span>
+      </div>
+      </div><!-- /monologueGroup -->
+      <div id="dialogueGroup" class="mode-group">
       <div class="seg">
-        <div class="seg-label"><span class="tag body">男女对话稿</span> 用于「不出镜·滚动字幕卡」出片（女：/男：） <span class="seg-count" id="cnt-dialogue"></span></div>
-        <div class="editor"><textarea id="ta-dialogue" class="editarea" placeholder="女：张老师，我想请教一下…&#10;男：嗯，这个关键看…&#10;（每行以 女：/男： 开头；留空则滚动字幕卡自动回退单声）" style="min-height:120px;"></textarea></div>
+        <div class="seg-label"><span class="tag body">男女对话稿</span> 用于「不出镜·滚动字幕卡」双声出片 <span class="seg-count" id="cnt-dialogue"></span></div>
+        <details class="fmt-box" open>
+          <summary>📐 对话稿格式规范（新手必读）</summary>
+          <div class="fmt-body">
+            <ul class="fmt-rules">
+              <li><b>角色标识</b>：每行以 <code>女：</code> 或 <code>男：</code> 开头（<b>全角冒号</b> <code>：</code> 推荐；半角 <code>:</code> 也兼容）。</li>
+              <li><b>台词位置</b>：标识后<b>直接写</b>该角色的台词，不要换行。</li>
+              <li>⚠️ <b>不加前缀的行 → 默认按「男声」处理</b>（新手最常踩的坑，务必每行都标角色）。</li>
+              <li><b>空行</b>会被自动忽略，可用来分段。</li>
+              <li>只有 <code>女：</code>/<code>男：</code> 没有台词的行会被跳过。</li>
+              <li>一行 = 一句台词（整行合成配音，画面自动换行，最多 3 行）。</li>
+              <li>成片<b>不显示角色名</b>，纯靠音色区分男女声。</li>
+            </ul>
+            <div class="fmt-example">
+              <div class="fmt-example-head">
+                <span>✅ 正确示例</span>
+                <button type="button" class="fmt-copy" id="insertDialogueExample">📋 填入示例</button>
+              </div>
+<pre>女：老板，公户的钱能直接转我自己卡上吗？
+男：千万别！这叫公转私，金税四期一查一个准。
+女：那临时周转一下也不行？
+男：真要用，走工资、分红、报销，留好凭证。</pre>
+            </div>
+          </div>
+        </details>
+        <div class="editor"><textarea id="ta-dialogue" class="editarea" placeholder="女：老板，公户的钱能直接转我自己卡上吗？&#10;男：千万别！这叫公转私，金税四期一查一个准。&#10;（每行以 女：/男： 开头；不加前缀默认男声）" style="min-height:160px;"></textarea></div>
         <div class="tip" style="margin-top:6px;background:rgba(15,23,42,.06);border-left:3px solid #2563eb;padding:8px 10px;border-radius:6px;line-height:1.7;">
           填了对话稿，⑤ 出片 选「📜 滚动字幕卡」即按 <b>男女双声 + 滚动字幕</b> 出片；不填也能出片（自动用独白单声）。<br>
           <span id="dialogueDurationTip" style="color:var(--muted);"></span>
         </div>
+      <div class="actions" style="margin-top:10px;">
+        <button type="button" id="previewDialogueBtn" class="secondary">🔊 试听双声（当前对话稿）</button>
+        <span id="pvDialogueState" class="tip"></span>
       </div>
+      </div><!-- /dialogueGroup -->
       <details id="guideBox">
         <summary>📖 各大平台违禁词红线速查卡（点击展开）</summary>
         <pre id="guideText">加载中…</pre>
@@ -810,11 +886,22 @@
           <div id="tpNote" class="tip" style="margin-top:8px;"></div>
         </div>
         <div id="scrollBox" style="display:none;margin-top:12px;padding-top:10px;border-top:1px dashed #cbd5e1;">
-          <div style="font-size:12.5px;color:#475569;margin-bottom:6px;">背景：</div>
-          <select id="scrollBg" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;">
-            <option value="seaside">🌊 滚动海浪（默认）</option>
-            <option value="gif">🌊 我的GIF海景（20260721TP.gif）</option>
-          </select>
+          <div style="font-weight:600;margin-bottom:8px;">背景图（双声视频）</div>
+          <div class="bg-upload" style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+            <label class="bg-up-btn" style="cursor:pointer;display:inline-block;padding:7px 12px;background:#2563eb;color:#fff;border-radius:8px;font-size:13px;">＋ 上传背景图
+              <input id="bgFile" type="file" accept="image/jpeg,image/png,image/gif,image/webp" hidden>
+            </label>
+            <span id="bgUpState" class="tip"></span>
+          </div>
+          <div id="bgThumbs" class="bg-thumbs" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;"></div>
+          <div style="font-size:12.5px;color:#475569;margin:6px 0;">缩放模式：</div>
+          <label style="margin-right:14px;cursor:pointer;font-size:13px;"><input type="radio" name="bgFit" value="fill" checked> 填充（覆盖）</label>
+          <label style="margin-right:14px;cursor:pointer;font-size:13px;"><input type="radio" name="bgFit" value="contain"> 适应（留边）</label>
+          <label style="cursor:pointer;font-size:13px;"><input type="radio" name="bgFit" value="stretch"> 拉伸</label>
+          <div class="bg-preview" id="bgPreview" style="position:relative;margin-top:12px;width:270px;height:480px;border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#000;">
+            <div class="bg-prev-img" id="bgPrevImg" style="position:absolute;inset:0;background-size:cover;background-position:center;"></div>
+            <div class="bg-prev-caps" id="bgPrevCaps" style="position:absolute;left:0;right:0;top:38%;padding:0 20px;color:#ffe100;font-weight:700;font-size:17px;text-shadow:0 0 4px #000;line-height:1.5;text-align:left;white-space:pre-line;"></div>
+          </div>
           <div style="font-size:12.5px;color:#475569;margin:10px 0 6px;">标题（≤10字，留空自动生成）：</div>
           <input id="scrollTitle" type="text" maxlength="10" placeholder="自动生成" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;width:240px;">
           <div style="font-size:12.5px;color:#475569;margin:10px 0 6px;">副标题（标题下方一行小字，可留空）：</div>
@@ -1269,16 +1356,18 @@ async function loadProjects(){
   $("projSearchBox").oninput = e => renderList(e.target.value);
   // 2. 同步当前项目名显示
   const curEl=$("projCurName");
-  if(currentName && list.some(p=>p.name===currentName)) curEl.textContent=currentName;
-  else if(list.length) curEl.textContent=list[0].name+"  ← 最近";
-  else curEl.textContent="— 暂无项目";
+  if(curEl){
+    if(currentName && list.some(p=>p.name===currentName)) curEl.textContent=currentName;
+    else if(list.length) curEl.textContent=list[0].name+"  ← 最近";
+    else curEl.textContent="— 暂无项目";
+  }
   // 3. 关键修复：保持当前选中项目，禁止被强制切回列表第一项。
   // 否则在 X 项目上「保存/出音频」后，currentName 会被偷偷切回列表首项（某个旧/模板项目），
   // 导致后续出音频作用到错误项目、音频内容变成旧模板。
   let target=null;
   if(currentName && list.some(p=>p.name===currentName)) target=currentName;
   else if(list.length) target=list[0].name;
-  if(target){ await loadProject(target); curEl.textContent=target; }
+  if(target){ await loadProject(target); if(curEl) curEl.textContent=target; }
   else toast("暂无项目，点「新建」创建一个");
 }
 async function loadProject(name){
@@ -1298,9 +1387,10 @@ async function loadProject(name){
   const s=d.segs||{};
   $("ta-open").value=s.opening||"";$("ta-body").value=s.body||"";$("ta-end").value=s.ending||"";
   const td=$("ta-dialogue"); if(td) td.value=d.dialogue||"";
+  saveDraftNow(); // 同步草稿，使刷新后草稿与已加载项目一致
   for(const k of ["open","body","end"]) await checkSeg(k);
-  $("opState").textContent="已加载："+name;
-  $("curName").textContent=name;
+  const opSt=$("opState"); if(opSt) opSt.textContent="已加载："+name;
+  const curNameEl=$("curName"); if(curNameEl) curNameEl.textContent=name;
   // 选题面板显示当前项目账号定位（用于分类 / 平台上传）
   const acct = projAcctMap[name]||"未分类";
   const ta=$("topicAcct");
@@ -1430,6 +1520,58 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){ const pop=$("projPopup"); if(pop) pop.style.display="none"; }
 });
 $("platformSel").addEventListener("change",()=>{for(const k of ["open","body","end"]) checkSeg(k);});
+
+// 对话稿「填入示例」按钮：把规范示例写入 ta-dialogue，并触发计数/草稿
+(()=>{
+  const btn=$("insertDialogueExample"); if(!btn) return;
+  btn.addEventListener("click",()=>{
+    const ta=$("ta-dialogue"); if(!ta) return;
+    ta.value=
+      "女：老板，公户的钱能直接转我自己卡上吗？\n"+
+      "男：千万别！这叫公转私，金税四期一查一个准。\n"+
+      "女：那临时周转一下也不行？\n"+
+      "男：真要用，走工资、分红、报销，留好凭证。";
+    ta.dispatchEvent(new Event("input",{bubbles:true}));
+    updateAllCounts(); scheduleDraftSave();
+    if(typeof setMode==="function") setMode("dialogue");
+  });
+})();
+
+// 实时配音试听：把当前编辑器文本发后端合成，浏览器直接播放（复用生产 TTS 管线）
+async function previewTts(text, stateEl, btnEl){
+  if(!text || !text.trim()){ if(stateEl) stateEl.textContent="文本为空，先写点内容"; return; }
+  if(btnEl){ btnEl.disabled=true; }
+  if(stateEl){ stateEl.textContent="合成试听中…"; }
+  try{
+    const r=await fetch("/api/tts_preview",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({text:text.trim()})});
+    const ct=r.headers.get("Content-Type")||"";
+    if(!r.ok || ct.indexOf("audio")<0){
+      let msg="试听失败";
+      try{ const j=await r.json(); if(j&&j.error) msg=j.error; }catch(e){}
+      if(stateEl) stateEl.textContent=msg.slice(0,80);
+      return;
+    }
+    const blob=await r.blob();
+    const url=URL.createObjectURL(blob);
+    const au=new Audio(url);
+    au.onended=()=>{ URL.revokeObjectURL(url); if(stateEl) stateEl.textContent="试听完成"; if(btnEl) btnEl.disabled=false; };
+    au.onerror=()=>{ URL.revokeObjectURL(url); if(stateEl) stateEl.textContent="播放失败"; if(btnEl) btnEl.disabled=false; };
+    await au.play();
+    if(stateEl) stateEl.textContent="播放中…";
+  }catch(e){
+    if(stateEl) stateEl.textContent=("错误："+(e&&e.message?e.message:e)).slice(0,80);
+    if(btnEl) btnEl.disabled=false;
+  }
+}
+const pvMonoBtn=$("previewMonoBtn"), pvDlgBtn=$("previewDialogueBtn");
+if(pvMonoBtn) pvMonoBtn.addEventListener("click",()=>{
+  const t=[$("ta-open").value,$("ta-body").value,$("ta-end").value].filter(x=>x&&x.trim()).join("\n");
+  previewTts(t,$("pvMonoState"),pvMonoBtn);
+});
+if(pvDlgBtn) pvDlgBtn.addEventListener("click",()=>{
+  previewTts($("ta-dialogue").value,$("pvDialogueState"),pvDlgBtn);
+});
 $("saveBtn").addEventListener("click",async()=>{
   if(!currentName) return;
   const r=await fetch("/api/project/"+encodeURIComponent(currentName)+"/save",{method:"POST",
@@ -1469,7 +1611,7 @@ function updateAllCounts(){
 }
 $("targetDuration").addEventListener("input", updateTargetWordCount);
 for(const id of ["ta-open","ta-body","ta-end","ta-dialogue"]){
-  $(id).addEventListener("input", ()=>{ updateAllCounts(); for(const k of ["open","body","end"]) if(id==="ta-"+k) checkSeg(k); });
+  $(id).addEventListener("input", ()=>{ updateAllCounts(); for(const k of ["open","body","end"]) if(id==="ta-"+k) checkSeg(k); scheduleDraftSave(); });
 }
 updateTargetWordCount(); updateAllCounts();
 
@@ -1482,7 +1624,7 @@ function resetRewriteBtn(){
   rewriteAbortCtrl = null; rewriteAbortedByTimeout = false;
   $("rewriteBtn").disabled = false;
   $("rewriteBtn").textContent = "✨ AI 按设定改写";
-  $("opState").textContent = "";
+  const opSt=$("opState"); if(opSt) opSt.textContent = "";
 }
 $("rewriteBtn").addEventListener("click",async()=>{
   // 改写进行中再次点击 = 中止
@@ -1493,7 +1635,7 @@ $("rewriteBtn").addEventListener("click",async()=>{
   rewriteAbortCtrl = new AbortController();
   $("rewriteBtn").disabled = false;
   $("rewriteBtn").textContent = "⏹ 中止改写";
-  $("opState").textContent = `按 ${sec}s（≈${Math.round(sec*CHARS_PER_SEC)}字）改写中…可点按钮中止`;
+  const opSt=$("opState"); if(opSt) opSt.textContent = `按 ${sec}s（≈${Math.round(sec*CHARS_PER_SEC)}字）改写中…可点按钮中止`;
   // 120 秒超时自动中止，避免永久卡在「改写中」
   rewriteTimer = setTimeout(()=>{
     if(rewriteAbortCtrl){ rewriteAbortedByTimeout = true; rewriteAbortCtrl.abort(); toast("改写超时（>120s），已自动中止"); }
@@ -1771,7 +1913,8 @@ $("renderBtn").addEventListener("click",async()=>{
     body.voice_mode=document.querySelector('input[name="tpVoice"]:checked').value;
   } else if(mode==="scroll"){
     body.provider="scroll";
-    body.bg=$("scrollBg")?$("scrollBg").value:"seaside";
+    body.bg=currentBgPath||"seaside";
+    body.bg_fit=document.querySelector('input[name="bgFit"]:checked').value;
     body.title=$("scrollTitle")?($("scrollTitle").value||""):"";
     body.subtitle=$("scrollSubtitle")?($("scrollSubtitle").value||""):"";
   }
@@ -1835,6 +1978,67 @@ async function initThirdparty(){
 }
 document.querySelectorAll('input[name="renderMode"]').forEach(el=>el.addEventListener("change",toggleRenderMode));
 initThirdparty();
+
+// —— 双声视频背景图管理（上传/替换/实时预览）——
+let currentBgPath = "";
+let bgItems = [];
+async function loadBgManager(){
+  try{ const r=await fetch("/api/bg_current"); const c=await r.json(); currentBgPath=c.path||""; }catch(e){}
+  await refreshBgThumbs();
+}
+async function refreshBgThumbs(){
+  try{ const r=await fetch("/api/bg_list"); const d=await r.json(); bgItems=d.items||[]; }catch(e){ bgItems=[]; }
+  const box=$("bgThumbs"); if(!box) return; box.innerHTML="";
+  bgItems.forEach(it=>{
+    const el=document.createElement("div");
+    el.style.cssText="position:relative;width:84px;height:150px;border-radius:8px;overflow:hidden;border:2px solid "+(it.path===currentBgPath?"#2563eb":"#e2e8f0")+";cursor:pointer;background:#000;";
+    const img=document.createElement("div");
+    img.style.cssText="position:absolute;inset:0;background-image:url('"+it.url+"');background-size:cover;background-position:center;";
+    el.appendChild(img); el.title=it.name;
+    el.onclick=async()=>{ await setBg(it); };
+    const del=document.createElement("div");
+    del.textContent="✕"; del.style.cssText="position:absolute;top:2px;right:2px;width:18px;height:18px;line-height:18px;text-align:center;background:rgba(0,0,0,.55);color:#fff;border-radius:50%;font-size:12px;cursor:pointer;";
+    del.onclick=async(ev)=>{ ev.stopPropagation(); await delBg(it); };
+    el.appendChild(del); box.appendChild(el);
+  });
+  updateBgPreview();
+}
+async function setBg(it){
+  const r=await fetch("/api/bg_set",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:it.id})});
+  const d=await r.json(); if(d.ok){ currentBgPath=d.path||""; await refreshBgThumbs(); }
+}
+async function delBg(it){
+  if(!confirm("删除背景「"+it.name+"」？此操作不可恢复。")) return;
+  const r=await fetch("/api/bg_delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:it.id})});
+  const d=await r.json(); if(d.ok){ if(currentBgPath===it.path) currentBgPath=""; await refreshBgThumbs(); }
+}
+function currentBgUrl(){
+  const it=bgItems.find(x=>x.path===currentBgPath); return it?it.url:"";
+}
+function updateBgPreview(){
+  const fit=document.querySelector('input[name="bgFit"]:checked');
+  const mode=fit?fit.value:"fill";
+  const map={fill:"cover",contain:"contain",stretch:"100% 100%"};
+  const img=$("bgPrevImg"); if(!img) return;
+  img.style.backgroundImage=currentBgPath?("url('"+currentBgUrl()+"')"):"";
+  img.style.backgroundSize=map[mode];
+  const caps=$("bgPrevCaps"); if(caps) caps.textContent="老板，公户的钱能直接转我自己卡上吗？\n千万别！这叫公转私，金税四期一查一个准。";
+}
+const bgFileEl=$("bgFile");
+if(bgFileEl) bgFileEl.addEventListener("change",async(e)=>{
+  const f=e.target.files&&e.target.files[0]; if(!f) return;
+  $("bgUpState").textContent="上传中…";
+  const fd=new FormData(); fd.append("file",f);
+  try{
+    const r=await fetch("/api/bg_upload",{method:"POST",body:fd});
+    const d=await r.json();
+    if(d.ok){ currentBgPath=d.item.path; $("bgUpState").textContent="✅ 已上传并设为当前"; await refreshBgThumbs(); }
+    else { $("bgUpState").textContent="失败："+(d.error||"").slice(0,60); }
+  }catch(err){ $("bgUpState").textContent="上传出错"; }
+  e.target.value="";
+});
+document.querySelectorAll('input[name="bgFit"]').forEach(el=>el.addEventListener("change",updateBgPreview));
+loadBgManager();
 
 // —— 批量渲染队列 ——
 let queueTimer = null;        // 步骤9 详细面板轮询
@@ -2601,10 +2805,82 @@ function useModel(name){
   },100);
 }
 
+// ===== 模式切换骨架 + 草稿保护 =====
+const MODE_KEY = 'hgt_studio_mode_v2';
+const DRAFT_KEY = 'hgt_studio_draft_v2';
+const MODE_FIELDS = ['ta-open','ta-body','ta-end','ta-dialogue'];
+let _draftTimer = null;
+function saveDraftNow(){
+  try{
+    const d={};
+    for(const id of MODE_FIELDS){ const el=$(id); d[id]= el? el.value : ''; }
+    d.__mode = getMode();
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+  }catch(e){ /* 隐私模式 / 配额超限：静默忽略，不影响主流程 */ }
+}
+function scheduleDraftSave(){
+  if(_draftTimer) clearTimeout(_draftTimer);
+  _draftTimer = setTimeout(saveDraftNow, 350);
+}
+function restoreDraft(){
+  try{
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if(!raw) return false;
+    const d = JSON.parse(raw);
+    for(const id of MODE_FIELDS){ const el=$(id); if(el && typeof d[id]==='string') el.value = d[id]; }
+    return true;
+  }catch(e){ return false; }
+}
+function getMode(){
+  try{ const m = localStorage.getItem(MODE_KEY); return (m==='dialogue'||m==='monologue')? m : 'monologue'; }
+  catch(e){ return 'monologue'; }
+}
+function setMode(mode, opts){
+  mode = (mode==='dialogue')? 'dialogue' : 'monologue';
+  try{ localStorage.setItem(MODE_KEY, mode); }catch(e){}
+  // 视觉：高亮当前按钮
+  document.querySelectorAll('#modeSwitch .mode-btn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.mode===mode);
+  });
+  // 确定性：仅切换可见性，绝不销毁/重置编辑器内容
+  const mg=$('monologueGroup'), dg=$('dialogueGroup');
+  if(mg) mg.hidden = (mode!=='monologue');
+  if(dg) dg.hidden = (mode!=='dialogue');
+  saveDraftNow();
+  if(!(opts&&opts.silent)) updateModeHint();
+}
+function updateModeHint(){
+  const el=$('modeHint'); if(!el) return;
+  el.textContent = (getMode()==='dialogue')
+    ? '当前：对话模式（男女双声 · 滚动字幕卡出片）'
+    : '当前：独白模式（单声 · 三段式数字人出片）';
+}
+function initModeSwitch(){
+  // 1) 先恢复草稿（先于任何项目加载；点开已存项目会自然覆盖，属预期）
+  restoreDraft();
+  // 2) 绑定切换按钮 —— 确定性策略：切换永不中断正在进行的生成；
+  //    生成结果写入其目标字段，与编辑器可见性无关，两字段均受草稿保护
+  document.querySelectorAll('#modeSwitch .mode-btn').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const target = b.dataset.mode;
+      if(target===getMode()) return;   // 同模式点击：幂等，不抖动
+      setMode(target);
+    });
+  });
+  // 3) 初始模式
+  setMode(getMode(), {silent:true});
+  updateModeHint();
+  // 4) 关闭/切后台兜底保存，防意外刷新丢失
+  window.addEventListener('beforeunload', saveDraftNow);
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveDraftNow(); });
+}
+
 // —— 初始化 ——
 (async()=>{
   // 默认在首页
   goHome();
+  // 模式切换骨架初始化（恢复草稿 + 绑定控件）
+  initModeSwitch();
   // 预热：拉到作品/模特列表后，后台静默加载项目列表供工作台用
   loadProjects();
   const g=await fetch("/api/guidance");const gd=await g.json();

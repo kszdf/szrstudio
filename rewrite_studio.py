@@ -46,7 +46,7 @@ PY310 = r"D:/heygem/py310/Scripts/python.exe"      # 出片网关线用 py310
 MAKE_AVATAR = BASE / "make_avatar_video.py"
 MAKE_SCROLL = BASE / "make_scroll_video.py"          # 不出镜·滚动字幕卡（男女对话）
 PY313 = r"C:/Users/lenovo/.workbuddy/binaries/python/versions/3.13.12/python.exe"  # 滚动字幕卡用 3.13（自带 dashscope+Pillow+numpy）
-SCROLL_DEFAULT_GIF = r"D:/heygem_data/face2face/20260721TP.gif"   # 用户默认 GIF 海景背景
+SCROLL_DEFAULT_GIF = r"C:/Users/lenovo/WorkBuddy/2026-07-27-09-14-15/videos/ocean_rolling_9x16_deepblue.gif"   # 用户默认 GIF 海景背景（已清理旧 20260721TP.gif 引用）
 SCROLL_MALE_VOICE = "cosyvoice-v3-plus-zhangc2-28a7c3541e1c45518a03046c11baeb1d"
 SCROLL_FEMALE_VOICE = "cosyvoice-v3-plus-jiangnv3-991b204c1d564ac7a60f0cb9a8fd78bd"
 SCROLL_MALE_MODEL = "cosyvoice-v3-plus"
@@ -56,6 +56,60 @@ FFMPEG = r"D:/ffmpeg/ffmpeg-8.1.2-full_build/bin/ffmpeg.exe"
 
 for d in (AUDIO_DIR, VIDEO_DIR, PKG_DIR, THUMB_DIR, STATIC_DIR):
     d.mkdir(parents=True, exist_ok=True)
+
+# 双声视频背景图管理（上传/替换/预览）：存于静态目录，前端走 /static/bg/ 直接访问
+BG_DIR = STATIC_DIR / "bg"
+BG_DIR.mkdir(parents=True, exist_ok=True)
+BG_INDEX = BG_DIR / "bg_index.json"
+BG_ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+BG_MAX_BYTES = 30 * 1024 * 1024
+ACCOUNT_PROFILE = BASE / "account_profile.json"  # weekly_pipeline 同读此文件 bg 字段（单一事实来源）
+
+
+# ---------------------------------------------------------------- 背景图管理助手
+def _bg_load_index():
+    if BG_INDEX.exists():
+        try:
+            return json.loads(BG_INDEX.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return []
+
+
+def _bg_save_index(items):
+    BG_INDEX.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _bg_account_bg():
+    """读取账号定位里的当前背景路径（单一事实来源）。"""
+    if ACCOUNT_PROFILE.exists():
+        try:
+            return json.loads(ACCOUNT_PROFILE.read_text(encoding="utf-8")).get("bg") or ""
+        except Exception:
+            return ""
+    return ""
+
+
+def _bg_set_account_bg(path):
+    prof = {}
+    if ACCOUNT_PROFILE.exists():
+        try:
+            prof = json.loads(ACCOUNT_PROFILE.read_text(encoding="utf-8"))
+        except Exception:
+            prof = {}
+    prof["bg"] = path or ""
+    ACCOUNT_PROFILE.write_text(json.dumps(prof, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _bg_current_id():
+    """由 account_profile.bg 反查当前背景在索引里的 id（供前端高亮）。"""
+    cur = _bg_account_bg()
+    if not cur:
+        return None
+    for it in _bg_load_index():
+        if not it.get("deleted") and it.get("path") == cur:
+            return it.get("id")
+    return None
 
 sys.path.insert(0, str(BASE))
 import forbidden_words as fw
@@ -376,14 +430,14 @@ JOB_LOCK = threading.Lock()
 def start_render(name: str, model_id: str, provider: str = "heygem",
                  avatar_id: str | None = None, voice_mode: str = "official",
                  bg: str | None = None, title: str | None = None,
-                 subtitle: str | None = None) -> dict:
+                 subtitle: str | None = None, bg_fit: str | None = None) -> dict:
     """出片入口。provider 默认 heygem（原本地流程，零改动）；
     provider=thirdparty 走第三方官方数字人，不动 HEYGEM 任何逻辑；
     provider=scroll 走不出镜·滚动字幕卡（男女对话），输出同一 VIDEO_DIR/<name>.mp4，下游无缝复用。"""
     if provider == "thirdparty":
         return _start_render_thirdparty(name, avatar_id, voice_mode)
     if provider == "scroll":
-        return _start_render_scroll(name, bg, title, subtitle)
+        return _start_render_scroll(name, bg, title, subtitle, bg_fit=bg_fit)
     models = {m["id"]: m for m in list_models()}
     if model_id not in models:
         return {"ok": False, "error": "模特不存在，请刷新模特列表"}
@@ -477,7 +531,8 @@ def _start_render_thirdparty(name: str, avatar_id: str | None,
 
 def _start_render_scroll(name: str, bg: str | None = None,
                           title: str | None = None,
-                          subtitle: str | None = None) -> dict:
+                          subtitle: str | None = None,
+                          bg_fit: str | None = None) -> dict:
     """不出镜·滚动字幕卡（男女对话）出片：调 make_scroll_video.py，输出到 VIDEO_DIR/<name>.mp4。
     下游（预览/字幕/质检/发布/队列）只认这个 mp4，与数字人出片零差别复用。"""
     p = project_path(name)
@@ -503,6 +558,8 @@ def _start_render_scroll(name: str, bg: str | None = None,
         cmd += ["--title", title.strip()[:20]]
     if subtitle and subtitle.strip():
         cmd += ["--subtitle", subtitle.strip()[:40]]
+    if bg_fit and bg_fit in ("fill", "contain", "stretch"):
+        cmd += ["--bg-fit", bg_fit]
     job_id = "job_" + os.urandom(4).hex()
     with JOB_LOCK:
         JOBS[job_id] = {"status": "running", "step": "滚动字幕卡渲染中（TTS+合成）",
@@ -962,6 +1019,11 @@ class Handler(BaseHTTPRequestHandler):
             with JOB_LOCK:
                 job = JOBS.get(m.group(1))
             return self._send_json(job or {"status": "not found"})
+        if path == "/api/bg_list":
+            items = [it for it in _bg_load_index() if not it.get("deleted")]
+            return self._send_json({"items": items, "current_id": _bg_current_id()})
+        if path == "/api/bg_current":
+            return self._send_json({"path": _bg_account_bg(), "current_id": _bg_current_id()})
         if path == "/api/queue":
             return self._send_json(get_queue())
         m = re.match(r"^/api/project/(.+?)/(qc|subtitle|publish)$", path)
@@ -1011,12 +1073,73 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception:
                     pass
                 return
+        # 背景图上传（multipart/form-data，与模特上传同机制）
+        if path == "/api/bg_upload":
+            try:
+                return self._handle_upload_bg()
+            except Exception as e:  # noqa
+                import traceback as _tb
+                err = f"{type(e).__name__}: {e}\n{_tb.format_exc()}"
+                return self._send_json({"ok": False, "error": err}, 200)
         body = self._body()
+        if path == "/api/bg_set":
+            bg_id = (body.get("id") or "").strip()
+            items = _bg_load_index()
+            rec = next((it for it in items if it.get("id") == bg_id and not it.get("deleted")), None)
+            if not rec:
+                return self._send_json({"ok": False, "error": "背景不存在或已删除"}, 400)
+            _bg_set_account_bg(rec["path"])
+            return self._send_json({"ok": True, "path": rec["path"]})
+        if path == "/api/bg_delete":
+            bg_id = (body.get("id") or "").strip()
+            items = _bg_load_index()
+            rec = next((it for it in items if it.get("id") == bg_id), None)
+            if not rec:
+                return self._send_json({"ok": False, "error": "背景不存在"}, 400)
+            rec["deleted"] = True
+            # 若删除的正是当前背景，则清空当前（需求6：旧背景不再引用）
+            if _bg_account_bg() == rec.get("path"):
+                _bg_set_account_bg("")
+            _bg_save_index(items)
+            return self._send_json({"ok": True, "deleted": bg_id})
         if path == "/api/check":
             text = body.get("text", "")
             platform = body.get("platform") or None
             hits = fw.scan(text, platform=platform)
             return self._send_json({"hits": hits})
+        if path == "/api/tts_preview":
+            text = (body.get("text") or "").strip()
+            if not text:
+                return self._send_json({"ok": False, "error": "文本为空，无法试听"}, 400)
+            try:
+                import make_scroll_video as smv
+                import tempfile as _tf, os as _os
+                fd, tmp = _tf.mkstemp(suffix=".wav", prefix="tts_pv_")
+                _os.close(fd)
+                try:
+                    smv.synth_dialogue_audio(text, tmp, dry=False, gap=0.18)
+                except SystemExit as se:
+                    try:
+                        _os.remove(tmp)
+                    except Exception:
+                        pass
+                    return self._send_json({"ok": False, "error": friendly_tts_error(str(se))})
+                with open(tmp, "rb") as _f:
+                    data = _f.read()
+                _os.remove(tmp)
+                if not data:
+                    return self._send_json({"ok": False, "error": "合成结果为空"})
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/wav")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            except SystemExit as e:
+                return self._send_json({"ok": False, "error": friendly_tts_error(str(e))})
+            except Exception as e:  # noqa
+                return self._send_json({"ok": False, "error": friendly_tts_error(f"{type(e).__name__}: {e}")})
         if path == "/api/generate":
             r = generate_from_source(body.get("source", ""),
                                      body.get("direction", ""),
@@ -1216,6 +1339,55 @@ class Handler(BaseHTTPRequestHandler):
             "size_mb": round(silent_path.stat().st_size / 1024 / 1024, 1),
             "message": "上传并转码为静音模板完成"
         })
+
+
+    def _handle_upload_bg(self):
+        """POST /api/bg_upload — multipart/form-data, 字段 file。
+        校验图片格式(jpg/png/gif/webp)，保存到 static/bg/，登记索引并返回可访问 URL。"""
+        ct = self.headers.get("Content-Type", "")
+        if not ct.startswith("multipart/form-data"):
+            return self._send_json({"ok": False, "error": "需 multipart/form-data"}, 400)
+        m = re.search(r"boundary=([^;]+)", ct)
+        if not m:
+            return self._send_json({"ok": False, "error": "缺 boundary"}, 400)
+        boundary = m.group(1).strip().strip('"').encode("utf-8")
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length) if length else b""
+            parts = _parse_multipart(raw, boundary)
+        except Exception as e:  # noqa
+            return self._send_json({"ok": False, "error": f"解析失败: {type(e).__name__}: {e}"}, 400)
+        if "file" not in parts or parts["file"][1] is None:
+            return self._send_json({"ok": False, "error": "缺字段 file"}, 400)
+        orig_name, data = parts["file"]
+        if orig_name is None:
+            return self._send_json({"ok": False, "error": "缺文件"}, 400)
+        base = os.path.basename(orig_name)
+        stem, ext = os.path.splitext(base)
+        ext = ext.lower()
+        if ext not in BG_ALLOWED_EXT:
+            return self._send_json({"ok": False, "error": "仅支持 JPG/PNG/GIF/WebP 图片"}, 400)
+        if len(data) > BG_MAX_BYTES:
+            return self._send_json({"ok": False, "error": "文件超过 30MB"}, 400)
+        if len(data) < 512:
+            return self._send_json({"ok": False, "error": "文件过小/可能损坏"}, 400)
+        safe_stem = re.sub(r"[^A-Za-z0-9_\u4e00-\u9fa5-]", "_", stem)[:40] or "bg"
+        bid = "bg_" + os.urandom(4).hex()
+        fname = f"{bid}_{safe_stem}{ext}"
+        try:
+            (BG_DIR / fname).write_bytes(data)
+        except Exception as e:
+            return self._send_json({"ok": False, "error": f"写入失败: {e}"}, 500)
+        items = _bg_load_index()
+        rec = {"id": bid, "name": base, "filename": fname,
+               "url": f"/static/bg/{fname}", "path": str(BG_DIR / fname),
+               "created": int(time.time()), "fit": "fill", "deleted": False}
+        items.append(rec)
+        _bg_save_index(items)
+        was_empty = not _bg_account_bg()
+        if was_empty:
+            _bg_set_account_bg(rec["path"])
+        return self._send_json({"ok": True, "item": rec, "auto_set": was_empty})
 
 
 # ------------------------------------------------------------------ 业务处理（生成初稿/保存/新建 放末尾避免循环依赖问题）
