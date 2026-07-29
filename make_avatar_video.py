@@ -100,23 +100,38 @@ def main():
     # HEYGEM 的 TransDhTask.run_flag 是内存标志，偶发异常退出后没复位会一直 busy
     print(f"[2] 提交 HEYGEM 视频生成 (code={code}) ...")
     submit_data = None
-    for attempt, wait_s in enumerate([0, 10, 15, 20], start=1):
+    # 提交阶段：对「HEYGEM 忙碌(10001)」与「网络中断/连接被拒」两类临时错误都做递增重试，
+    # 给刚启动或偶发崩溃的容器留出就绪时间，避免一上来就 rc=1 直接失败。
+    waits = [0, 5, 10, 15, 20, 25]
+    last_net_err = None
+    for attempt in range(1, len(waits) + 1):
+        wait_s = waits[attempt - 1]
         if wait_s:
-            print(f"    上次提交被拒（忙碌中），{wait_s}s 后重试（第 {attempt}/4 次）...")
+            print("    等待 %ds 后重试（第 %d/%d 次）..." % (wait_s, attempt, len(waits)))
             time.sleep(wait_s)
-        r = requests.post(f"{VIDEO_API}/easy/submit", json={
-            "audio_url": audio_container,
-            "video_url": args.model,
-            "code": code,
-        }, timeout=30)
-        submit_data = r.json()
+        try:
+            r = requests.post(VIDEO_API + "/easy/submit", json={
+                "audio_url": audio_container,
+                "video_url": args.model,
+                "code": code,
+            }, timeout=30)
+            submit_data = r.json()
+        except requests.exceptions.RequestException as e:
+            last_net_err = e
+            print("    网络异常（连接中断/被拒）：%s — 视为临时错误，重试" % e)
+            continue
         if submit_data.get("code") == 10000:
             break
         # 10001=忙碌中 → 重试；其它错（参数错等）→ 立即失败
         if submit_data.get("code") != 10001:
-            sys.exit(f"提交失败: {submit_data}")
+            sys.exit("提交失败: " + str(submit_data))
     if not submit_data or submit_data.get("code") != 10000:
-        sys.exit(f"提交失败（4 次仍忙碌）：{submit_data}。前面可能还有长任务在跑，请稍后手动重试，或执行 `docker restart heygem-gen-video` 清掉内存锁。")
+        if last_net_err:
+            hint = ("\n    底层网络错误: " + str(last_net_err) +
+                    "\n    多半是 HEYGEM 容器刚启动未就绪或已崩溃——请确认 Docker 容器 heygem-gen-video 处于 Up，"
+                    "启动后等待约 10~30 秒再重试，或执行 `docker restart heygem-gen-video`。")
+            sys.exit("提交失败（%d 次重试后仍失败）：%s%s" % (len(waits), submit_data, hint))
+        sys.exit("提交失败（%d 次重试后仍忙碌）：%s。前面可能还有长任务在跑，请稍后手动重试，或执行 `docker restart heygem-gen-video` 清掉内存锁。" % (len(waits), submit_data))
     print("    提交成功，开始渲染...")
 
     # 3) 轮询

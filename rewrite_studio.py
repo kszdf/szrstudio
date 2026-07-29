@@ -51,6 +51,18 @@ SCROLL_MALE_VOICE = "cosyvoice-v3-plus-zhangc2-28a7c3541e1c45518a03046c11baeb1d"
 SCROLL_FEMALE_VOICE = "cosyvoice-v3-plus-jiangnv3-991b204c1d564ac7a60f0cb9a8fd78bd"
 SCROLL_MALE_MODEL = "cosyvoice-v3-plus"
 SCROLL_FEMALE_MODEL = "cosyvoice-v3-plus"
+# 双声 TTS 自然度规则：嵌入所有「男女对话稿」生成 prompt，约束 LLM 产出利于自然朗读的对话文本
+TTS_NATURAL_RULE = (
+    "【双声自然度与情感规范（TTS 合成前必读）】\n"
+    "- 语气词适度：在句首/句中自然嵌入「嗯、其实、你看、说白了、对吧、咱们」等口语填充词增强对话感；"
+    "每百字不超过 2~3 处，避免啰嗦或抢戏。\n"
+    "- 情感克制真实：情绪随内容走（讲解时平实、提示风险时稍严肃、举例时略轻松），幅度轻不外露；"
+    "严禁戏剧化腔调、喊麦式激昂、过度卖萌或夸张叹气。\n"
+    "- 像日常对话：句子短促利落、一句一意，多用口语短句与自然的逗号/句号断句，"
+    "便于 TTS 在标点处自然停顿；男女交接处留半句空隙感。\n"
+    "- 语速语调：模拟真人聊天节奏，陈述句尾自然回落、疑问句尾上扬，避免全程平调或机械匀速朗读。\n"
+    "- 双声衔接：男女声交替边界清晰，不混淆、不串频，语气过渡顺滑。\n"
+)
 FFPROBE = r"D:/ffmpeg/ffmpeg-8.1.2-full_build/bin/ffprobe"
 FFMPEG = r"D:/ffmpeg/ffmpeg-8.1.2-full_build/bin/ffmpeg.exe"
 
@@ -614,6 +626,25 @@ def _run_render(job_id: str, cmd: list, out: Path):
             if p is not None:
                 JOBS[job_id]["progress"] = max(JOBS[job_id].get("progress",0), p)
     try:
+        # —— 出片前先探测 HEYGEM(8383) 是否真的在听：不可达直接给明确提示，避免白跑子进程 ——
+        import urllib.error as _ue
+        _heygem_ready = False
+        for _probe in range(3):
+            try:
+                urllib.request.urlopen(HEYGEM_API + "/", timeout=4).read()
+                _heygem_ready = True
+                break
+            except _ue.HTTPError:
+                # 404 等也说明服务在监听，端口活着
+                _heygem_ready = True
+                break
+            except Exception:
+                time.sleep(2)
+        if not _heygem_ready:
+            with JOB_LOCK:
+                JOBS[job_id].update({"status": "error", "step": "HEYGEM 未就绪",
+                    "error": "HEYGEM 数字人服务(8383) 不可达。请先启动 Docker Desktop 并确认容器 heygem-gen-video 处于 Up（docker ps）；容器启动后等待约 10~30 秒再出片。"})
+            return
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, text=True,
                                 encoding="utf-8", errors="replace")
@@ -722,9 +753,16 @@ def _run_render(job_id: str, cmd: list, out: Path):
                                      "step": "完成"})
         else:
             tail_msg = " | ".join(tail[-6:]) if tail else "无输出"
+            err = "成品未生成（rc=%s）；末段输出：%s" % (proc.returncode, tail_msg[:600])
+            # 网络中断类错误：给出明确的 HEYGEM 服务排查引导，而非只甩底层堆栈
+            if any(k in tail_msg for k in ("RemoteDisconnected", "Connection aborted",
+                                           "ConnectionError", "Connection refused",
+                                           "远程主机强迫关闭", "Max retries")):
+                err = ("HEYGEM 数字人服务连接中断（rc=%s）。请确认 Docker 容器 heygem-gen-video 处于 Up；"
+                       "容器刚启动需等约 10~30 秒再出片；仍失败执行 docker restart heygem-gen-video 后重试。"
+                       "底层末段：%s" % (proc.returncode, tail_msg[:400]))
             with JOB_LOCK:
-                JOBS[job_id].update({"status": "error",
-                                     "error": f"成品未生成（rc={proc.returncode}）；末段输出：{tail_msg[:600]}"})
+                JOBS[job_id].update({"status": "error", "error": err})
     except Exception as e:  # noqa
         with JOB_LOCK:
             JOBS[job_id].update({"status": "error",
@@ -917,6 +955,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
         self.end_headers()
         self.wfile.write(data)
 
@@ -1192,6 +1233,10 @@ class Handler(BaseHTTPRequestHandler):
                                               body.get("direction", "")))
         if path == "/api/queue":
             return self._send_json({"error": "method not allowed"}, 405)
+        if path == "/api/generate_title":
+            return self._send_json(generate_title_for_video(
+                body.get("opening", ""), body.get("body", ""),
+                body.get("ending", ""), body.get("dialogue", "")))
         m = re.match(r"^/api/project/(.+?)/(save|tts|tts_dialogue|publish-check|render|publish|account)$", path)
         if m:
             name = unquote(m.group(1))
@@ -1411,6 +1456,48 @@ def do_save(name: str, opening: str, body: str, ending: str, dialogue: str = "")
             pass
     return {"ok": True, "high": high, "med": med,
             "saved": str(p / "03_逐字稿定稿.md")}
+
+
+def generate_title_for_video(opening: str, body: str, ending: str, dialogue: str) -> dict:
+    """根据口播稿为视频号生成标题与副标题。
+    标题≤10字、简洁有力、口语化、适配视频号竖屏首屏；
+    副标题≤40字、与标题语义衔接、补充钩子或场景，避免生硬截断。"""
+    # 优先用对话稿，否则拼接三段稿
+    if dialogue and dialogue.strip():
+        source = dialogue.strip()
+    else:
+        source = "\n".join([opening or "", body or "", ending or ""]).strip()
+    if not source:
+        return {"ok": False, "error": "稿件为空，无法生成标题"}
+    # 取前 400 字避免 prompt 过长
+    source = source[:400]
+    prompt = f"""你是一名熟悉视频号平台规则的短视频文案。请根据以下口播稿，为视频号生成一条标题和一条副标题。
+
+要求：
+1. 标题控制在 10 个字以内（含标点），必须简洁、有力、口语化、去 AI 痕迹，能在一秒内抓住老板眼球。
+2. 副标题控制在 40 个字以内（含标点），放在标题下方作为补充说明；要与标题语义连贯、断句自然，不能出现生硬换行或被截断的感觉。
+3. 风格：财税干货、风险警示、面向中小企业老板，可用「老板」「注意」「千万别」「一查一个准」等视频号高点击词汇，但避免夸张恐吓。
+4. 输出必须是纯 JSON，不要任何解释、不要 markdown 代码块，格式：{{"title":"...","subtitle":"..."}}
+
+口播稿：
+{source}
+"""
+    try:
+        raw = llm(prompt, retries=2)
+        m = re.search(r"\{[\\s\\S]*?\"title\"[\\s\\S]*?\"subtitle\"[\\s\\S]*?\}", raw)
+        if not m:
+            return {"ok": False, "error": "模型返回格式异常", "raw": raw[:200]}
+        obj = json.loads(m.group(0))
+        title = (obj.get("title") or "").strip()
+        subtitle = (obj.get("subtitle") or "").strip()
+        # 硬截断兜底（按字符数，防止 LLM 超长）
+        if len(title) > 10:
+            title = title[:10]
+        if len(subtitle) > 40:
+            subtitle = subtitle[:40]
+        return {"ok": True, "title": title, "subtitle": subtitle}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:160]}
 
 
 def do_set_account(name: str, account_type: str) -> dict:
@@ -1697,6 +1784,7 @@ def search_and_create(category: str, period: str, direction: str = "",
             f"（{dlg_hint}，改写成女问男答的对话：每行以 女： 或 男： 开头；"
             "女为提问/引发好奇，男为张老师解答；称呼男为「张老师」，女用「我/您」自然对话；"
             "整体口语化、节奏与三段稿一致，覆盖同样的核心风险点）\n\n"
+            f"{TTS_NATURAL_RULE}"
             "直接输出（含 === 标记），不要额外解释。"
         )
         try:
@@ -1790,6 +1878,7 @@ def rewrite_with_duration(opening: str = "", body: str = "", ending: str = "",
         "  1) 三段式独白稿（=== 开头 === / === 正文 === / === 结尾（钩子） ===）\n"
         "  2) 男女对话稿（每行以 女： 或 男： 开头；女为提问者/引发好奇，男为张老师解答；"
         "整体覆盖同样知识点，保持目标时长，称呼男为「张老师」，女用「我/您」自然对话）\n\n"
+        f"{TTS_NATURAL_RULE}"
         f"{fb}\n\n"
         f"风格：\n{STYLE_GUIDE}\n\n"
         "【输出格式（严格按此，不要多余解释）】\n"
@@ -1886,6 +1975,7 @@ def generate_from_source(source: str, direction: str = "",
         f"（{dlg_hint}，改写成女问男答的对话：每行以 女： 或 男： 开头；"
         "女为提问/引发好奇，男为张老师解答；称呼男为「张老师」，女用「我/您」自然对话；"
         "整体口语化、节奏与三段稿一致，覆盖同样的核心风险点）\n\n"
+        f"{TTS_NATURAL_RULE}"
         "直接输出（含 === 标记），不要额外解释。"
     )
     try:
@@ -1905,6 +1995,41 @@ def generate_from_source(source: str, direction: str = "",
     return {"ok": True, "segs": segs, "dialogue": dialogue, "raw": raw}
 
 
+def init_default_bg():
+    """确保默认「滚动海浪」模板存在并可被选。"""
+    default_name = "default_rolling_seas.gif"
+    default_path = BG_DIR / default_name
+    # 如果默认文件不存在但源文件存在，则复制一份
+    src = Path(SCROLL_DEFAULT_GIF)
+    if not default_path.exists() and src.exists():
+        try:
+            shutil.copy2(str(src), str(default_path))
+        except Exception:
+            pass
+    if not default_path.exists():
+        return
+    items = _bg_load_index()
+    # 查找是否已注册默认模板
+    rec = next((it for it in items if it.get("is_default") and it.get("filename") == default_name), None)
+    if not rec:
+        rec = {
+            "id": "default_rolling_seas",
+            "name": "滚动海浪（默认模板）",
+            "filename": default_name,
+            "url": f"/static/bg/{default_name}",
+            "path": str(default_path),
+            "created": int(time.time()),
+            "fit": "fill",
+            "deleted": False,
+            "is_default": True,
+        }
+        items.append(rec)
+        _bg_save_index(items)
+    # 若账号尚未设置背景，默认使用海浪模板
+    if not _bg_account_bg():
+        _bg_set_account_bg(str(default_path))
+
+
 class StudioServer(ThreadingHTTPServer):
     def handle_error(self, request, client_address):
         # 吞掉客户端断开/断管等连接级异常，避免刷 stderr 且不致命
@@ -1921,6 +2046,7 @@ class StudioServer(ThreadingHTTPServer):
 
 
 def main():
+    init_default_bg()
     httpd = StudioServer(("0.0.0.0", PORT), Handler)
     print(f"二创改写台 v2 已启动: http://localhost:{PORT}  (Ctrl+C 停止)")
     try:

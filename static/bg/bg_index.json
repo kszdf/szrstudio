@@ -1,0 +1,13 @@
+[
+  {
+    "id": "default_rolling_seas",
+    "name": "滚动海浪（默认模板）",
+    "filename": "default_rolling_seas.gif",
+    "url": "/static/bg/default_rolling_seas.gif",
+    "path": "D:/heygem_data/gpt_sovits/static/bg/default_rolling_seas.gif",
+    "created": 1753759620,
+    "fit": "fill",
+    "deleted": false,
+    "is_default": true
+  }
+]

@@ -71,6 +71,7 @@
             position:sticky;top:64px;z-index:20;}
   .node-nav .steps{display:flex;flex-wrap:wrap;gap:8px;}
   .node-nav .steps li{margin-bottom:0;}
+  .col-mid{min-width:0;min-height:260px;}
   .col-right{position:sticky;top:16px;}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
         box-shadow:var(--shadow-sm);
@@ -98,7 +99,10 @@
 
   /* 面板 */
   .panel{display:none;scroll-margin-top:12px;}
-  .panel.active{display:block;}
+  .panel.active{display:block;animation:fadeIn .18s ease;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+  /* 兜底：没有任何面板激活时显示提示，避免工作区完全空白 */
+  .col-mid:has(>.panel.active) .panel-empty{display:none;}
   .panel h2{font-size:16px;margin:0 0 14px;padding:0 0 12px 14px;position:relative;font-weight:700;color:#1a2330;letter-spacing:.2px;border-bottom:1px solid var(--border);}
   .panel h2::before{content:"";position:absolute;left:0;top:0;bottom:12px;width:4px;border-radius:3px;
        background:linear-gradient(180deg,#3a5bff,#1d3ab8);}
@@ -119,6 +123,8 @@
     white-space:pre-wrap;word-wrap:break-word;overflow-wrap:break-word;box-sizing:border-box;}
   textarea.editarea{resize:none;outline:none;overflow:auto;background:transparent;
     color:transparent;caret-color:#111;z-index:2;}
+  /* 对话稿不需要违禁词高亮 overlay，直接显示文字 */
+  #ta-dialogue{color:var(--ink);background:#fff;}
   .overlay.editarea{overflow:auto;color:var(--ink);background:#fff;z-index:1;pointer-events:none;}
   mark.hit-high{background:#ffd6d6;color:#b00;border-bottom:2px solid var(--hi);border-radius:2px;}
   mark.hit-med{background:#fff3bf;color:#8a6d00;border-bottom:2px solid var(--med);border-radius:2px;}
@@ -293,8 +299,6 @@
   .guide-foot label{font-size:12px;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:5px;}
   .guide-foot>button{border:none;background:var(--blue-d);color:#fff;padding:8px 18px;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600;font-family:inherit;}
   .guide-foot>button:hover{background:#1d4ed8;}
-  .h-guide{display:inline-flex;align-items:center;justify-content:center;padding:10px 16px;margin-top:12px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;backdrop-filter:blur(4px);}
-  .h-guide:hover{background:rgba(255,255,255,.26);}
   .home-view{max-width:min(1600px,calc(100vw - 32px));margin:18px auto;padding:0 20px 80px;display:none;}
   .home-view.active{display:block;}
   .studio-view{display:none;}
@@ -306,8 +310,8 @@
   .col-right .card.audio-card.has-audio,
   .col-right .card.video-card.has-video{display:block;}
 
-  /* Hero 双 Banner 区 */
-  .hero{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:28px;}
+  /* Hero 单 Banner 区 */
+  .hero{display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:28px;}
   .hero-card{position:relative;border-radius:20px;overflow:hidden;padding:34px 32px;
              color:#fff;min-height:210px;display:flex;flex-direction:column;justify-content:space-between;
              box-shadow:var(--shadow-lg);transition:transform .25s,box-shadow .25s;cursor:pointer;
@@ -317,7 +321,6 @@
              pointer-events:none;}
   .hero-card:hover{transform:translateY(-4px);box-shadow:0 24px 60px rgba(15,23,42,.20);}
   .hero-main{background:linear-gradient(125deg,#5b21b6 0%,#7c3aed 48%,#a855f7 100%);}
-  .hero-side{background:linear-gradient(125deg,#0369a1 0%,#2563eb 58%,#1e40af 100%);}
   .hero-card .h-eyebrow{font-size:13px;letter-spacing:2px;opacity:.85;font-weight:500;text-transform:uppercase;}
   .hero-card .h-title{font-size:30px;font-weight:800;margin:8px 0 10px;line-height:1.25;letter-spacing:.5px;}
   .hero-card .h-desc{font-size:14px;opacity:.92;line-height:1.6;max-width:520px;}
@@ -325,11 +328,9 @@
                     padding:11px 22px;border-radius:999px;font-weight:700;font-size:14.5px;width:fit-content;
                     box-shadow:0 4px 14px rgba(0,0,0,.18);transition:.15s;}
   .hero-card .h-cta:hover{transform:scale(1.05);}
-  .hero-side .h-cta{color:#2563eb;}
   .hero-card .h-illust{position:absolute;right:18px;bottom:0;font-size:120px;opacity:.22;
                         pointer-events:none;line-height:1;}
   .hero-main .h-illust{right:30px;font-size:140px;}
-  .hero-side .h-illust{right:20px;font-size:110px;}
   .hero-card .h-tags{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
   .hero-card .h-tag{background:rgba(255,255,255,.18);backdrop-filter:blur(6px);
                     padding:5px 12px;border-radius:999px;font-size:12px;font-weight:500;
@@ -543,6 +544,7 @@
       <h1>慧根堂·财税智造</h1>
       <div class="sub">财税短视频生产 SaaS / 内容工厂 · 选题→改写→音频→出片→字幕→质检→发布，一个界面跑完</div>
     </div>
+    <span id="uiVer" style="margin-left:auto;padding:4px 8px;background:rgba(255,255,255,.15);border-radius:6px;font-size:11px;color:rgba(255,255,255,.85);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;user-select:none;" title="UI 版本戳，强刷后应更新">v20250729-7</span>
   </div>
   <div class="bar">
     <div class="view-switch" id="viewSwitch">
@@ -579,7 +581,7 @@
 <!-- ========== 首页 Dashboard（仿 Duix 风格）========== -->
 <div id="home-view" class="home-view active">
 
-  <!-- Hero 双 Banner 区 -->
+  <!-- Hero 单 Banner 区 -->
   <div class="hero">
     <div class="hero-card hero-main" onclick="goStudio();setTimeout(()=>gotoStep('topic'),100);">
       <div>
@@ -594,17 +596,7 @@
         <div class="h-desc">从选题到发布一站跑完：联网找爆款 → 二次创作 → 品牌主播音合成 → 数字人出片 → 字幕烧录 → 质检发布。</div>
       </div>
       <div class="h-cta" onclick="event.stopPropagation();goStudio();setTimeout(()=>gotoStep('topic'),100);">➕ 创建视频</div>
-      <div class="h-guide" onclick="event.stopPropagation();openFeatureGuide();">📖 功能介绍（新手必看）</div>
       <div class="h-illust">🎬</div>
-    </div>
-    <div class="hero-card hero-side" onclick="goStudio();setTimeout(()=>gotoStep('topic'),100);">
-      <div>
-        <div class="h-eyebrow">VIRAL TOPICS</div>
-        <div class="h-title" style="font-size:24px;">联网找爆款</div>
-        <div class="h-desc" style="margin-top:6px;">按时间段/类别，实时抓最近真实财税热点，挑一条二创。</div>
-      </div>
-      <div class="h-cta" onclick="event.stopPropagation();goStudio();setTimeout(()=>gotoStep('topic'),100);">🔥 一键选题</div>
-      <div class="h-illust">🔥</div>
     </div>
   </div>
 
@@ -666,6 +658,11 @@
 
   <!-- 中：工作区（仅显示当前节点内容） -->
   <div class="col-mid">
+    <div id="panelEmpty" class="panel-empty" style="display:none;padding:48px 20px;text-align:center;color:var(--muted);background:var(--panel);border:1px dashed var(--border);border-radius:var(--radius);">
+      <div style="font-size:40px;margin-bottom:12px;">📭</div>
+      <div style="font-weight:600;color:var(--ink);margin-bottom:6px;">当前步骤面板未加载</div>
+      <div style="font-size:13px;">请点上方步骤导航，或 <button type="button" class="secondary" onclick="gotoStep('topic')">返回选题</button></div>
+    </div>
 
     <!-- 选题 -->
     <div class="card panel" id="panel-topic">
@@ -697,8 +694,11 @@
           <select id="periodSel" title="检索时间段" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;">
             <option>近7天</option><option selected>近30天</option><option>近3个月</option><option>2026年以来</option><option>近1年</option>
           </select>
-          <input id="hotTargetSec" type="number" value="60" min="10" max="600" title="男女对话稿目标时长（秒）"
-            style="width:120px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <input id="hotTargetSec" type="number" value="60" min="10" max="600" title="目标时长（秒）"
+              style="width:110px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;">
+            <span id="hotSecHint" style="font-size:12px;color:var(--muted);white-space:nowrap;">≈ 252 字</span>
+          </div>
           <button id="findHotBtn" class="primary">🔍 联网找爆款</button>
         </div>
         <div class="tip">按上面"类别 + 时间段"自动联网检索最近财税爆款话题，列出与主题高度相关的候选（最多 10 条，素材不足或相关度不够时自动减少）。点选某条卡片 → 按其角度生成二创稿 → 自动填入「② 改写」三段。</div>
@@ -712,14 +712,13 @@
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:center;">
           <input id="dirInput" placeholder="创作方向（如：从老板最怕的稽查角度讲）"
             style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;">
-          <select id="lenSel" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;">
-            <option>约30秒</option><option>约60秒</option><option>约90秒</option><option selected>约3分钟</option><option>约5分钟</option><option>约10分钟</option>
-          </select>
-          <span id="lenHint" style="font-size:12px;color:var(--muted);white-space:nowrap;"></span>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <input id="directTargetSec" type="number" value="60" min="10" max="600" title="目标时长（秒）"
+              style="width:110px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;">
+            <span id="directSecHint" style="font-size:12px;color:var(--muted);white-space:nowrap;">≈ 252 字</span>
+          </div>
           <input id="keepInput" placeholder="重点保留（如：个人卡收营业款概念）"
             style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;">
-          <input id="directTargetSec" type="number" value="60" min="10" max="600" title="男女对话稿目标时长（秒）"
-            style="width:120px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;">
           <button id="directCreateBtn" class="primary">✨ 直接生成二创稿</button>
         </div>
         <div class="tip">不联网，AI 按「专业视角」直接对上面素材做原创二创稿 → 自动填入「② 改写」三段。如果只是想"按维度找爆款再二创"，请切到「🌐 联网找爆款」Tab。</div>
@@ -729,9 +728,19 @@
     <!-- 改写 -->
     <div class="card panel" id="panel-edit">
       <h2>② 改写 · 三段式 + 违禁词实时标红</h2>
+      <!-- 生成成功提示条：AI 二创/改写后自动出现，一键跳转音频 -->
+      <div id="editSuccessBanner" style="display:none;margin-bottom:14px;padding:12px 14px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span style="font-size:20px;">✅</span>
+          <span style="font-weight:600;color:#065f46;">二创稿已生成</span>
+          <span class="tip" style="margin:0;">可直接出音频，或继续修改。</span>
+          <button type="button" id="editGoAudioBanner" class="primary" style="margin-left:auto;">🔊 转至音频 →</button>
+        </div>
+      </div>
       <div class="actions" style="align-items:flex-start;flex-wrap:wrap;gap:10px;">
         <button id="saveBtn" class="primary">💾 保存定稿</button>
         <button id="rewriteBtn" class="secondary">✨ AI 按设定改写</button>
+        <button type="button" id="editGoAudioBtn" class="secondary">🔊 转至音频</button>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-left:auto;max-width:100%;">
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap;">
             目标时长 <input id="targetDuration" type="number" value="60" min="10" max="600" style="width:70px;text-align:center;padding:6px 8px;border:1px solid var(--border);border-radius:6px;"> 秒
@@ -795,6 +804,11 @@
             </div>
           </div>
         </details>
+        <div class="actions" style="margin:10px 0 8px;flex-wrap:wrap;gap:10px;">
+          <button type="button" id="genDialogueFromSegsBtn" class="primary">🤖 根据三段稿生成男女对话</button>
+          <button type="button" id="genDialogueFromTopicBtn" class="secondary">🌐 按当前选题联网生成</button>
+          <span id="genDialogueState" class="tip"></span>
+        </div>
         <div class="editor"><textarea id="ta-dialogue" class="editarea" placeholder="女：老板，公户的钱能直接转我自己卡上吗？&#10;男：千万别！这叫公转私，金税四期一查一个准。&#10;（每行以 女：/男： 开头；不加前缀默认男声）" style="min-height:160px;"></textarea></div>
         <div class="tip" style="margin-top:6px;background:rgba(15,23,42,.06);border-left:3px solid #2563eb;padding:8px 10px;border-radius:6px;line-height:1.7;">
           填了对话稿，⑤ 出片 选「📜 滚动字幕卡」即按 <b>男女双声 + 滚动字幕</b> 出片；不填也能出片（自动用独白单声）。<br>
@@ -803,6 +817,7 @@
       <div class="actions" style="margin-top:10px;">
         <button type="button" id="previewDialogueBtn" class="secondary">🔊 试听双声（当前对话稿）</button>
         <span id="pvDialogueState" class="tip"></span>
+      </div>
       </div>
       </div><!-- /dialogueGroup -->
       <details id="guideBox">
@@ -828,12 +843,12 @@
         <div class="progress" style="height:6px;"><i id="ttsProgBar" style="width:0%;"></i></div>
         <div id="ttsProgTip" class="tip" style="margin-top:6px;font-size:11.5px;">根据文字内容合成品牌主播真人音色，通常 10–30 秒。</div>
       </div>
-      <div class="card" style="background:#f6f8fa;margin-bottom:12px;">
+      <div id="monoPreviewCard" class="card" style="background:#f6f8fa;margin-bottom:12px;">
         <span class="pv-label">独白音频试听</span>
         <audio id="audioPlayer" controls preload="none" style="width:100%">您的浏览器不支持音频</audio>
         <div id="noAudio" class="empty">尚未生成独白音频，点上方「一键出音频」。</div>
       </div>
-      <div class="card" style="background:#f6f8fa;margin-bottom:0;">
+      <div id="dialoguePreviewCard" class="card" style="background:#f6f8fa;margin-bottom:0;">
         <span class="pv-label">男女对话双声音频试听</span>
         <audio id="dialogueAudioPlayer" controls preload="none" style="width:100%">您的浏览器不支持音频</audio>
         <div id="noDialogueAudio" class="empty">尚未生成对话音频，点上方「一键出对话双声」。</div>
@@ -858,7 +873,11 @@
         <div class="tip" id="uploadMsg"></div>
       </div>
       <div class="models" id="modelList"><span class="empty">加载中…</span></div>
-      <div class="tip" id="selModelTip">未选择模特。</div>
+      <div class="actions" style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--border);">
+        <button type="button" id="confirmModelBtn" class="primary" disabled>✅ 确认选择此模特</button>
+        <button type="button" id="goRenderFromModelBtn" class="secondary" disabled>🎬 确认并去出片 →</button>
+        <span class="tip" id="selModelTip">未选择模特，请点上方卡片。</span>
+      </div>
       <input type="file" id="modelFileInput" accept=".mp4,video/mp4" style="display:none">
     </div>
 
@@ -866,10 +885,12 @@
     <div class="card panel" id="panel-render">
       <h2>⑤ 出片 · 音频+模特驱动数字人</h2>
       <div class="actions">
-        <button id="renderBtn" class="primary">🎬 一键出片</button>
+        <button id="renderBtn" class="primary">🎬 开始出片</button>
         <button id="queueBtn" class="secondary">📋 加入批量队列</button>
         <span id="renderState" class="tip"></span>
       </div>
+      <!-- 出片前置条件提示：根据当前模式告诉用户还需做什么 -->
+      <div id="renderPrereq" class="tip" style="margin-bottom:8px;background:#f0f9ff;border-left:3px solid #0ea5e9;padding:8px 10px;border-radius:6px;line-height:1.7;"></div>
 
       <!-- 出片方式：本地数字人(HEYGEM) / 第三方官方数字人（新增，原流程不动） -->
       <div class="render-mode" style="margin:12px 0 4px;padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
@@ -902,9 +923,14 @@
             <div class="bg-prev-img" id="bgPrevImg" style="position:absolute;inset:0;background-size:cover;background-position:center;"></div>
             <div class="bg-prev-caps" id="bgPrevCaps" style="position:absolute;left:0;right:0;top:38%;padding:0 20px;color:#ffe100;font-weight:700;font-size:17px;text-shadow:0 0 4px #000;line-height:1.5;text-align:left;white-space:pre-line;"></div>
           </div>
-          <div style="font-size:12.5px;color:#475569;margin:10px 0 6px;">标题（≤10字，留空自动生成）：</div>
-          <input id="scrollTitle" type="text" maxlength="10" placeholder="自动生成" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;width:240px;">
-          <div style="font-size:12.5px;color:#475569;margin:10px 0 6px;">副标题（标题下方一行小字，可留空）：</div>
+          <div class="actions" style="margin:10px 0 6px;align-items:center;">
+            <span style="font-size:12.5px;color:#475569;">标题 / 副标题：</span>
+            <button id="genTitleBtn" type="button" class="secondary" style="padding:6px 12px;font-size:12.5px;">✨ 自动生成标题/副标题</button>
+            <span id="genTitleState" class="tip"></span>
+          </div>
+          <div style="font-size:12px;color:#475569;margin:0 0 4px;">标题（≤10字，留空则出片时自动用首句）：</div>
+          <input id="scrollTitle" type="text" maxlength="10" placeholder="自动生成" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;width:240px;margin-bottom:8px;">
+          <div style="font-size:12px;color:#475569;margin:0 0 4px;">副标题（标题下方一行小字，可留空）：</div>
           <input id="scrollSubtitle" type="text" maxlength="40" placeholder="如：建筑财税·避坑指南" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;width:320px;">
           <div id="scrollNote" class="tip" style="margin-top:8px;">不出镜、不用模特、不用 Docker；自动男女双声 + 滚动字幕，约 1–2 分钟。成品与数字人出片走同一预览/字幕/质检/发布链路。</div>
         </div>
@@ -1226,20 +1252,40 @@ function esc(s){return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;
 
 // —— 步骤切换 ——
 function gotoStep(step){
-  document.querySelectorAll(".steps li").forEach(li=>{
-    li.classList.toggle("active", li.dataset.step===step);
-  });
-  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
-  const panel=$("panel-"+step);
-  panel.classList.add("active");
-  // 顶部 sticky 导航 + 单面板网格：直接切换显示，无需整页滚动
-  if(step==="model") loadModels();
-  if(step==="subtitle") loadSubtitle();
-  if(step==="qc") {/* 手动点 */}
-  // 队列相关：所有步骤都用全局 pollQueue，步骤9 额外 renderQueue 一次（已由 pollQueue 触发）
-  if(step==="queue") pollQueue();
-  // 关键修复：切步骤时重刷右栏，确保音频/视频卡按新步骤显隐（否则从出片页切回选题页视频卡不消失）
-  refreshPreview();
+  try{
+    document.querySelectorAll(".steps li").forEach(li=>{
+      li.classList.toggle("active", li.dataset.step===step);
+    });
+    // 双重保险：既用 classList 也用内联 style 控制显隐，避免浏览器缓存旧 CSS 导致 .panel.active 不生效
+    document.querySelectorAll(".panel").forEach(p=>{
+      p.classList.remove("active");
+      p.style.display = "none";
+    });
+    const panel=$("panel-"+step);
+    if(!panel){ console.error("gotoStep: missing panel-"+step); toast("界面异常：找不到「"+step+"」面板"); return; }
+    panel.classList.add("active");
+    panel.style.display = "block";
+    const empty=$("panelEmpty"); if(empty) empty.style.display="none";
+    // 顶部 sticky 导航 + 单面板网格：直接切换显示，无需整页滚动
+    if(step==="topic") pauseAllMedia(); // 进入选题页时停止所有媒体，防止双声/自动播放
+    if(step==="model") loadModels();
+    if(step==="subtitle") loadSubtitle();
+    if(step==="qc") {/* 手动点 */}
+    if(step==="audio") syncAudioPreviewVisibility();
+    // 队列相关：所有步骤都用全局 pollQueue，步骤9 额外 renderQueue 一次（已由 pollQueue 触发）
+    if(step==="queue") pollQueue();
+    // 关键修复：切步骤时重刷右栏，确保音频/视频卡按新步骤显隐（否则从出片页切回选题页视频卡不消失）
+    refreshPreview();
+  }catch(e){
+    console.error("gotoStep error:", e);
+    toast("切换步骤出错："+e.message);
+    ensurePanelVisible();
+  }
+}
+function ensurePanelVisible(){
+  const active=document.querySelector(".panel.active");
+  const empty=$("panelEmpty");
+  if(!active && empty){ empty.style.display="block"; }
 }
 document.querySelectorAll(".steps li").forEach(li=>{
   li.addEventListener("click",()=>{ gotoStep(li.dataset.step); if(!guideNoMore) showGuide(li.dataset.step); });
@@ -1415,6 +1461,7 @@ async function loadProject(name){
   markDoneSteps();
 }
 async function refreshPreview(){
+  try{
   // 音频：带 ?t=时间戳 强制刷新，避免浏览器缓存旧音频导致"听旧看新"
   const ra=await fetch("/api/projects"); const list=await ra.json();
   const pr=list.find(p=>p.name===currentName);
@@ -1455,16 +1502,22 @@ async function refreshPreview(){
   }catch(_){ $("dialogueAudioPlayer").removeAttribute("src"); $("noDialogueAudio").style.display="block"; }
   if(pr && pr.video){
     $("pvVideo").style.display="block";
-    $("pvVideo").muted = false; // 强制取消静音：用户主动点项目卡，应出声
     $("pvVideo").src="/api/video/"+encodeURIComponent(currentName)+".mp4";
     $("pvVideo").load(); // 切了 src 必须 .load() 才会重新下载
     $("pvVideo").dataset.loadedKey = currentName; // 同步，避免轮询被覆盖重播
     $("videoLbl").textContent="成片 · 可播放";
     $("qsVideo").innerHTML='<span class="ok">✅ 已出片</span>';
-    // 选中项目时也开播（用户已主动点项目卡，是有效手势）
-    const pp = $("pvVideo").play();
-    syncMuteBtn();
-    if(pp && pp.catch){ pp.catch(()=>{ $("videoLbl").textContent="成片 · 点 ▶ 播放"; }); }
+    // 只有在“出片及之后”步骤才自动播放并出声；进入选题等上游步骤时默认静音、不自动播放
+    if(showVideo){
+      $("pvVideo").muted = false;
+      const pp = $("pvVideo").play();
+      syncMuteBtn();
+      if(pp && pp.catch){ pp.catch(()=>{ $("videoLbl").textContent="成片 · 点 ▶ 播放"; }); }
+    } else {
+      $("pvVideo").muted = true;
+      try{ $("pvVideo").pause(); }catch(_){}
+      syncMuteBtn();
+    }
     // 显示视频卡片（默认隐藏），但仅当当前步骤属于“出片及之后”
     const vc=document.querySelector(".col-right .card.video-card"); if(vc) vc.classList.toggle("has-video", showVideo);
   } else {
@@ -1486,6 +1539,7 @@ async function refreshPreview(){
     // 隐藏视频卡片（整卡不见，避免选题页等无视频步骤显示错误空卡片）
     const vc=document.querySelector(".col-right .card.video-card"); if(vc) vc.classList.remove("has-video");
   }
+  }catch(e){ console.error("refreshPreview error:", e); }
 }
 function markDoneSteps(){
   // 简单标记：改写总是可达；其余按产物
@@ -1582,6 +1636,25 @@ $("saveBtn").addEventListener("click",async()=>{
   else toast("保存失败："+(d.error||""));
 });
 
+// —— 改写 → 音频 跳转（携带当前文本，先保存再跳转）——
+async function saveAndGoToAudio(){
+  if(!currentName){ toast("请先新建或打开一个项目"); return; }
+  const open=$("ta-open").value, body=$("ta-body").value, end=$("ta-end").value, dlg=$("ta-dialogue").value;
+  if(!open.trim() && !body.trim() && !end.trim() && !dlg.trim()){ toast("当前没有文本内容，请先写稿或生成二创稿"); return; }
+  try{
+    await fetch("/api/project/"+encodeURIComponent(currentName)+"/save",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({opening:open,body,ending:end,dialogue:dlg})});
+    await loadProjects(); markDoneSteps();
+    gotoStep("audio");
+  }catch(e){ toast("保存失败："+e.message); }
+}
+const editGoAudioBtn=$("editGoAudioBtn"); if(editGoAudioBtn) editGoAudioBtn.addEventListener("click", saveAndGoToAudio);
+const editGoAudioBanner=$("editGoAudioBanner"); if(editGoAudioBanner) editGoAudioBanner.addEventListener("click", saveAndGoToAudio);
+function showEditSuccessBanner(show=true){
+  const b=$("editSuccessBanner"); if(b) b.style.display=show?"block":"none";
+}
+
 // —— 改写区：目标时长 ↔ 字数换算 + 实时统计 ——
 const CHARS_PER_SEC = 4.2;
 function countCJK(text){
@@ -1662,6 +1735,7 @@ $("rewriteBtn").addEventListener("click",async()=>{
     await fetch("/api/project/"+encodeURIComponent(currentName)+"/save", {method:"POST",
       headers:{"Content-Type":"application/json"},
       body: JSON.stringify({opening:$("ta-open").value, body:$("ta-body").value, ending:$("ta-end").value, dialogue:$("ta-dialogue").value})});
+    showEditSuccessBanner(true);
     toast(`改写完成 ✅ 目标 ${sec}s ≈ ${d.target_chars} 字`);
   }catch(e){
     if(e.name === "AbortError"){
@@ -1727,6 +1801,10 @@ $("ttsBtn").addEventListener("click",async()=>{
       lbl.textContent=`✅ 合成完成（${sec} 秒）`;
       tip.textContent="音频已存入后台 audio/，下方可直接试听。";
       toast("🔊 音频生成成功");
+      // 独白音频生成成功后，确保当前试听区显示独白卡片
+      const monoCard2 = $("monoPreviewCard"), dlgCard2 = $("dialoguePreviewCard");
+      if(monoCard2) monoCard2.style.display = "block";
+      if(dlgCard2) dlgCard2.style.display = "none";
       await loadProjects();refreshPreview();gotoStep("model");
     } else {
       bar.style.background="var(--red,#e5484d)";
@@ -1787,6 +1865,10 @@ $("ttsDialogueBtn").addEventListener("click",async()=>{
       toast("🎙 对话双声音频生成成功");
       $("dialogueAudioPlayer").src="/api/audio/"+encodeURIComponent(currentName)+"_dialogue"+"?t="+Date.now();
       $("noDialogueAudio").style.display="none";
+      // 对话双声生成成功后，确保当前试听区显示对话卡片
+      const monoCard = $("monoPreviewCard"), dlgCard = $("dialoguePreviewCard");
+      if(monoCard) monoCard.style.display = "none";
+      if(dlgCard) dlgCard.style.display = "block";
       await loadProjects();refreshPreview();
     } else {
       bar.style.background="var(--red,#e5484d)";
@@ -1829,7 +1911,7 @@ async function submitNewProject(){
 async function loadModels(){
   const r=await fetch("/api/models"); const list=await r.json();
   const box=$("modelList");
-  if(!list.length){box.innerHTML='<span class="empty">未找到静音模特，请把 *_silent.mp4 放到 face2face/</span>';return;}
+  if(!list.length){box.innerHTML='<span class="empty">未找到静音模特，请把 *_silent.mp4 放到 face2face/</span>';updateModelActionButtons();return;}
   box.innerHTML=list.map(m=>{
     const media = m.thumb_url
       ? `<img class="thumb" src="${m.thumb_url}" loading="lazy" alt="${esc(m.label)}" onerror="this.outerHTML='<div class=&quot;thumb-placeholder&quot;>暂无预览</div>'">`
@@ -1843,11 +1925,26 @@ async function loadModels(){
       box.querySelectorAll(".model-card").forEach(x=>x.classList.remove("sel"));
       c.classList.add("sel"); selModel=c.dataset.id;
       $("selModelTip").textContent="已选模特："+c.querySelector(".nm").textContent;
+      updateModelActionButtons();
     });
   });
   if(selModel){const el=box.querySelector(`[data-id="${CSS.escape(selModel)}"]`);
     if(el) el.classList.add("sel");}
+  updateModelActionButtons();
 }
+function updateModelActionButtons(){
+  const hasSel=!!selModel;
+  const cfm=$("confirmModelBtn"); if(cfm){ cfm.disabled=!hasSel; cfm.textContent=hasSel?"✅ 已选："+(document.querySelector('.model-card.sel .nm')?.textContent||"模特"):"✅ 确认选择此模特"; }
+  const go=$("goRenderFromModelBtn"); if(go) go.disabled=!hasSel;
+}
+const confirmModelBtn=$("confirmModelBtn"); if(confirmModelBtn) confirmModelBtn.addEventListener("click",()=>{
+  if(!selModel){ toast("请先点选一张模特"); return; }
+  toast("模特已确认："+(document.querySelector('.model-card.sel .nm')?.textContent||selModel));
+});
+const goRenderFromModelBtn=$("goRenderFromModelBtn"); if(goRenderFromModelBtn) goRenderFromModelBtn.addEventListener("click",()=>{
+  if(!selModel){ toast("请先点选一张模特"); gotoStep("model"); return; }
+  gotoStep("render");
+});
 
 // —— 上传模特 ——
 $("uploadModelBtn").addEventListener("click",()=>{ $("modelFileInput").click(); });
@@ -1962,7 +2059,26 @@ function toggleRenderMode(){
   const mode=document.querySelector('input[name="renderMode"]:checked').value;
   $("tpBox").style.display = mode==="thirdparty" ? "block":"none";
   $("scrollBox").style.display = mode==="scroll" ? "block":"none";
+  updateRenderPrereq();
 }
+function updateRenderPrereq(){
+  const box=$("renderPrereq"); if(!box) return;
+  const mode=document.querySelector('input[name="renderMode"]:checked')?.value || "heygem";
+  let txt="";
+  if(mode==="heygem"){
+    if(selModel) txt=`✅ 已选本地模特：<b>${esc(document.querySelector('.model-card.sel .nm')?.textContent||selModel)}</b>，可直接点「开始出片」。`;
+    else txt=`⚠️ 尚未选择模特，请先到「④ 选模特」点选一张，或切到「📜 滚动字幕卡」模式（无需模特）。`;
+  }else if(mode==="thirdparty"){
+    txt=`🤖 第三方数字人模式：选择官方形象 + 声音模式后，点「开始出片」。`;
+  }else if(mode==="scroll"){
+    txt=`📜 滚动字幕卡模式：无需模特 / 无需 Docker，系统将用男女对话稿（或独白）+ 背景图直接出片。`;
+  }
+  box.innerHTML=txt;
+}
+// 切到出片步骤时刷新前置提示
+gotoStep=(function(orig){
+  return function(step){ orig(step); if(step==="render") updateRenderPrereq(); };
+})(gotoStep);
 async function initThirdparty(){
   try{
     const r=await fetch("/api/thirdparty/info");const d=await r.json();
@@ -1996,10 +2112,14 @@ async function refreshBgThumbs(){
     img.style.cssText="position:absolute;inset:0;background-image:url('"+it.url+"');background-size:cover;background-position:center;";
     el.appendChild(img); el.title=it.name;
     el.onclick=async()=>{ await setBg(it); };
-    const del=document.createElement("div");
-    del.textContent="✕"; del.style.cssText="position:absolute;top:2px;right:2px;width:18px;height:18px;line-height:18px;text-align:center;background:rgba(0,0,0,.55);color:#fff;border-radius:50%;font-size:12px;cursor:pointer;";
-    del.onclick=async(ev)=>{ ev.stopPropagation(); await delBg(it); };
-    el.appendChild(del); box.appendChild(el);
+    // 默认模板不允许删除
+    if(!it.is_default){
+      const del=document.createElement("div");
+      del.textContent="✕"; del.style.cssText="position:absolute;top:2px;right:2px;width:18px;height:18px;line-height:18px;text-align:center;background:rgba(0,0,0,.55);color:#fff;border-radius:50%;font-size:12px;cursor:pointer;";
+      del.onclick=async(ev)=>{ ev.stopPropagation(); await delBg(it); };
+      el.appendChild(del);
+    }
+    box.appendChild(el);
   });
   updateBgPreview();
 }
@@ -2039,6 +2159,42 @@ if(bgFileEl) bgFileEl.addEventListener("change",async(e)=>{
 });
 document.querySelectorAll('input[name="bgFit"]').forEach(el=>el.addEventListener("change",updateBgPreview));
 loadBgManager();
+
+// —— 滚动字幕卡：自动生成视频号标题/副标题 ——
+const genTitleBtn=$("genTitleBtn");
+if(genTitleBtn){
+  genTitleBtn.addEventListener("click", async()=>{
+    if(!currentName){ toast("请先创建或选择一个项目"); return; }
+    const btn=genTitleBtn, st=$("genTitleState");
+    btn.disabled=true; st.textContent="生成中…";
+    try{
+      const r=await fetch("/api/generate_title",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          opening:$("ta-open").value||"",
+          body:$("ta-body").value||"",
+          ending:$("ta-end").value||"",
+          dialogue:$("ta-dialogue").value||""
+        })});
+      const d=await r.json();
+      if(d.ok){
+        $("scrollTitle").value = d.title || "";
+        $("scrollSubtitle").value = d.subtitle || "";
+        st.textContent = "✅ 已生成";
+        toast("标题/副标题生成成功");
+      } else {
+        st.textContent = "生成失败：" + (d.error||"").slice(0,40);
+        toast("生成失败："+(d.error||""));
+      }
+    }catch(e){
+      st.textContent="网络错误";
+      toast("标题生成网络错误");
+    } finally {
+      btn.disabled=false;
+    }
+  });
+}
 
 // —— 批量渲染队列 ——
 let queueTimer = null;        // 步骤9 详细面板轮询
@@ -2386,17 +2542,16 @@ $("pubBtn").addEventListener("click",async()=>{
   $("qsPub").innerHTML='<span class="ok">✅ 已生成</span>';
 });
 
-// —— 时长下拉 → 实时显示目标字数（让"时长控制长短"看得见）——
-const LEN_HINT = {
-  "约30秒":"目标 60-90 字", "约60秒":"目标 100-150 字", "约90秒":"目标 150-220 字",
-  "约3分钟":"目标 450-700 字", "约5分钟":"目标 800-1200 字", "约10分钟":"目标 1500-2200 字"
-};
-function updateLenHint(){
-  const v=$("lenSel").value;
-  $("lenHint").textContent = LEN_HINT[v] || "";
+// —— 选题区目标时长（秒）→ 实时显示目标字数（改写区已有 updateTargetWordCount）——
+function updateTopicSecHints(){
+  const hot = $("hotSecHint"), drc = $("directSecHint");
+  if(hot) hot.textContent = `≈ ${Math.round((parseFloat($("hotTargetSec").value)||0)*CHARS_PER_SEC)} 字`;
+  if(drc) drc.textContent = `≈ ${Math.round((parseFloat($("directTargetSec").value)||0)*CHARS_PER_SEC)} 字`;
 }
-$("lenSel").addEventListener("change", updateLenHint);
-updateLenHint();
+["hotTargetSec","directTargetSec"].forEach(id=>{
+  const el=$(id); if(el) el.addEventListener("input", updateTopicSecHints);
+});
+updateTopicSecHints();
 
 // —— 双入口 Tab 切换：🌐 联网找爆款 vs ✍️ 直接生成二创稿 ——
 function switchTopicTab(pane){
@@ -2453,7 +2608,7 @@ $("findHotBtn").addEventListener("click",async()=>{
   if(!category){toast("请先填写财税类别（如：虚开发票 / 公转私 / 个税汇算）");return;}
   $("findHotBtn").disabled=true;$("findHotBtn").textContent="联网检索中…";
   try{
-    const payload={mode:"list", category, period, direction:$("dirInput").value, length:$("lenSel").value, keep_core:$("keepInput").value};
+    const payload={mode:"list", category, period, direction:$("dirInput").value, keep_core:$("keepInput").value, target_seconds:parseFloat($("hotTargetSec").value)||60};
     const r=await fetch("/api/topic_search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
     let d;
     try{ d=await r.json(); }
@@ -2477,7 +2632,7 @@ $("directCreateBtn").addEventListener("click",async()=>{
   if(!source){toast("请先在文本框粘贴爆款链接 / 原文逐字稿 / 创作提示词");return;}
   $("directCreateBtn").disabled=true;$("directCreateBtn").textContent="AI 改写中…";
   try{
-    const payload={source, direction:$("dirInput").value, length:$("lenSel").value, keep_core:$("keepInput").value, target_seconds:parseFloat($("directTargetSec").value)||0};
+    const payload={source, direction:$("dirInput").value, keep_core:$("keepInput").value, target_seconds:parseFloat($("directTargetSec").value)||60};
     const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
     let d;
     try{ d=await r.json(); }
@@ -2503,10 +2658,52 @@ $("directCreateBtn").addEventListener("click",async()=>{
       }
     } else toast("初稿已填入编辑器，可手动保存");
     gotoStep("edit");
+    showEditSuccessBanner(true);
     for(const k of ["open","body","end"]) await checkSeg(k);
     $("ta-dialogue").dispatchEvent(new Event("input"));
   }catch(e){toast("生成出错："+e.message);}
   $("directCreateBtn").disabled=false;$("directCreateBtn").textContent="✨ 直接生成二创稿";
+});
+
+// —— 对话模式：根据当前三段稿自动生成男女对话 ——
+$("genDialogueFromSegsBtn").addEventListener("click", async()=>{
+  if(!currentName){toast("请先新建或加载一个项目");return;}
+  const source=[$("ta-open").value, $("ta-body").value, $("ta-end").value].join("\n\n").trim();
+  if(!source){toast("请先填写或生成「开头 / 正文 / 结尾」三段稿");return;}
+  const btn=$("genDialogueFromSegsBtn");
+  btn.disabled=true; btn.textContent="生成对话中…";
+  $("genDialogueState").textContent="AI 正把三段稿改写成女问男答…";
+  try{
+    const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({source, direction:"改写成女问男答的男女对话，覆盖同样风险点，口语化", target_seconds:parseFloat($("targetDuration").value)||60})});
+    let d; try{ d=await r.json(); }catch(_){ const txt=await r.text().catch(()=>""); throw new Error("服务端返回异常("+r.status+")："+txt.slice(0,120)); }
+    if(!r.ok){ throw new Error((d&&d.error)||("HTTP "+r.status)); }
+    if(!d.ok){toast("生成失败："+(d.error||"").slice(0,90));return;}
+    const dlg=d.dialogue||"";
+    if(!dlg){toast("AI 未返回对话稿，请重试或手动填写");return;}
+    $("ta-dialogue").value=dlg;
+    // 自动保存
+    await fetch("/api/project/"+encodeURIComponent(currentName)+"/save",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({opening:$("ta-open").value,body:$("ta-body").value,ending:$("ta-end").value,dialogue:dlg})});
+    $("ta-dialogue").dispatchEvent(new Event("input"));
+    $("genDialogueState").textContent="已生成并保存 "+(dlg.split("\n").filter(l=>l.trim()).length)+" 行对话";
+    toast("男女对话稿已生成并保存 ✅");
+  }catch(e){toast("生成对话出错："+e.message); $("genDialogueState").textContent="";}
+  btn.disabled=false; btn.textContent="🤖 根据三段稿生成男女对话";
+});
+
+// —— 对话模式：按当前选题联网生成男女对话 ——
+$("genDialogueFromTopicBtn").addEventListener("click", async()=>{
+  if(!currentName){toast("请先新建或加载一个项目");return;}
+  if(!lastHotList || !lastHotList.length){toast("请先在「① 选题」面板点「🔍 联网找爆款」列出候选选题");return;}
+  // 列出候选让用户选
+  const titles=lastHotList.map((t,i)=>`${i+1}. ${(t.title||"").slice(0,40)}`).join("\n");
+  const input=prompt("已缓存以下候选选题，请输入序号生成男女对话稿：\n"+titles, "1");
+  if(!input) return;
+  const idx=parseInt(input,10)-1;
+  if(isNaN(idx) || idx<0 || idx>=lastHotList.length){toast("序号无效");return;}
+  await doCreateFromHot(idx);
 });
 
 // —— 联网候选 → 用户挑 → 二创（共用第二步）——
@@ -2546,6 +2743,7 @@ async function doCreateFromHot(idx){
       }
     } else toast("二创稿已填入编辑器，可手动保存");
     gotoStep("edit");
+    showEditSuccessBanner(true);
     for(const k of ["open","body","end"]) await checkSeg(k);
     $("ta-dialogue").dispatchEvent(new Event("input"));
   }catch(e){toast("二创出错："+e.message);}
@@ -2607,7 +2805,20 @@ function goHome(){
   if($("projPopup")) $("projPopup").style.display="none";
   loadHomeData();
 }
+function pauseAllMedia(){
+  // 进入工作台/选题页时统一暂停所有媒体，避免首页网格视频与右侧预览重叠出声
+  document.querySelectorAll("video, audio").forEach(m=>{
+    try{
+      if(!m.paused) m.pause();
+      // 重置播放头，避免切回首页时从中间继续
+      if(m.currentTime && !isNaN(m.currentTime)) m.currentTime = 0;
+      // 对于非用户主动控制的预览视频，默认恢复静音状态
+      if(m.id==="pvVideo"){ m.muted = true; }
+    }catch(_){}
+  });
+}
 function goStudio(){
+  pauseAllMedia(); // 先停掉首页所有自动播放的视频
   $("home-view").classList.remove("active");
   $("studio-view").classList.add("active");
   document.querySelectorAll("#viewSwitch button").forEach(b=>{
@@ -2622,6 +2833,7 @@ function goStudio(){
   // 关键修复：进入工作台必须保证至少有一个面板可见，否则整个工作区空白
   // （用户感知为「点选题没反应 / 步骤区空白」）。已有激活面板则保持当前步骤。
   if(!document.querySelector(".panel.active")) gotoStep("topic");
+  ensurePanelVisible();
 }
 // 视图切换按钮
 document.querySelectorAll("#viewSwitch button").forEach(btn=>{
@@ -2848,6 +3060,23 @@ function setMode(mode, opts){
   if(dg) dg.hidden = (mode!=='dialogue');
   saveDraftNow();
   if(!(opts&&opts.silent)) updateModeHint();
+  // 出音频面板试听区与当前生成模式一一对应
+  syncAudioPreviewVisibility();
+}
+
+// —— 出音频面板：根据当前生成模式（独白/对话）过滤试听卡片 ——
+function syncAudioPreviewVisibility(){
+  const mode = getMode();
+  const mono = $('monoPreviewCard');
+  const dialogue = $('dialoguePreviewCard');
+  if(!mono || !dialogue) return;
+  if(mode==='dialogue'){
+    mono.style.display = 'none';
+    dialogue.style.display = 'block';
+  } else {
+    mono.style.display = 'block';
+    dialogue.style.display = 'none';
+  }
 }
 function updateModeHint(){
   const el=$('modeHint'); if(!el) return;
