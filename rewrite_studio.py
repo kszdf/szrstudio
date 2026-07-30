@@ -1027,6 +1027,21 @@ def _auth_gate(self) -> bool:
     self.end_headers()
     self.wfile.write(json.dumps({"error": "unauthorized", "hint": "请先调用 /api/login 获取会话令牌"}, ensure_ascii=False).encode("utf-8"))
     return False
+
+def _auth_state(self) -> dict:
+    """公开状态接口（/api/auth/state）：前端据此决定走令牌模式还是账号登录模式。"""
+    if not _auth_enabled():
+        return {"auth_enabled": False, "authenticated": True,
+                "username": None, "role": None, "tenant_id": None}
+    tok = _session_token_from(self)
+    s = studio_db.get_session(tok) if tok else None
+    if s:
+        u = studio_db.get_user_by_id(s["user_id"])
+        if u:
+            return {"auth_enabled": True, "authenticated": True,
+                    "username": u["username"], "role": u["role"], "tenant_id": u["tenant_id"]}
+    return {"auth_enabled": True, "authenticated": False,
+            "username": None, "role": None, "tenant_id": None}
 # =====================================================
 
 
@@ -1136,6 +1151,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
         path = u.path
+        # 公开状态接口（不受网关限制，供前端判断鉴权模式）
+        if path == "/api/auth/state":
+            return self._send_json(_auth_state(self))
         # P0-1 数据面鉴权：仅 gate /api/*，放行首页与静态资源
         if path.startswith("/api/") and not _auth_gate(self):
             return

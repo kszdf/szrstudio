@@ -835,6 +835,12 @@ def verify_user(username: str, password: str) -> dict | None:
         return None
     return dict(row)
 
+def get_user_by_id(user_id: int) -> dict | None:
+    cx = _conn()
+    row = cx.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    cx.close()
+    return dict(row) if row else None
+
 
 # 初始化时一并建表
 def init_all() -> dict:

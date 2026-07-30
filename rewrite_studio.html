@@ -1173,6 +1173,91 @@
 <script>
 const $ = id => document.getElementById(id);
 
+/* ===== P0-1 局域网访问令牌门禁（前端）=====
+ * 后端已对 /api/* 加 Bearer/Cookie 鉴权。前端无需改动现有 fetch，
+ * 只需在加载时确保携带 hgtv2_token Cookie：未设置则弹窗输入一次，
+ * 输入后写入 Cookie（30天），后续所有 fetch 自动带上。
+ */
+(function(){
+  function getCookie(k){ return (document.cookie.match('(?:^|; )'+k+'=([^;]*)')||[])[1]; }
+  function setCookie(k,v,d){ document.cookie = k+'='+encodeURIComponent(v)+';path=/;max-age='+(d*86400); }
+  const TOK = 'hgtv2_token';
+
+  /* 局域网令牌模式（AUTH_ENABLED=0 默认走这里，逻辑保持原样） */
+  function showTokenPrompt(){
+    const overlay = document.createElement('div');
+    overlay.id = 'gateOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(20,24,38,.6);display:flex;align-items:center;justify-content:center;z-index:9999;font-family:system-ui,"Microsoft YaHei",sans-serif';
+    overlay.innerHTML = '<div style="background:#fff;border-radius:16px;padding:28px 32px;width:340px;box-shadow:0 20px 60px rgba(0,0,0,.25)">'
+      + '<h3 style="margin:0 0 6px;font-size:18px;color:#1f2430">工作台访问口令</h3>'
+      + '<p style="margin:0 0 16px;font-size:13px;color:#7a8194;line-height:1.6">本机工作台已启用局域网访问令牌，请输入管理员提供的口令。</p>'
+      + '<input id="tokInput" type="password" placeholder="粘贴访问令牌" style="width:100%;padding:10px 12px;border:1px solid #e6e9f2;border-radius:10px;font-size:14px;box-sizing:border-box">'
+      + '<button id="tokBtn" style="margin-top:14px;width:100%;padding:10px;border:0;border-radius:10px;background:#2f54eb;color:#fff;font-size:15px;font-weight:600;cursor:pointer">进入工作台</button>'
+      + '<p id="tokErr" style="margin:10px 0 0;font-size:12px;color:#e5484d;display:none">口令错误，请检查后重试。</p></div>';
+    document.body.appendChild(overlay);
+    function tryEnter(){
+      const v = document.getElementById('tokInput').value.trim();
+      if(!v){ return; }
+      fetch('/api/queue', {headers:{'Authorization':'Bearer '+v}}).then(r=>{
+        if(r.ok){ setCookie(TOK, v, 30); overlay.remove(); location.reload(); }
+        else { document.getElementById('tokErr').style.display='block'; }
+      }).catch(()=>{ document.getElementById('tokErr').style.display='block'; });
+    }
+    document.getElementById('tokBtn').addEventListener('click', tryEnter);
+    document.getElementById('tokInput').addEventListener('keydown', e=>{ if(e.key==='Enter') tryEnter(); });
+  }
+
+  /* 账号登录模式（AUTH_ENABLED=1 走这里）：对接 /api/login，下发 hgtv2_session Cookie */
+  function showAccountLogin(){
+    const overlay = document.createElement('div');
+    overlay.id = 'gateOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:linear-gradient(135deg,rgba(15,23,42,.82),rgba(30,27,75,.82));backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:9999;font-family:system-ui,"Microsoft YaHei",sans-serif';
+    overlay.innerHTML = '<div style="width:360px;padding:36px 34px;border-radius:20px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);box-shadow:0 30px 80px rgba(0,0,0,.4);backdrop-filter:blur(20px) saturate(160%)">'
+      + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><div style="width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:20px">🎬</div><h3 style="margin:0;font-size:19px;color:#fff;font-weight:700">慧根堂工作台</h3></div>'
+      + '<p style="margin:0 0 22px;font-size:13px;color:rgba(255,255,255,.6);line-height:1.6">请输入租户账号登录。未登录无法使用工作台。</p>'
+      + '<label style="font-size:12px;color:rgba(255,255,255,.7)">账号</label>'
+      + '<input id="lgUser" type="text" autocomplete="username" placeholder="用户名" style="margin:6px 0 14px;width:100%;padding:11px 13px;border:1px solid rgba(255,255,255,.18);border-radius:11px;font-size:14px;box-sizing:border-box;background:rgba(255,255,255,.06);color:#fff;outline:none">'
+      + '<label style="font-size:12px;color:rgba(255,255,255,.7)">密码</label>'
+      + '<input id="lgPwd" type="password" autocomplete="current-password" placeholder="密码" style="margin:6px 0 18px;width:100%;padding:11px 13px;border:1px solid rgba(255,255,255,.18);border-radius:11px;font-size:14px;box-sizing:border-box;background:rgba(255,255,255,.06);color:#fff;outline:none">'
+      + '<button id="lgBtn" style="width:100%;padding:12px;border:0;border-radius:11px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:.2s">登 录</button>'
+      + '<p id="lgErr" style="margin:12px 0 0;font-size:12px;color:#fca5a5;display:none;text-align:center"></p></div>';
+    document.body.appendChild(overlay);
+    function tryLogin(){
+      const u = document.getElementById('lgUser').value.trim();
+      const p = document.getElementById('lgPwd').value;
+      if(!u || !p){ return; }
+      const btn = document.getElementById('lgBtn'); btn.textContent = '登录中…';
+      fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'},
+                           credentials:'include', body: JSON.stringify({username:u, password:p})})
+        .then(r=> r.json().then(d=>({ok:r.ok, d})))
+        .then(({ok,d})=>{
+          if(ok && d.ok){ overlay.remove(); location.reload(); }
+          else { btn.textContent='登 录';
+                 const e=document.getElementById('lgErr'); e.textContent=(d&&d.error)||'登录失败'; e.style.display='block'; }
+        }).catch(()=>{ btn.textContent='登 录';
+                       const e=document.getElementById('lgErr'); e.textContent='网络错误，请重试'; e.style.display='block'; });
+    }
+    document.getElementById('lgBtn').addEventListener('click', tryLogin);
+    document.getElementById('lgPwd').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
+    document.getElementById('lgUser').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('lgPwd').focus(); });
+    document.getElementById('lgUser').focus();
+  }
+
+  /* 先问后端当前鉴权模式，再决定走哪条门禁 */
+  fetch('/api/auth/state').then(r=>r.json()).then(s=>{
+    if(s.auth_enabled){
+      if(s.authenticated){ return; }   // 已有会话，直接进
+      showAccountLogin();
+    } else {
+      if(getCookie(TOK)){ return; }     // 已有局域网令牌，直接进
+      showTokenPrompt();
+    }
+  }).catch(()=>{
+    if(getCookie(TOK)){ return; }
+    showTokenPrompt();                   // 兜底：原有令牌模式
+  });
+})();
+
 /* ===== 统一操作引导系统（点击左侧步骤按钮时弹出，降低新用户学习成本）===== */
 let guideNoMore = false;
 const STEP_GUIDES = {
