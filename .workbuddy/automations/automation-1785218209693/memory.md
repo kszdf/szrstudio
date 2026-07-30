@@ -8,5 +8,10 @@
 
 - 2026-07-29 晚(23:51, 20:00档)：再次执行 `render --slot evening`，同样**跳过**。依旧未找到 2026-W31 队列，EXIT=0，无 mp4/sidecar，README 未改。上游 gen-topics/select 本周仍未产出队列。无异常。
 
+## 2026-07-30 (周四, 周号 2026-W31)
+- 执行 `weekly_pipeline.py render --slot evening`（python 3.13.12）
+- 结果：**跳过**。「未找到 2026-W31 队列」，EXIT=0。output/weekly 下仅有 `_samples/2026-W31-demo/`，无正式 `2026-W31/queue.json`，未触发 TTS/ffmpeg，无 mp4/sidecar 产出，README 未改。无异常、无报错。
+- 根因同上：上游 gen-topics(周日23:30) / select+create-scripts(周一08:00) 本周仍未生成正式队列。连续 4 次（07-28 下午、07-29 上下午晚、07-30 晚）均跳过。
+
 ## 历史
 - 2026-07-28：本自动化首次运行即发现 queue 缺失，同一下午场已先跳过。
