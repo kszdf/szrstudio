@@ -103,6 +103,10 @@ input,textarea,select{font-family:inherit;font-size:var(--fs-14);color:var(--ink
 .mode-btn:hover{background:var(--bg);color:var(--ink)}
 .mode-btn.active{background:var(--grad);color:#fff;font-weight:600;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)}
 
+.seg-hint{font-size:var(--fs-12);color:var(--muted);margin-bottom:6px}
+#scriptMerged{width:100%;border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-size:var(--fs-15);resize:vertical;background:var(--card);color:var(--text);box-sizing:border-box}
+#scriptMerged:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-x)}
+
 /* ============ 卡片 ============ */
 .grid{display:grid;gap:var(--sp-4)}
 .grid.cols-2{grid-template-columns:repeat(2,1fr)}
@@ -282,15 +286,14 @@ input,textarea,select{font-family:inherit;font-size:var(--fs-14);color:var(--ink
               <button class="mode-btn" data-mode="dialogue" onclick="setScriptMode('dialogue')">💬 双声对话</button>
             </div>
           </div>
-          <!-- 独白模式：三段式 -->
+          <!-- 独白模式：合并三段式（一个框，内部用标记分段） -->
           <div id="soloFields">
-            <textarea id="scriptOpen" placeholder="【开头】钩子，3-5秒抓住老板注意力..." style="min-height:70px"></textarea>
-            <textarea id="scriptBody" placeholder="【正文】核心干货，层层递进..." style="min-height:110px"></textarea>
-            <textarea id="scriptEnd" placeholder="【结尾】留资钩子，引导私信咨询..." style="min-height:70px"></textarea>
+            <div class="seg-hint">独白模式 · 整段脚本，按【开头】【正文】【结尾】三段书写（机器人会自动识别分段）：</div>
+            <textarea id="scriptMerged" placeholder="【开头】钩子，3-5秒抓住老板注意力...&#10;&#10;【正文】核心干货，层层递进...&#10;&#10;【结尾】留资钩子，引导私信咨询..." style="min-height:230px;font-family:var(--font-cn);line-height:1.7"></textarea>
           </div>
           <!-- 双声模式：对话稿 -->
           <div id="dialogueFields" style="display:none">
-            <textarea id="scriptDialogue" placeholder="男女对话稿格式：&#10;女：老板你好，今天聊个扎心的话题...&#10;男：什么话题这么扎心？&#10;女：就是建筑行业里90%的老板都在犯的错..." style="min-height:200px"></textarea>
+            <textarea id="scriptDialogue" placeholder="男女对话稿格式：&#10;女：老板你好，今天聊个扎心的话题...&#10;男：什么话题这么扎心？&#10;女：就是建筑行业里90%的老板都在犯的错..." style="min-height:230px"></textarea>
             <p style="font-size:var(--fs-12);color:var(--muted);margin-top:4px">提示：双声模式下系统将自动按「女：」「男：」标签分配江老师/张老师音色</p>
           </div>
         </div>
@@ -586,9 +589,9 @@ function pickTopic(i){
   const t = _cachedTopics[i];
   if(!t) return;
   _selectedTopic = t;
-  // 填入三段式开头，摘要填正文
-  if(t.title) document.getElementById("scriptOpen").value = t.title;
-  if(t.summary || t.why_hot) document.getElementById("scriptBody").value = (t.summary || t.why_hot);
+  // 直接采用：标题作开头、摘要作正文，写入合并框
+  const merged = segsToMerged(t.title || "", (t.summary || t.why_hot || ""), "");
+  document.getElementById("scriptMerged").value = merged;
   toast("已采用选题到脚本区，可继续编辑或点「AI改写润色」");
 }
 
@@ -663,14 +666,55 @@ function adoptToScript(){
     toast("还没有二创结果，请先生成"); return;
   }
   const r = _rwResult.result || _rwResult;
-  if(r.opening) document.getElementById("scriptOpen").value = r.opening;
-  if(r.body)   document.getElementById("scriptBody").value = r.body;
-  if(r.ending)  document.getElementById("scriptEnd").value = r.ending;
-  if(r.dialogue) document.getElementById("scriptDialogue").value = r.dialogue;
+  setScriptSegs({opening: r.opening||"", body: r.body||"", ending: r.ending||"", dialogue: r.dialogue||""});
   toast("已采用到脚本区 ✅");
   closeRewritePanel();
   // 滚动到脚本区
   document.getElementById("soloFields").scrollIntoView({behavior:"smooth",block:"center"});
+}
+
+/* ── 独白合并框 ↔ 三段互转 ── */
+/* 后端契约不变：do_save 收 opening/body/ending，serialize_three 用 === 开头 ===/=== 正文 ===/=== 结尾（钩子） === 格式 */
+function mergedToSegs(text){
+  const segs = {opening:"", body:"", ending:""};
+  const re = /^\s*(?:#\s*)?【?\s*(开头|正文|结尾|钩子)\s*】?\s*$/m;
+  // 按行扫描，遇到标记行切换当前段
+  const lines = (text || "").split(/\r?\n/);
+  let cur = "opening"; // 默认落入开头段
+  const buf = {opening:[], body:[], ending:[]};
+  for(const ln of lines){
+    // 标记行：行首(可带#)紧跟【开头】/【正文】/【结尾】/【钩子】，标记后内容归入该段
+    const m = ln.match(/^\s*(?:#\s*)?【\s*(开头|正文|结尾|钩子)\s*】\s*(.*)$/);
+    if(m){
+      const k = (m[1]==="开头") ? "opening" : (m[1]==="正文" ? "body" : "ending");
+      cur = k;
+      if(m[2].trim()) buf[cur].push(m[2]);
+      continue;
+    }
+    buf[cur].push(ln);
+  }
+  segs.opening = buf.opening.join("\n").trim();
+  segs.body    = buf.body.join("\n").trim();
+  segs.ending  = buf.ending.join("\n").trim();
+  return segs;
+}
+function segsToMerged(o,b,e){
+  const parts = [];
+  if((o||"").trim())    parts.push("【开头】\n" + o.trim());
+  if((b||"").trim())    parts.push("【正文】\n" + b.trim());
+  if((e||"").trim())    parts.push("【结尾】\n" + e.trim());
+  return parts.join("\n\n");
+}
+function getScriptSegs(){
+  if(_scriptMode === "dialogue"){
+    return {opening:"", body:"", ending:"", dialogue: document.getElementById("scriptDialogue").value};
+  }
+  return Object.assign({dialogue:""}, mergedToSegs(document.getElementById("scriptMerged").value));
+}
+function setScriptSegs(segs){
+  if(!segs) return;
+  document.getElementById("scriptMerged").value = segsToMerged(segs.opening||"", segs.body||"", segs.ending||"");
+  if(segs.dialogue) document.getElementById("scriptDialogue").value = segs.dialogue;
 }
 
 /* ── 脚本模式切换（独白/双声）── */
@@ -705,20 +749,18 @@ function setRenderMode(mode){
 function runRewrite(){
   const msg = document.getElementById("studioMsg");
   msg.textContent = "AI 改写中...";
+  const s = getScriptSegs();
   POST("/api/rewrite", {
-    opening: document.getElementById("scriptOpen").value,
-    body: document.getElementById("scriptBody").value,
-    ending: document.getElementById("scriptEnd").value,
-    topic: document.getElementById("scriptOpen").value,
+    opening: s.opening,
+    body: s.body,
+    ending: s.ending,
+    topic: s.opening,
     target_seconds: parseFloat(document.getElementById("targetSec").value || 120),
     account_type: document.getElementById("accountType").value
   }).then(d => {
     if(d && d.ok && d.result){
       const r = d.result;
-      if(r.opening) document.getElementById("scriptOpen").value = r.opening;
-      if(r.body) document.getElementById("scriptBody").value = r.body;
-      if(r.ending) document.getElementById("scriptEnd").value = r.ending;
-      if(r.dialogue) document.getElementById("scriptDialogue").value = r.dialogue;
+      setScriptSegs({opening: r.opening||"", body: r.body||"", ending: r.ending||"", dialogue: r.dialogue||""});
       msg.textContent = "改写完成 ✅";
     } else {
       msg.textContent = "改写失败：" + esc(d && d.error || "未知错误");
@@ -729,14 +771,15 @@ function runRewrite(){
 let currentName = "";
 function saveProject(){
   const msg = document.getElementById("studioMsg");
-  const title = (document.getElementById("scriptOpen").value || "草稿").slice(0,30);
+  const s = getScriptSegs();
+  const title = (s.opening || s.dialogue || "草稿").slice(0,30);
   // 用标题做项目名（简化：时间戳防重）
   currentName = "p_" + Date.now();
   POST("/api/project/" + encodeURIComponent(currentName) + "/save", {
-    opening: document.getElementById("scriptOpen").value,
-    body: document.getElementById("scriptBody").value,
-    ending: document.getElementById("scriptEnd").value,
-    dialogue: document.getElementById("scriptDialogue").value
+    opening: s.opening,
+    body: s.body,
+    ending: s.ending,
+    dialogue: s.dialogue
   }).then(d => {
     msg.textContent = d && d.ok ? ("已保存：" + currentName) : ("保存失败：" + esc(d&&d.error||""));
     loadDashboard();
@@ -747,12 +790,13 @@ function runTTS(){
   const msg = document.getElementById("studioMsg");
   if(!currentName){ saveProject(); }
   msg.textContent = "生成音频中...";
-  const dlg = document.getElementById("scriptDialogue").value.trim();
+  const s = getScriptSegs();
+  const dlg = (s.dialogue || "").trim();
   const ep = "/api/project/" + encodeURIComponent(currentName) + (dlg ? "/tts_dialogue" : "/tts");
   const body = dlg ? {dialogue: dlg} : {
-    opening: document.getElementById("scriptOpen").value,
-    body: document.getElementById("scriptBody").value,
-    ending: document.getElementById("scriptEnd").value
+    opening: s.opening,
+    body: s.body,
+    ending: s.ending
   };
   POST(ep, body).then(d => {
     msg.textContent = d && d.ok ? "音频已生成 ✅（可在我的视频查看）" : ("音频失败：" + esc(d&&d.error||""));
