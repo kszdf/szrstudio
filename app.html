@@ -97,6 +97,12 @@ input,textarea,select{font-family:inherit;font-size:var(--fs-14);color:var(--ink
 .btn.primary:hover{transform:translateY(-1px);box-shadow:0 7px 20px rgba(122,92,255,.45)}
 .btn.ghost{background:transparent}
 
+/* ============ 模式切换（独白/双声） ============ */
+.mode-toggle{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--bg-2)}
+.mode-btn{padding:8px 16px;border:none;background:transparent;color:var(--muted);font-size:var(--fs-13);cursor:pointer;transition:.2s;flex:1;text-align:center}
+.mode-btn:hover{background:var(--bg);color:var(--ink)}
+.mode-btn.active{background:var(--grad);color:#fff;font-weight:600;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)}
+
 /* ============ 卡片 ============ */
 .grid{display:grid;gap:var(--sp-4)}
 .grid.cols-2{grid-template-columns:repeat(2,1fr)}
@@ -209,15 +215,18 @@ input,textarea,select{font-family:inherit;font-size:var(--fs-14);color:var(--ink
     <!-- 创作台 -->
     <section class="view" id="view-studio">
       <div class="section-h"><h3>创作台</h3></div>
+
+      <!-- ═══ ① 联网选题 ═══ -->
       <div class="card" style="margin-bottom:var(--sp-4)">
         <div class="field">
-          <label>① 联网选题（可选 · 自动联网搜热点并二创）</label>
+          <label>① 联网选题（自动联网搜热点 → 选题 → 二创 → 脚本）</label>
           <div class="row">
             <input id="topicCat" placeholder="领域关键词，如：建筑行业 税务">
             <input id="topicDir" placeholder="方向，如：老板最怕的稽查">
             <select id="topicLen">
               <option value="30秒">30秒</option><option value="1分钟">1分钟</option>
               <option value="2分钟" selected>2分钟</option><option value="3分钟">3分钟</option>
+              <option value="5分钟">5分钟</option>
             </select>
           </div>
           <button class="btn primary" id="topicBtn" onclick="runTopic()" style="margin-top:8px">🔍 联网搜选题</button>
@@ -225,13 +234,65 @@ input,textarea,select{font-family:inherit;font-size:var(--fs-14);color:var(--ink
         <div id="topicResult" class="loading" style="display:none"></div>
       </div>
 
+      <!-- ═══ ② 二创编辑面板（选中选题后展开） ═══ -->
+      <div class="card" id="rewritePanel" style="margin-bottom:var(--sp-4);display:none;border-left:4px solid var(--brand)">
+        <div class="section-h" style="margin:0 0 12px"><h3 style="font-size:var(--fs-15);color:var(--brand)">✨ 二创编辑</h3>
+          <button class="btn ghost" style="font-size:12px;padding:2px 10px" onclick="closeRewritePanel()">收起</button></div>
+        <div id="rewriteTopicInfo" style="background:var(--bg-2);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:var(--fs-13)"></div>
+        <div class="row" style="margin-bottom:10px">
+          <div class="field" style="margin:0;flex:1"><label>二创篇幅</label>
+            <select id="rwLength">
+              <option value="30秒">30秒短视频</option><option value="1分钟">1分钟口播</option>
+              <option value="2分钟" selected>2分钟深度</option>
+              <option value="3分钟">3分钟讲解</option><option value="5分钟">5分钟长文</option>
+            </select>
+          </div>
+          <div class="field" style="margin:0;flex:1"><label>内容风格</label>
+            <select id="rwStyle">
+              <option value="专业干货" selected>专业干货（老张人设）</option>
+              <option value="口语爆款">口语爆款（抖音味）</option>
+              <option value="故事案例">故事案例（钩子开头）</option>
+              <option value="问答互动">问答互动（评论区引导）</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:var(--sp-3);flex-wrap:wrap">
+          <button class="btn primary" id="rwCreateBtn" onclick="runTopicCreate()">✨ AI 二创生成</button>
+          <button class="btn" onclick="adoptToScript()">📋 采用到脚本区</button>
+        </div>
+        <div id="rwResult" style="margin-top:12px;display:none">
+          <label style="font-size:var(--fs-13);color:var(--muted)">二创结果预览：</label>
+          <div id="rwPreview" style="background:var(--bg-2);border-radius:8px;padding:12px;font-size:var(--fs-13);line-height:1.7;white-space:pre-wrap"></div>
+        </div>
+        <div id="rwMsg" class="auth-err" style="color:var(--muted);text-align:left;margin-top:6px"></div>
+      </div>
+
+      <!-- ═══ ③ 脚本编辑 ═══ -->
       <div class="card" style="margin-bottom:var(--sp-4)">
         <div class="field">
-          <label>② 脚本（改写 / 三段式 / 男女对话），可手动粘贴或选题后填入</label>
-          <textarea id="scriptOpen" placeholder="【开头】钩子，3-5秒抓住老板..." style="min-height:70px"></textarea>
-          <textarea id="scriptBody" placeholder="【正文】核心干货..." style="min-height:110px"></textarea>
-          <textarea id="scriptEnd" placeholder="【结尾】留资钩子，引导私信..." style="min-height:70px"></textarea>
-          <textarea id="scriptDialogue" placeholder="男女对话稿（可选）：&#10;女：...&#10;男：..." style="min-height:80px"></textarea>
+          <label>③ 脚本编辑
+            <span id="modeLabel" style="font-weight:400;color:var(--muted);font-size:var(--fs-12);margin-left:8px">
+              当前：<b id="modeText">独白模式</b>（单声口播）
+            </span>
+          </label>
+          <!-- 模式切换：独白 / 双声对话 -->
+          <div class="row" style="margin-bottom:10px">
+            <div class="mode-toggle" id="scriptModeToggle">
+              <button class="mode-btn active" data-mode="solo" onclick="setScriptMode('solo')">🎙️ 独白模式</button>
+              <button class="mode-btn" data-mode="dialogue" onclick="setScriptMode('dialogue')">💬 双声对话</button>
+            </div>
+          </div>
+          <!-- 独白模式：三段式 -->
+          <div id="soloFields">
+            <textarea id="scriptOpen" placeholder="【开头】钩子，3-5秒抓住老板注意力..." style="min-height:70px"></textarea>
+            <textarea id="scriptBody" placeholder="【正文】核心干货，层层递进..." style="min-height:110px"></textarea>
+            <textarea id="scriptEnd" placeholder="【结尾】留资钩子，引导私信咨询..." style="min-height:70px"></textarea>
+          </div>
+          <!-- 双声模式：对话稿 -->
+          <div id="dialogueFields" style="display:none">
+            <textarea id="scriptDialogue" placeholder="男女对话稿格式：&#10;女：老板你好，今天聊个扎心的话题...&#10;男：什么话题这么扎心？&#10;女：就是建筑行业里90%的老板都在犯的错..." style="min-height:200px"></textarea>
+            <p style="font-size:var(--fs-12);color:var(--muted);margin-top:4px">提示：双声模式下系统将自动按「女：」「男：」标签分配江老师/张老师音色</p>
+          </div>
         </div>
         <div class="row">
           <div class="field" style="margin:0"><label>账号类型</label>
@@ -250,12 +311,23 @@ input,textarea,select{font-family:inherit;font-size:var(--fs-14);color:var(--ink
         </div>
       </div>
 
+      <!-- ═══ ④ 出片配置 ═══ -->
       <div class="card">
-        <div class="section-h" style="margin:0 0 12px"><h3 style="font-size:var(--fs-15)">③ 出片</h3></div>
+        <div class="section-h" style="margin:0 0 12px"><h3 style="font-size:var(--fs-15)">④ 出片配置</h3></div>
         <div class="row">
-          <div class="field" style="margin:0"><label>数字人模特</label><select id="modelSel"></select></div>
-          <div class="field" style="margin:0"><label>背景</label>
-            <select id="bgSel"><option value="">默认海景</option></select></div>
+          <div class="field" style="margin:0;flex:1"><label>数字人模特</label><select id="modelSel"></select></div>
+          <div class="field" style="margin:0;flex:1"><label>背景</label>
+            <select id="bgSel"><option value="">默认海景</option></select>
+          </div>
+        </div>
+        <!-- 出片模式：独白 / 双声 -->
+        <div class="field" style="margin-top:10px">
+          <label>出片模式</label>
+          <div class="mode-toggle" id="renderModeToggle">
+            <button class="mode-btn active" data-mode="solo" onclick="setRenderMode('solo')">🎙️ 独白（单数字人口播）</button>
+            <button class="mode-btn" data-mode="dual" onclick="setRenderMode('dual')">🎭 双声（男女交替旁白）</button>
+          </div>
+          <p id="renderModeHint" style="font-size:var(--fs-12);color:var(--muted);margin-top:4px">独白模式：单一数字人形象 + 张老师克隆音 | 双声模式：滚动字幕卡 + 男女双声交替</p>
         </div>
         <div class="field"><label>视频标题（滚动字幕卡用）</label><input id="videoTitle" placeholder="如：建筑老板必看的三大税务雷区"></div>
         <div class="field"><label>副标题（可选）</label><input id="videoSubtitle" placeholder="如：老张讲财税"></div>
@@ -472,6 +544,13 @@ function loadBgs(){
 }
 
 /* ===== 创作台动作 ===== */
+let _cachedTopics = null;   // 当前选题列表缓存
+let _selectedTopic = null;  // 当前选中待二创的选题
+let _rwResult = null;       // 二创结果缓存（供"采用到脚本区"用）
+let _scriptMode = "solo";   // 脚本模式：solo / dialogue
+let _renderMode = "solo";   // 出片模式：solo / dual
+
+/* ── ① 联网选题 ── */
 function runTopic(){
   const btn = document.getElementById("topicBtn");
   btn.disabled = true; btn.textContent = "🔍 搜索中...";
@@ -486,24 +565,143 @@ function runTopic(){
   }).then(d => {
     btn.disabled = false; btn.textContent = "🔍 联网搜选题";
     if(!d || d.error){ box.innerHTML = `<span style="color:var(--err)">${esc(d&&d.error||'检索失败')}</span>`; return; }
-    const topics = (d.topics || []).slice(0, 6);
+    const topics = (d.topics || []).slice(0, 8);
+    _cachedTopics = topics;
     if(!topics.length){ box.innerHTML = `<span class="auth-err" style="color:var(--muted)">未找到相关选题，换个关键词试试</span>`; return; }
-    box.innerHTML = `<div style="font-weight:700;margin-bottom:8px">为你找到 ${topics.length} 个选题：</div>` + topics.map((t,i)=>`
-      <div class="item" style="cursor:pointer" onclick="pickTopic(${i}, ${JSON.stringify(topics).replace(/"/g,'&quot;')})">
-        <div class="thumb">${esc((t.relevance||0))}</div>
-        <div class="meta"><div class="t">${esc(t.title)}</div>
-          <div class="s">${esc(t.summary||'')}</div></div>
-        <span class="tag muted">采用</span>
+    box.innerHTML = `<div style="font-weight:700;margin-bottom:10px">为你找到 ${topics.length} 个选题，点击「AI二创」进入二次创作：</div>` + topics.map((t,i)=>`
+      <div class="item" style="cursor:default">
+        <div class="thumb">${esc(t.relevance||0)}</div>
+        <div class="meta" style="flex:1"><div class="t">${esc(t.title)}</div>
+          <div class="s" style="font-size:var(--fs-12);margin-top:2px">${esc(t.summary||t.why_hot||'')}</div></div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+          <button class="btn primary" style="padding:4px 12px;font-size:12px" onclick="startRewrite(${i})">✨ AI二创</button>
+          <button class="btn ghost" style="padding:4px 12px;font-size:12px" onclick="pickTopic(${i})">📋 直接采用</button>
+        </div>
       </div>`).join("");
   }).catch(()=>{ btn.disabled=false; btn.textContent="🔍 联网搜选题"; box.innerHTML=`<span style="color:var(--err)">连接失败</span>`; });
 }
-function pickTopic(i, topics){
-  const t = topics[i];
-  if(t && t.title){ document.getElementById("scriptOpen").value = t.title; }
-  if(t && t.summary){ document.getElementById("scriptBody").value = t.summary; }
-  toast("已填入选题，可继续补充脚本");
+
+/* ── 选题：直接采用（跳过二创，填入脚本区）── */
+function pickTopic(i){
+  const t = _cachedTopics[i];
+  if(!t) return;
+  _selectedTopic = t;
+  // 填入三段式开头，摘要填正文
+  if(t.title) document.getElementById("scriptOpen").value = t.title;
+  if(t.summary || t.why_hot) document.getElementById("scriptBody").value = (t.summary || t.why_hot);
+  toast("已采用选题到脚本区，可继续编辑或点「AI改写润色」");
 }
 
+/* ── ② 打开二创面板 ── */
+function startRewrite(i){
+  const t = _cachedTopics[i];
+  if(!t) return;
+  _selectedTopic = t;
+  _rwResult = null;
+  const panel = document.getElementById("rewritePanel");
+  const info = document.getElementById("rewriteTopicInfo");
+  info.innerHTML = `<b>📌 选题：</b>${esc(t.title)}<br><b>📊 相关度：</b>${t.relevance||'-'}<br><b>💡 要点：</b>${esc(t.risk_point||t.audience||t.summary||'')}`;
+  document.getElementById("rwResult").style.display = "none";
+  document.getElementById("rwMsg").textContent = "";
+  panel.style.display = "block";
+  panel.scrollIntoView({behavior:"smooth",block:"start"});
+  toast("已打开二创面板，调整参数后点「AI二创生成」");
+}
+function closeRewritePanel(){
+  document.getElementById("rewritePanel").style.display = "none";
+}
+
+/* ── AI 二创生成（调后端 mode=create）── */
+function runTopicCreate(){
+  if(!_selectedTopic){ showFatal("请先选择一个选题"); return; }
+  const btn = document.getElementById("rwCreateBtn");
+  const msg = document.getElementById("rwMsg");
+  btn.disabled = true; btn.textContent = "✨ 二创生成中...";
+  msg.textContent = "正在联网分析并二次创作，预计 15-30 秒...";
+  POST("/api/topic_search", {
+    category: _selectedTopic.title,
+    direction: document.getElementById("topicDir").value || (_selectedTopic.risk_point || ""),
+    length: document.getElementById("rwLength").value,
+    target_seconds: 0,
+    mode: "create",
+    keep_core: document.getElementById("rwStyle").value,
+    topic_index: -1,
+    topics_cache: JSON.stringify([_selectedTopic])
+  }).then(d => {
+    btn.disabled = false; btn.textContent = "✨ AI 二创生成";
+    if(!d || d.error){ msg.textContent = "二创失败：" + esc(d&&d.error||"未知错误"); return; }
+    _rwResult = d;
+    // 展示结果预览
+    const preview = document.getElementById("rwPreview");
+    let text = "";
+    if(d.result){
+      if(d.result.opening) text += "【开头】\n" + d.result.opening + "\n\n";
+      if(d.result.body) text += "【正文】\n" + d.result.body + "\n\n";
+      if(d.result.ending) text += "【结尾】\n" + d.result.ending + "\n\n";
+      if(d.result.dialogue) text += "【对话稿】\n" + d.result.dialogue + "\n";
+    } else if(d.opening || d.body || d.ending){
+      if(d.opening) text += "【开头】\n" + d.opening + "\n\n";
+      if(d.body) text += "【正文】\n" + d.body + "\n\n";
+      if(d.ending) text += "【结尾】\n" + d.ending + "\n\n";
+      if(d.dialogue) text += "【对话稿】\n" + d.dialogue + "\n";
+    } else {
+      text = JSON.stringify(d, null, 2);
+    }
+    preview.textContent = text || "(无内容)";
+    document.getElementById("rwResult").style.display = "block";
+    msg.textContent = "二创完成 ✅  可预览上方结果，确认后点「采用到脚本区」";
+    toast("二创生成完成！");
+  }).catch(err => {
+    btn.disabled = false; btn.textContent = "✨ AI 二创生成";
+    msg.textContent = "连接失败：" + (err.message||"");
+  });
+}
+
+/* ── 采用二创结果到脚本区 ── */
+function adoptToScript(){
+  if(!_rwResult){
+    toast("还没有二创结果，请先生成"); return;
+  }
+  const r = _rwResult.result || _rwResult;
+  if(r.opening) document.getElementById("scriptOpen").value = r.opening;
+  if(r.body)   document.getElementById("scriptBody").value = r.body;
+  if(r.ending)  document.getElementById("scriptEnd").value = r.ending;
+  if(r.dialogue) document.getElementById("scriptDialogue").value = r.dialogue;
+  toast("已采用到脚本区 ✅");
+  closeRewritePanel();
+  // 滚动到脚本区
+  document.getElementById("soloFields").scrollIntoView({behavior:"smooth",block:"center"});
+}
+
+/* ── 脚本模式切换（独白/双声）── */
+function setScriptMode(mode){
+  _scriptMode = mode;
+  document.querySelectorAll("#scriptModeToggle .mode-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
+  const soloEl = document.getElementById("soloFields");
+  const dlgEl  = document.getElementById("dialogueFields");
+  const label  = document.getElementById("modeText");
+  if(mode === "dialogue"){
+    soloEl.style.display = "none"; dlgEl.style.display = "block";
+    label.textContent = "双声对话模式（男女交替）";
+  } else {
+    soloEl.style.display = "block"; dlgEl.style.display = "none";
+    label.textContent = "独白模式（单声口播）";
+  }
+}
+
+/* ── 出片模式切换（独白/双声）── */
+function setRenderMode(mode){
+  _renderMode = mode;
+  document.querySelectorAll("#renderModeToggle .mode-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
+  const hint = document.getElementById("renderModeHint");
+  if(mode === "dual"){
+    hint.textContent = "双声模式：滚动字幕卡 + 江老师(女)/张老师(男)克隆音交替旁白，无需数字人模特";
+  } else {
+    hint.textContent = "独白模式：单一数字人形象 + 张老师克隆音口播";
+  }
+}
+
+/* ── AI 改写润色（对已有脚本再加工）── */
 function runRewrite(){
   const msg = document.getElementById("studioMsg");
   msg.textContent = "AI 改写中...";
@@ -566,15 +764,16 @@ function runRender(){
   const msg = document.getElementById("studioMsg");
   if(!currentName){ saveProject(); }
   msg.textContent = "提交出片任务...";
+  const voice_mode = _renderMode === "dual" ? "dual" : "official";
   POST("/api/project/" + encodeURIComponent(currentName) + "/render", {
     model: document.getElementById("modelSel").value,
-    provider: "heygem",
+    provider: _renderMode === "dual" ? "scroll" : "heygem",
     bg: document.getElementById("bgSel").value || null,
     title: document.getElementById("videoTitle").value || null,
     subtitle: document.getElementById("videoSubtitle").value || null,
-    voice_mode: "official"
+    voice_mode: voice_mode
   }).then(d => {
-    if(d && d.ok){ msg.textContent = "已加入渲染队列 🚀"; toast("出片任务已提交"); loadQueue(); }
+    if(d && d.ok){ msg.textContent = "已加入渲染队列 🚀（"+(_renderMode==="dual"?"双声字幕卡":"独白数字人")+"）"; toast("出片任务已提交"); loadQueue(); }
     else msg.textContent = "出片失败：" + esc(d&&d.error||"");
   }).catch(()=>{ msg.textContent="连接失败"; });
 }
