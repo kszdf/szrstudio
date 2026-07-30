@@ -1,0 +1,22 @@
+{
+  "_comment": "发布配置示例。enabled=false 时全部走人工审核出库(离线可用)。设为 true 并填齐平台凭证后，编排器会尝试调用对应平台 API，未齐全则自动降级到人工出库（不会伪造成功）。真实平台自动发布需企业资质+OAuth，请按需填写。",
+  "enabled": false,
+  "platforms": {
+    "douyin": {
+      "access_token": "",
+      "open_id": "",
+      "note": "抖音开放平台：需企业号+应用白名单，/video/upload + /video/create"
+    },
+    "kuaishou": {
+      "access_token": "",
+      "note": "快手开放平台：/openapi/photo/publish"
+    },
+    "bilibili": {
+      "bili_jct": "",
+      "note": "B站：需登录态 cookie，/x/vu/web/add 投稿"
+    },
+    "shipinhao": {
+      "note": "视频号：目前无开放上传 API，只能人工出库后手动发布"
+    }
+  }
+}
