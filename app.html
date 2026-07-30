@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>慧根堂 · 数字人视频工作台</title>
+<style>
+/* ============ 设计令牌（浅色为主 / 商用 SaaS 风格，清新通透） ============ */
+:root{
+  --bg:#f5f7fc; --bg-2:#eef2f9; --panel:#ffffff; --panel-2:#f8fafd;
+  --border:#e6ebf4; --border-soft:#eef1f7;
+  --ink:#1b2133; --muted:#5d6a86; --faint:#9aa4bd;
+  --brand:#4f7cff; --brand-2:#7a5cff; --brand-ink:#fff;
+  --grad:linear-gradient(135deg,#4f7cff,#7a5cff);
+  --coin:#f0a020; --ok:#19b56a; --warn:#f0a020; --err:#ef4d5e; --hi:#ff4d8d;
+  --radius:14px; --radius-sm:10px; --radius-lg:20px;
+  --shadow-sm:0 1px 2px rgba(20,30,60,.06);
+  --shadow:0 8px 24px rgba(20,30,60,.10);
+  --shadow-lg:0 20px 50px rgba(20,30,60,.14);
+  --fs-12:12px; --fs-13:13px; --fs-14:14px; --fs-15:15px; --fs-16:16px; --fs-18:18px; --fs-22:22px; --fs-28:28px;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px; --sp-10:40px;
+  --sidebar-w:228px; --top-h:56px;
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+[data-theme="dark"]{
+  --bg:#171b29; --bg-2:#1e2435; --panel:#20283c; --panel-2:#283150;
+  --border:#2e3850; --border-soft:#262f45;
+  --ink:#eef2fb; --muted:#9aa6c4; --faint:#69748f;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.25);
+  --shadow:0 8px 24px rgba(0,0,0,.30);
+  --shadow-lg:0 20px 50px rgba(0,0,0,.40);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:"PingFang SC","Microsoft YaHei",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  background:var(--bg);color:var(--ink);font-size:var(--fs-14);line-height:1.5;
+  -webkit-font-smoothing:antialiased;overflow:hidden;transition:background .3s var(--ease),color .3s var(--ease)}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea,select{font-family:inherit;font-size:var(--fs-14);color:var(--ink)}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:9px}
+::-webkit-scrollbar-thumb:hover{background:var(--faint)}
+
+/* ============ 登录闸门 ============ */
+#authScreen{position:fixed;inset:0;z-index:50;display:grid;place-items:center;
+  background:radial-gradient(1200px 600px at 50% -10%,rgba(79,124,255,.18),transparent),
+             linear-gradient(160deg,var(--bg),var(--bg-2))}
+.auth-card{width:380px;max-width:92vw;background:var(--panel);border:1px solid var(--border);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:var(--sp-8) var(--sp-6);
+  animation:pop .4s var(--ease)}
+@keyframes pop{from{opacity:0;transform:translateY(12px) scale(.97)}to{opacity:1;transform:none}}
+.auth-logo{width:46px;height:46px;border-radius:13px;background:var(--grad);display:grid;place-items:center;
+  color:#fff;font-size:24px;font-weight:800;box-shadow:0 6px 18px rgba(79,124,255,.5);margin:0 auto var(--sp-4)}
+.auth-title{text-align:center;font-size:var(--fs-22);font-weight:800;margin-bottom:6px}
+.auth-sub{text-align:center;color:var(--muted);font-size:var(--fs-13);margin-bottom:var(--sp-6)}
+.auth-form{display:flex;flex-direction:column;gap:var(--sp-3)}
+.auth-form input{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--panel-2);outline:none;transition:.2s}
+.auth-form input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(79,124,255,.15)}
+.auth-btn{width:100%;padding:12px;border-radius:var(--radius-sm);background:var(--grad);color:#fff;font-weight:700;
+  font-size:var(--fs-15);box-shadow:0 6px 18px rgba(122,92,255,.4);transition:.2s var(--ease)}
+.auth-btn:hover{transform:translateY(-1px);box-shadow:0 9px 24px rgba(122,92,255,.5)}
+.auth-hint{margin-top:var(--sp-4);font-size:var(--fs-12);color:var(--faint);text-align:center;line-height:1.6}
+.auth-err{color:var(--err);font-size:var(--fs-12);text-align:center;min-height:16px;margin-top:6px}
+
+/* ============ 顶栏 ============ */
+.topbar{height:var(--top-h);display:flex;align-items:center;gap:var(--sp-4);
+  padding:0 var(--sp-4);background:color-mix(in srgb,var(--panel) 80%,transparent);
+  backdrop-filter:blur(18px);border-bottom:1px solid var(--border);position:relative;z-index:30}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:var(--fs-15);letter-spacing:.3px}
+.brand .logo{width:30px;height:30px;border-radius:9px;background:var(--grad);display:grid;place-items:center;color:#fff;font-size:15px;box-shadow:0 4px 14px rgba(79,124,255,.45)}
+.topbar .spacer{flex:1}
+.icon-btn{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:16px;color:var(--muted);border:1px solid transparent;transition:.2s}
+.icon-btn:hover{background:var(--panel-2);border-color:var(--border)}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--grad);display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;cursor:pointer}
+
+/* ============ 布局 ============ */
+.layout{display:flex;height:calc(100vh - var(--top-h))}
+.sidebar{width:var(--sidebar-w);flex:0 0 var(--sidebar-w);background:var(--panel);border-right:1px solid var(--border);
+  padding:var(--sp-4) var(--sp-3);display:flex;flex-direction:column;gap:4px;overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);color:var(--muted);
+  font-weight:600;font-size:var(--fs-14);transition:.2s;cursor:pointer;border:1px solid transparent}
+.nav-item:hover{background:var(--panel-2);color:var(--ink)}
+.nav-item.active{background:color-mix(in srgb,var(--brand) 12%,transparent);color:var(--brand);border-color:color-mix(in srgb,var(--brand) 25%,transparent)}
+.nav-item .ic{font-size:17px;width:20px;text-align:center}
+.sidebar .spacer{flex:1}
+.main{flex:1;overflow-y:auto;padding:var(--sp-6)}
+.view{display:none}
+.view.active{display:block;animation:fade .35s var(--ease)}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.section-h{display:flex;align-items:center;justify-content:space-between;margin:0 0 var(--sp-4)}
+.section-h h3{font-size:var(--fs-18);font-weight:800}
+.btn{font-size:var(--fs-13);font-weight:700;padding:8px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);
+  background:var(--panel-2);color:var(--ink);transition:.2s}
+.btn:hover{border-color:var(--brand);color:var(--brand)}
+.btn.primary{background:var(--grad);color:#fff;border:none;box-shadow:0 4px 14px rgba(122,92,255,.35)}
+.btn.primary:hover{transform:translateY(-1px);box-shadow:0 7px 20px rgba(122,92,255,.45)}
+.btn.ghost{background:transparent}
+
+/* ============ 卡片 ============ */
+.grid{display:grid;gap:var(--sp-4)}
+.grid.cols-2{grid-template-columns:repeat(2,1fr)}
+.grid.cols-3{grid-template-columns:repeat(3,1fr)}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-4);
+  box-shadow:var(--shadow-sm);transition:.25s var(--ease)}
+.card:hover{box-shadow:var(--shadow);transform:translateY(-2px)}
+.stat{display:flex;flex-direction:column;gap:4px}
+.stat .n{font-size:var(--fs-28);font-weight:800;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.stat .l{color:var(--muted);font-size:var(--fs-13)}
+
+/* ============ 表单 ============ */
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:var(--sp-4)}
+.field label{font-size:var(--fs-13);font-weight:700;color:var(--muted)}
+.field input,.field textarea,.field select{width:100%;padding:11px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--panel-2);outline:none;transition:.2s;resize:vertical}
+.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(79,124,255,.15)}
+.field textarea{min-height:90px}
+.row{display:flex;gap:var(--sp-3);flex-wrap:wrap}
+.row > *{flex:1;min-width:160px}
+
+/* ============ 列表/表 ============ */
+.list{display:flex;flex-direction:column;gap:var(--sp-2)}
+.item{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--panel-2);transition:.2s}
+.item:hover{border-color:var(--brand)}
+.item .thumb{width:54px;height:54px;border-radius:8px;background:var(--grad);flex:0 0 54px;display:grid;place-items:center;color:#fff;font-size:20px}
+.item .meta{flex:1;min-width:0}
+.item .meta .t{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .meta .s{color:var(--muted);font-size:var(--fs-12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag{font-size:var(--fs-12);padding:3px 9px;border-radius:999px;font-weight:700}
+.tag.ok{background:rgba(25,181,106,.14);color:var(--ok)}
+.tag.warn{background:rgba(240,160,32,.16);color:var(--warn)}
+.tag.err{background:rgba(239,77,94,.14);color:var(--err)}
+.tag.muted{background:var(--panel);color:var(--muted)}
+
+/* ============ 队列 ============ */
+.q-item{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-2)}
+.bar{height:7px;border-radius:7px;background:var(--border);overflow:hidden;flex:1}
+.bar i{display:block;height:100%;background:var(--grad);border-radius:7px;transition:width .4s var(--ease)}
+
+/* ============ toast ============ */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);z-index:60;
+  background:var(--ink);color:var(--panel);padding:11px 18px;border-radius:999px;font-size:var(--fs-13);font-weight:600;
+  box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:.3s var(--ease)}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ============ 加载态 ============ */
+.loading{padding:var(--sp-8);text-align:center;color:var(--muted)}
+.spin{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--brand);border-radius:50%;animation:sp 1s linear infinite;vertical-align:middle;margin-right:8px}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* ============ 响应式 ============ */
+@media (max-width:860px){
+  .sidebar{position:fixed;left:0;top:var(--top-h);bottom:0;z-index:40;transform:translateX(-100%);transition:.3s var(--ease)}
+  .sidebar.open{transform:none}
+  .grid.cols-2,.grid.cols-3{grid-template-columns:1fr}
+  .menu-toggle{display:grid !important}
+}
+.menu-toggle{display:none;width:36px;height:36px;border-radius:10px;place-items:center;font-size:18px;color:var(--muted);border:1px solid var(--border)}
+</style>
+</head>
+<body>
+
+<!-- 登录闸门 -->
+<div id="authScreen">
+  <div class="auth-card">
+    <div class="auth-logo">慧</div>
+    <div class="auth-title">数字人视频工作台</div>
+    <div class="auth-sub">慧根堂 · 企业内容生产平台</div>
+    <form class="auth-form" onsubmit="return doLogin(event)">
+      <input id="tokenInput" type="password" placeholder="访问口令（粘贴 hgt- 开头的令牌）" autocomplete="off">
+      <button class="auth-btn" type="submit">进入工作台</button>
+      <div class="auth-err" id="authErr"></div>
+    </form>
+    <div class="auth-hint">口令由管理员通过 <code>.access_token</code> 文件提供<br>输入即本地保存，下次免输</div>
+  </div>
+</div>
+
+<!-- 主界面 -->
+<div class="topbar" id="topbar" style="display:none">
+  <button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+  <div class="brand"><span class="logo">慧</span>慧根堂工作台</div>
+  <div class="spacer"></div>
+  <button class="icon-btn" id="themeBtn" title="切换明暗">🌗</button>
+  <div class="avatar" id="avatarBtn" title="账号">张</div>
+</div>
+
+<div class="layout" id="layout" style="display:none">
+  <aside class="sidebar" id="sidebar">
+    <div class="nav-item active" data-view="dashboard" onclick="goView('dashboard')"><span class="ic">📊</span>概览</div>
+    <div class="nav-item" data-view="studio" onclick="goView('studio')"><span class="ic">✍️</span>创作台</div>
+    <div class="nav-item" data-view="queue" onclick="goView('queue')"><span class="ic">⏳</span>渲染队列</div>
+    <div class="nav-item" data-view="videos" onclick="goView('videos')"><span class="ic">🎬</span>我的视频</div>
+    <div class="nav-item" data-view="avatars" onclick="goView('avatars')"><span class="ic">🧑</span>数字人</div>
+    <div class="nav-item" data-view="account" onclick="goView('account')"><span class="ic">⚙️</span>账号设置</div>
+    <div class="spacer"></div>
+    <div class="nav-item" onclick="logout()"><span class="ic">🚪</span>退出登录</div>
+  </aside>
+
+  <main class="main">
+    <!-- 概览 -->
+    <section class="view active" id="view-dashboard">
+      <div class="section-h"><h3>工作概览</h3></div>
+      <div class="grid cols-3" id="dashStats" style="margin-bottom:var(--sp-4)"></div>
+      <div class="section-h"><h3>最近项目</h3><button class="btn" onclick="goView('studio')">＋ 新建创作</button></div>
+      <div class="list" id="dashRecent"></div>
+    </section>
+
+    <!-- 创作台 -->
+    <section class="view" id="view-studio">
+      <div class="section-h"><h3>创作台</h3></div>
+      <div class="card" style="margin-bottom:var(--sp-4)">
+        <div class="field">
+          <label>① 联网选题（可选 · 自动联网搜热点并二创）</label>
+          <div class="row">
+            <input id="topicCat" placeholder="领域关键词，如：建筑行业 税务">
+            <input id="topicDir" placeholder="方向，如：老板最怕的稽查">
+            <select id="topicLen">
+              <option value="30秒">30秒</option><option value="1分钟">1分钟</option>
+              <option value="2分钟" selected>2分钟</option><option value="3分钟">3分钟</option>
+            </select>
+          </div>
+          <button class="btn primary" id="topicBtn" onclick="runTopic()" style="margin-top:8px">🔍 联网搜选题</button>
+        </div>
+        <div id="topicResult" class="loading" style="display:none"></div>
+      </div>
+
+      <div class="card" style="margin-bottom:var(--sp-4)">
+        <div class="field">
+          <label>② 脚本（改写 / 三段式 / 男女对话），可手动粘贴或选题后填入</label>
+          <textarea id="scriptOpen" placeholder="【开头】钩子，3-5秒抓住老板..." style="min-height:70px"></textarea>
+          <textarea id="scriptBody" placeholder="【正文】核心干货..." style="min-height:110px"></textarea>
+          <textarea id="scriptEnd" placeholder="【结尾】留资钩子，引导私信..." style="min-height:70px"></textarea>
+          <textarea id="scriptDialogue" placeholder="男女对话稿（可选）：&#10;女：...&#10;男：..." style="min-height:80px"></textarea>
+        </div>
+        <div class="row">
+          <div class="field" style="margin:0"><label>账号类型</label>
+            <select id="accountType">
+              <option>财税IP打造类</option><option>营销引流类</option><option>未分类</option>
+            </select>
+          </div>
+          <div class="field" style="margin:0"><label>目标时长(秒)</label>
+            <input id="targetSec" type="number" value="120">
+          </div>
+        </div>
+        <div style="display:flex;gap:var(--sp-3);flex-wrap:wrap;margin-top:8px">
+          <button class="btn" onclick="runRewrite()">📝 AI 改写润色</button>
+          <button class="btn" onclick="saveProject()">💾 保存草稿</button>
+          <button class="btn" onclick="goView('videos')">📁 我的项目</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-h" style="margin:0 0 12px"><h3 style="font-size:var(--fs-15)">③ 出片</h3></div>
+        <div class="row">
+          <div class="field" style="margin:0"><label>数字人模特</label><select id="modelSel"></select></div>
+          <div class="field" style="margin:0"><label>背景</label>
+            <select id="bgSel"><option value="">默认海景</option></select></div>
+        </div>
+        <div class="field"><label>视频标题（滚动字幕卡用）</label><input id="videoTitle" placeholder="如：建筑老板必看的三大税务雷区"></div>
+        <div class="field"><label>副标题（可选）</label><input id="videoSubtitle" placeholder="如：老张讲财税"></div>
+        <div style="display:flex;gap:var(--sp-3);flex-wrap:wrap">
+          <button class="btn" onclick="runTTS()">🔊 生成音频</button>
+          <button class="btn primary" onclick="runRender()">🚀 一键出片</button>
+          <button class="btn ghost" onclick="goView('queue')">查看队列</button>
+        </div>
+        <div id="studioMsg" class="auth-err" style="color:var(--muted);text-align:left"></div>
+      </div>
+    </section>
+
+    <!-- 渲染队列 -->
+    <section class="view" id="view-queue">
+      <div class="section-h"><h3>渲染队列</h3><button class="btn" onclick="loadQueue()">🔄 刷新</button></div>
+      <div class="list" id="queueList"></div>
+    </section>
+
+    <!-- 我的视频 -->
+    <section class="view" id="view-videos">
+      <div class="section-h"><h3>我的视频</h3><button class="btn primary" onclick="goView('studio')">＋ 新建创作</button></div>
+      <div class="list" id="videoList"></div>
+    </section>
+
+    <!-- 数字人 -->
+    <section class="view" id="view-avatars">
+      <div class="section-h"><h3>数字人模特</h3></div>
+      <div class="grid cols-3" id="avatarList"></div>
+    </section>
+
+    <!-- 账号设置 -->
+    <section class="view" id="view-account">
+      <div class="section-h"><h3>账号设置</h3></div>
+      <div class="card" style="max-width:520px">
+        <div class="field"><label>账号</label><input value="张德富（管理员）" disabled></div>
+        <div class="field"><label>工作空间</label><input value="慧根堂主空间" disabled></div>
+        <div class="field"><label>访问口令</label>
+          <div class="row" style="align-items:flex-end">
+            <input id="tokenView" disabled>
+            <button class="btn" onclick="copyToken()">复制</button>
+          </div>
+        </div>
+        <div class="field"><label>主题</label>
+          <button class="btn" id="themeBtn2" onclick="toggleTheme()">切换明暗主题</button>
+        </div>
+        <p class="auth-hint" style="text-align:left">当前为单机内测版，多用户注册与计费将于正式商用版上线。</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ===== 统一 API 层（同域，自动带令牌 cookie，零改 fetch） ===== */
+const API = (path, opts = {}) => {
+  opts.headers = Object.assign({"Content-Type": "application/json"}, opts.headers || {});
+  return fetch(path, opts).then(r => {
+    if (r.status === 401) { // 令牌失效 → 回登录
+      document.getElementById("authScreen").style.display = "grid";
+      document.getElementById("topbar").style.display = "none";
+      document.getElementById("layout").style.display = "none";
+      throw new Error("unauthorized");
+    }
+    return r.json();
+  });
+};
+const POST = (p, body) => API(p, {method: "POST", body: JSON.stringify(body || {})});
+
+/* ===== 令牌闸门 ===== */
+function doLogin(e){
+  e.preventDefault();
+  const v = document.getElementById("tokenInput").value.trim();
+  if(!v){ document.getElementById("authErr").textContent = "请输入口令"; return false; }
+  // 写 cookie 给后端鉴权用
+  document.cookie = "hgtv2_token=" + v + "; path=/; max-age=2592000; samesite=lax";
+  // 验证一次
+  API("/api/projects").then(d => {
+    if(d.error === "unauthorized"){ document.getElementById("authErr").textContent = "口令错误"; return; }
+    enterApp();
+  }).catch(err => { if(err.message !== "unauthorized") document.getElementById("authErr").textContent = "连接失败，确认服务已启动"; });
+  return false;
+}
+function enterApp(){
+  document.getElementById("authScreen").style.display = "none";
+  document.getElementById("topbar").style.display = "flex";
+  document.getElementById("layout").style.display = "flex";
+  document.getElementById("tokenView").value = (document.cookie.match(/hgtv2_token=([^;]+)/)||[])[1] || "";
+  loadAll();
+}
+function logout(){
+  document.cookie = "hgtv2_token=; path=/; max-age=0";
+  document.getElementById("authScreen").style.display = "grid";
+  document.getElementById("topbar").style.display = "none";
+  document.getElementById("layout").style.display = "none";
+}
+function copyToken(){ const t=document.getElementById("tokenView").value; if(t){navigator.clipboard.writeText(t); toast("已复制口令");} }
+
+/* ===== 主题 ===== */
+const THEME_KEY = "hgt-theme";
+function applyTheme(t){ document.documentElement.setAttribute("data-theme", t); }
+function toggleTheme(){
+  const cur = document.documentElement.getAttribute("data-theme");
+  const next = cur === "dark" ? "light" : "dark";
+  applyTheme(next); localStorage.setItem(THEME_KEY, next);
+}
+(function(){ const saved = localStorage.getItem(THEME_KEY) || "light"; applyTheme(saved); })();
+document.getElementById("themeBtn").onclick = toggleTheme;
+
+/* ===== 导航 ===== */
+function goView(v){
+  document.querySelectorAll(".nav-item[data-view]").forEach(n => n.classList.toggle("active", n.dataset.view === v));
+  document.querySelectorAll(".view").forEach(s => s.classList.remove("active"));
+  const el = document.getElementById("view-" + v);
+  if(el) el.classList.add("active");
+  document.querySelector(".sidebar").classList.remove("open");
+  if(v === "dashboard") loadDashboard();
+  if(v === "videos") loadVideos();
+  if(v === "avatars") loadAvatars();
+  if(v === "queue") loadQueue();
+}
+
+/* ===== toast ===== */
+let toastTimer;
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2400);
+}
+
+/* ===== 时间格式化 ===== */
+function fmtTime(ts){ if(!ts) return ""; const d = new Date(ts*1000); const p=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+function esc(s){ return String(s||"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* ===== 数据加载 ===== */
+function loadAll(){ loadDashboard(); loadModels(); loadBgs(); }
+
+function loadDashboard(){
+  API("/api/projects").then(list => {
+    if(!Array.isArray(list)) return;
+    const total = list.length;
+    const withVideo = list.filter(p => p.video).length;
+    const withAudio = list.filter(p => p.audio).length;
+    document.getElementById("dashStats").innerHTML = `
+      <div class="card stat"><span class="n">${total}</span><span class="l">项目总数</span></div>
+      <div class="card stat"><span class="n">${withAudio}</span><span class="l">已生成音频</span></div>
+      <div class="card stat"><span class="n">${withVideo}</span><span class="l">已出片</span></div>`;
+    const recent = list.slice(0, 8);
+    document.getElementById("dashRecent").innerHTML = recent.length ? recent.map(p => `
+      <div class="item">
+        <div class="thumb">🎬</div>
+        <div class="meta"><div class="t">${esc(p.name)}</div>
+          <div class="s">${fmtTime(p.mtime)} · ${esc(p.account_type)}</div></div>
+        <span class="tag ${p.video?'ok':(p.audio?'warn':'muted')}">${p.video?'已出片':(p.audio?'已配音':'草稿')}</span>
+        <button class="btn" onclick="goView('studio')">打开</button>
+      </div>`).join("") : `<div class="loading">还没有项目，去创作台新建一个吧</div>`;
+  }).catch(()=>{});
+}
+
+function loadVideos(){
+  API("/api/projects").then(list => {
+    if(!Array.isArray(list)) return;
+    const el = document.getElementById("videoList");
+    if(!list.length){ el.innerHTML = `<div class="loading">暂无视频，去创作台出片</div>`; return; }
+    el.innerHTML = list.map(p => `
+      <div class="item">
+        <div class="thumb">🎬</div>
+        <div class="meta"><div class="t">${esc(p.name)}</div>
+          <div class="s">${fmtTime(p.mtime)} · ${esc(p.account_type)} · 违规高${p.high}/中${p.med}</div></div>
+        ${p.video ? `<button class="btn primary" onclick="window.open('/api/video/${encodeURIComponent(p.name)}.mp4','_blank')">▶ 播放</button>` : (p.audio ? `<span class="tag warn">待出片</span>` : `<span class="tag muted">草稿</span>`)}
+      </div>`).join("");
+  }).catch(()=>{});
+}
+
+function loadAvatars(){
+  API("/api/models").then(list => {
+    if(!Array.isArray(list)) return;
+    document.getElementById("avatarList").innerHTML = list.map(m => `
+      <div class="card">
+        <div class="thumb" style="width:100%;height:120px;border-radius:var(--radius-sm);margin-bottom:10px;font-size:40px">🧑</div>
+        <div class="t" style="font-weight:700">${esc(m.label)}</div>
+        <div class="s" style="color:var(--muted);font-size:var(--fs-12)">${m.size_mb} MB</div>
+      </div>`).join("");
+  }).catch(()=>{});
+}
+
+function loadModels(){
+  API("/api/models").then(list => {
+    if(!Array.isArray(list)) return;
+    const sel = document.getElementById("modelSel");
+    sel.innerHTML = list.map(m => `<option value="${esc(m.id)}">${esc(m.label)}</option>`).join("");
+  }).catch(()=>{});
+}
+function loadBgs(){
+  API("/api/bg_list").then(d => {
+    if(!d || !Array.isArray(d.items)) return;
+    const sel = document.getElementById("bgSel");
+    sel.innerHTML = `<option value="">默认海景</option>` + d.items.map(b => `<option value="${esc(b.id||b.name||'')}">${esc(b.name||b.id||'背景')}</option>`).join("");
+  }).catch(()=>{});
+}
+
+/* ===== 创作台动作 ===== */
+function runTopic(){
+  const btn = document.getElementById("topicBtn");
+  btn.disabled = true; btn.textContent = "🔍 搜索中...";
+  const box = document.getElementById("topicResult");
+  box.style.display = "block"; box.innerHTML = `<span class="spin"></span>联网检索选题中...`;
+  POST("/api/topic_search", {
+    category: document.getElementById("topicCat").value,
+    direction: document.getElementById("topicDir").value,
+    length: document.getElementById("topicLen").value,
+    target_seconds: 0,
+    mode: "list"
+  }).then(d => {
+    btn.disabled = false; btn.textContent = "🔍 联网搜选题";
+    if(!d || d.error){ box.innerHTML = `<span style="color:var(--err)">${esc(d&&d.error||'检索失败')}</span>`; return; }
+    const topics = (d.topics || []).slice(0, 6);
+    if(!topics.length){ box.innerHTML = `<span class="auth-err" style="color:var(--muted)">未找到相关选题，换个关键词试试</span>`; return; }
+    box.innerHTML = `<div style="font-weight:700;margin-bottom:8px">为你找到 ${topics.length} 个选题：</div>` + topics.map((t,i)=>`
+      <div class="item" style="cursor:pointer" onclick="pickTopic(${i}, ${JSON.stringify(topics).replace(/"/g,'&quot;')})">
+        <div class="thumb">${esc((t.relevance||0))}</div>
+        <div class="meta"><div class="t">${esc(t.title)}</div>
+          <div class="s">${esc(t.summary||'')}</div></div>
+        <span class="tag muted">采用</span>
+      </div>`).join("");
+  }).catch(()=>{ btn.disabled=false; btn.textContent="🔍 联网搜选题"; box.innerHTML=`<span style="color:var(--err)">连接失败</span>`; });
+}
+function pickTopic(i, topics){
+  const t = topics[i];
+  if(t && t.title){ document.getElementById("scriptOpen").value = t.title; }
+  if(t && t.summary){ document.getElementById("scriptBody").value = t.summary; }
+  toast("已填入选题，可继续补充脚本");
+}
+
+function runRewrite(){
+  const msg = document.getElementById("studioMsg");
+  msg.textContent = "AI 改写中...";
+  POST("/api/rewrite", {
+    opening: document.getElementById("scriptOpen").value,
+    body: document.getElementById("scriptBody").value,
+    ending: document.getElementById("scriptEnd").value,
+    topic: document.getElementById("scriptOpen").value,
+    target_seconds: parseFloat(document.getElementById("targetSec").value || 120),
+    account_type: document.getElementById("accountType").value
+  }).then(d => {
+    if(d && d.ok && d.result){
+      const r = d.result;
+      if(r.opening) document.getElementById("scriptOpen").value = r.opening;
+      if(r.body) document.getElementById("scriptBody").value = r.body;
+      if(r.ending) document.getElementById("scriptEnd").value = r.ending;
+      if(r.dialogue) document.getElementById("scriptDialogue").value = r.dialogue;
+      msg.textContent = "改写完成 ✅";
+    } else {
+      msg.textContent = "改写失败：" + esc(d && d.error || "未知错误");
+    }
+  }).catch(()=>{ msg.textContent="连接失败"; });
+}
+
+let currentName = "";
+function saveProject(){
+  const msg = document.getElementById("studioMsg");
+  const title = (document.getElementById("scriptOpen").value || "草稿").slice(0,30);
+  // 用标题做项目名（简化：时间戳防重）
+  currentName = "p_" + Date.now();
+  POST("/api/project/" + encodeURIComponent(currentName) + "/save", {
+    opening: document.getElementById("scriptOpen").value,
+    body: document.getElementById("scriptBody").value,
+    ending: document.getElementById("scriptEnd").value,
+    dialogue: document.getElementById("scriptDialogue").value
+  }).then(d => {
+    msg.textContent = d && d.ok ? ("已保存：" + currentName) : ("保存失败：" + esc(d&&d.error||""));
+    loadDashboard();
+  }).catch(()=>{ msg.textContent="连接失败"; });
+}
+
+function runTTS(){
+  const msg = document.getElementById("studioMsg");
+  if(!currentName){ saveProject(); }
+  msg.textContent = "生成音频中...";
+  const dlg = document.getElementById("scriptDialogue").value.trim();
+  const ep = "/api/project/" + encodeURIComponent(currentName) + (dlg ? "/tts_dialogue" : "/tts");
+  const body = dlg ? {dialogue: dlg} : {
+    opening: document.getElementById("scriptOpen").value,
+    body: document.getElementById("scriptBody").value,
+    ending: document.getElementById("scriptEnd").value
+  };
+  POST(ep, body).then(d => {
+    msg.textContent = d && d.ok ? "音频已生成 ✅（可在我的视频查看）" : ("音频失败：" + esc(d&&d.error||""));
+    loadDashboard();
+  }).catch(()=>{ msg.textContent="连接失败"; });
+}
+
+function runRender(){
+  const msg = document.getElementById("studioMsg");
+  if(!currentName){ saveProject(); }
+  msg.textContent = "提交出片任务...";
+  POST("/api/project/" + encodeURIComponent(currentName) + "/render", {
+    model: document.getElementById("modelSel").value,
+    provider: "heygem",
+    bg: document.getElementById("bgSel").value || null,
+    title: document.getElementById("videoTitle").value || null,
+    subtitle: document.getElementById("videoSubtitle").value || null,
+    voice_mode: "official"
+  }).then(d => {
+    if(d && d.ok){ msg.textContent = "已加入渲染队列 🚀"; toast("出片任务已提交"); loadQueue(); }
+    else msg.textContent = "出片失败：" + esc(d&&d.error||"");
+  }).catch(()=>{ msg.textContent="连接失败"; });
+}
+
+/* ===== 队列 ===== */
+function loadQueue(){
+  API("/api/queue").then(d => {
+    const el = document.getElementById("queueList");
+    const items = (d && d.queue) || [];
+    if(!items.length){ el.innerHTML = `<div class="loading">队列为空</div>`; return; }
+    el.innerHTML = items.map(q => {
+      const pct = q.progress != null ? Math.round(q.progress*100) : (q.status==="done"?100:5);
+      const label = {pending:"排队中",running:"渲染中",done:"完成",error:"失败"}[q.status]||q.status;
+      return `<div class="q-item">
+        <div class="thumb" style="width:40px;height:40px;flex:0 0 40px;font-size:16px">🎬</div>
+        <div class="meta" style="flex:1"><div class="t" style="font-weight:700">${esc(q.name||q.id)}</div>
+          <div class="s" style="color:var(--muted);font-size:var(--fs-12)">${label}</div></div>
+        <div class="bar"><i style="width:${pct}%"></i></div>
+        <span class="tag ${q.status==='done'?'ok':(q.status==='error'?'err':'warn')}">${pct}%</span>
+      </div>`;
+    }).join("");
+  }).catch(()=>{});
+}
+
+/* ===== 启动：若已有令牌 cookie 直接进 ===== */
+(function(){
+  const has = /hgtv2_token=([^;]+)/.test(document.cookie);
+  if(has){ API("/api/projects").then(d => { if(!(d&&d.error==="unauthorized")) enterApp(); }).catch(()=>{}); }
+})();
+</script>
+</body>
+</html>

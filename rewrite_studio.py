@@ -42,6 +42,7 @@ FACE = ROOT / "face2face"
 
 PORT = 8385
 HTML_FILE = BASE / "rewrite_studio.html"
+APP_FILE = BASE / "app.html"   # 商用化新前端（接真实接口，顶替老界面皮肤）
 PY310 = r"D:/heygem/py310/Scripts/python.exe"      # 出片网关线用 py310
 MAKE_AVATAR = BASE / "make_avatar_video.py"
 MAKE_SCROLL = BASE / "make_scroll_video.py"          # 不出镜·滚动字幕卡（男女对话）
@@ -1021,6 +1022,21 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _send_html_app(self):
+        if not APP_FILE.exists():
+            self._send_json({"error": "app.html 未部署"}, 404)
+            return
+        html = APP_FILE.read_text(encoding="utf-8")
+        data = html.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+        self.end_headers()
+        self.wfile.write(data)
+
     def _send_file(self, path: Path, mime: str):
         if not path.exists():
             self._send_json({"error": "not found"}, 404)
@@ -1089,6 +1105,9 @@ class Handler(BaseHTTPRequestHandler):
                         "ico":"image/x-icon"}.get(ext.lstrip("."), "application/octet-stream")
                 return self._send_file(fp, mime)
             return self._send_json({"error": "not found"}, 404)
+        # 商用化新前端入口（同域 serve，令牌 cookie 自动生效，零跨域）
+        if path in ("/app", "/app/"):
+            return self._send_html_app()
         if path == "/api/projects":
             return self._send_json(list_projects())
         if path == "/api/guidance":
