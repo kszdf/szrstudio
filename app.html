@@ -179,7 +179,7 @@ input,textarea,select{font-family:inherit;font-size:var(--fs-14);color:var(--ink
 <!-- 主界面 -->
 <div class="topbar" id="topbar" style="display:none">
   <button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
-  <div class="brand"><span class="logo">慧</span>慧根堂工作台</div>
+  <div class="brand"><span class="logo">慧</span>慧根堂工作台 <span style="font-size:10px;opacity:.5">v2026.07.30.2</span></div>
   <div class="spacer"></div>
   <button class="icon-btn" id="themeBtn" title="切换明暗">🌗</button>
   <div class="avatar" id="avatarBtn" title="账号">张</div>
@@ -310,6 +310,16 @@ input,textarea,select{font-family:inherit;font-size:var(--fs-14);color:var(--ink
 <div id="toast"></div>
 
 <script>
+/* ===== 全局错误兜底：任何 JS 报错/网络失败都显示到页面顶部，不再静默无反应 ===== */
+function showFatal(msg){
+  let bar = document.getElementById("fatalBar");
+  if(!bar){ bar = document.createElement("div"); bar.id="fatalBar";
+    bar.style.cssText="position:fixed;left:0;right:0;top:0;z-index:99999;background:#e5484d;color:#fff;padding:10px 16px;font-size:14px;line-height:1.4;box-shadow:0 2px 10px rgba(0,0,0,.25)";
+    document.body.appendChild(bar); }
+  bar.textContent = "⚠️ " + msg;
+}
+window.onerror = function(m, src, line){ showFatal("页面脚本错误：" + m + "（行" + line + "）"); return false; };
+
 /* ===== 统一 API 层（同域，自动带令牌 cookie，零改 fetch） ===== */
 const API = (path, opts = {}) => {
   opts.headers = Object.assign({"Content-Type": "application/json"}, opts.headers || {});
@@ -320,7 +330,11 @@ const API = (path, opts = {}) => {
       document.getElementById("layout").style.display = "none";
       throw new Error("unauthorized");
     }
-    return r.json();
+    return r.json().catch(()=>({error:"response_not_json"}));
+  }).catch(err => {
+    if(err.message === "unauthorized") throw err;
+    showFatal("网络请求失败（" + err.message + "）：请确认通过 http://localhost:8385/app 访问、且服务已重启");
+    throw err;
   });
 };
 const POST = (p, body) => API(p, {method: "POST", body: JSON.stringify(body || {})});
