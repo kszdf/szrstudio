@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>慧根堂短视频生产工作台 · Web 优化原型 · UI Designer</title>
+<style>
+  /* ====== 设计令牌（对齐现有 8385 + 扩展） ====== */
+  :root{
+    --bg:#f4f6fb; --panel:#fff; --surface:#f7f9fc; --surface-2:#eef2f8;
+    --border:#e7ebf2; --ink:#16202e; --muted:#69748a; --muted-l:#9aa4b2;
+    --blue:#2f54eb; --blue-d:#1d3ab8; --blue-l:#eef2ff;
+    --hi:#e5484d; --med:#a9790a;
+    --green:#15a05a; --green-l:#ecfdf3;
+    --red:#e23b3b; --amber:#d98a06; --amber-l:#fff7e6;
+    --coin:#d98a06; /* 商业化/收益 */
+    --step-on:#1d3ab8; --step-done:#15a05a; --step-todo:#9aa4b2;
+    --radius:14px; --radius-lg:18px; --radius-sm:10px;
+    --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+    --shadow-sm:0 1px 3px rgba(16,24,40,.08);
+    --shadow-md:0 6px 20px rgba(16,24,40,.10);
+    --shadow-lg:0 18px 48px rgba(16,24,40,.16);
+    --fs-12:12px;--fs-13:13px;--fs-14:14px;--fs-16:16px;--fs-18:18px;--fs-20:20px;--fs-24:24px;--fs-28:28px;--fs-34:34px;
+    --sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:20px;--sp-6:24px;--sp-8:32px;--sp-10:40px;--sp-12:48px;
+    --e:200ms cubic-bezier(.22,1,.36,1);
+    --font:"Microsoft YaHei","PingFang SC",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --top-h:60px;
+  }
+  html[data-theme="dark"]{
+    --bg:#0e1117; --panel:#161b24; --surface:#1b212c; --surface-2:#222a37;
+    --border:#283042; --ink:#eef2f8; --muted:#9aa6b8; --muted-l:#6c7689;
+    --blue:#5b7cff; --blue-d:#8aa2ff; --blue-l:#1a2240;
+    --green:#2fbf77; --green-l:#10241a;
+    --coin:#f0b43a;
+    --step-on:#8aa2ff; --step-done:#2fbf77; --step-todo:#5a6577;
+    --shadow-sm:0 1px 3px rgba(0,0,0,.4);
+    --shadow-md:0 6px 20px rgba(0,0,0,.5);
+    --shadow-lg:0 18px 48px rgba(0,0,0,.6);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:var(--font);background:var(--bg);color:var(--ink);font-size:var(--fs-14);-webkit-font-smoothing:antialiased;}
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px;}
+  button{font-family:inherit;cursor:pointer;}
+
+  /* ====== 顶部品牌栏 ====== */
+  .topbar{height:var(--top-h);background:linear-gradient(100deg,#15233f,#1d3ab8 55%,#2f54eb);color:#fff;
+    display:flex;align-items:center;gap:var(--sp-4);padding:0 var(--sp-6);position:sticky;top:0;z-index:50;box-shadow:var(--shadow-sm);}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:var(--fs-18);letter-spacing:.5px;white-space:nowrap;}
+  .brand .logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#ff7a3c,#ffb020);display:flex;align-items:center;justify-content:center;font-size:16px;}
+  .brand small{font-weight:500;font-size:11px;opacity:.8;display:block;line-height:1;}
+  .topnav{display:flex;gap:4px;margin-left:var(--sp-4);}
+  .topnav a{padding:8px 14px;border-radius:var(--radius-sm);font-size:var(--fs-14);font-weight:600;color:rgba(255,255,255,.82);cursor:pointer;transition:var(--e);text-decoration:none;}
+  .topnav a:hover{background:rgba(255,255,255,.12);color:#fff;}
+  .topnav a.on{background:#fff;color:var(--blue-d);}
+  .top-right{margin-left:auto;display:flex;align-items:center;gap:var(--sp-3);}
+  .proj-switch{position:relative;}
+  .proj-cur{display:flex;align-items:center;gap:8px;padding:7px 12px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:10px;color:#fff;font-weight:600;font-size:var(--fs-13);max-width:280px;cursor:pointer;}
+  .proj-cur .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px;}
+  .status-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;font-size:var(--fs-13);font-weight:700;background:rgba(47,160,90,.2);color:#bff5d6;border:1px solid rgba(47,160,90,.4);cursor:pointer;}
+  .status-pill.warn{background:rgba(217,138,6,.2);color:#ffe1a6;border-color:rgba(217,138,6,.4);}
+  .icon-btn{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;transition:var(--e);}
+  .icon-btn:hover{background:rgba(255,255,255,.24);}
+
+  /* ====== 页面容器 ====== */
+  .page{max-width:1480px;margin:0 auto;padding:var(--sp-6);}
+  .view{display:none;}
+  .view.active{display:block;animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* ====== 首页：作品 + 模特库 ====== */
+  .hero{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:var(--sp-4);margin-bottom:var(--sp-6);}
+  .hero-card{position:relative;border-radius:var(--radius-lg);overflow:hidden;padding:var(--sp-6);color:#fff;min-height:150px;display:flex;flex-direction:column;justify-content:flex-end;cursor:pointer;box-shadow:var(--shadow-md);transition:var(--e);}
+  .hero-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);}
+  .hero-card.h1{background:linear-gradient(135deg,#1d3ab8,#2f54eb);}
+  .hero-card.h2{background:linear-gradient(135deg,#d98a06,#f0b43a);}
+  .hero-card.h3{background:linear-gradient(135deg,#15a05a,#2fbf77);}
+  .hero-card .hl{font-size:var(--fs-20);font-weight:800;margin-bottom:6px;}
+  .hero-card .hd{font-size:var(--fs-13);opacity:.9;line-height:1.5;}
+  .hero-card .ill{position:absolute;right:14px;top:10px;font-size:54px;opacity:.25;}
+
+  .section-head{display:flex;align-items:center;gap:var(--sp-3);margin:var(--sp-6) 0 var(--sp-4);}
+  .section-head h2{font-size:var(--fs-20);font-weight:800;margin:0;display:flex;align-items:center;gap:8px;}
+  .section-head .ct{font-size:var(--fs-13);font-weight:700;color:var(--blue-d);background:var(--blue-l);padding:2px 10px;border-radius:999px;}
+  .section-head .spacer{margin-left:auto;}
+  .search-inp{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:999px;padding:9px 14px;min-width:240px;color:var(--muted);font-size:var(--fs-13);}
+  .search-inp input{border:none;outline:none;background:transparent;color:var(--ink);font-size:var(--fs-14);width:100%;}
+  .chip-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:var(--sp-4);}
+  .chip{padding:7px 14px;border-radius:999px;background:var(--surface);border:1px solid var(--border);color:var(--muted);font-size:var(--fs-13);font-weight:600;cursor:pointer;transition:var(--e);}
+  .chip.on{background:var(--blue);color:#fff;border-color:var(--blue);}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:var(--sp-4);}
+  .g-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-xs);transition:var(--e);cursor:pointer;display:flex;flex-direction:column;}
+  .g-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--blue-l);}
+  .g-thumb{aspect-ratio:9/12;background:linear-gradient(160deg,#22304f,#101826);position:relative;display:flex;align-items:center;justify-content:center;color:#fff;font-size:34px;opacity:.9;}
+  .g-thumb .dur{position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.6);border-radius:6px;padding:2px 6px;font-size:11px;font-weight:700;}
+  .g-thumb .status{position:absolute;left:8px;top:8px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:rgba(47,160,90,.9);}
+  .g-body{padding:12px 13px 14px;}
+  .g-title{font-size:var(--fs-14);font-weight:700;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:8px;min-height:38px;}
+  .g-meta{display:flex;align-items:center;justify-content:space-between;font-size:var(--fs-12);color:var(--muted);}
+  .g-meta .acct{display:flex;align-items:center;gap:5px;}
+  .g-meta .acct .av{width:18px;height:18px;border-radius:50%;background:var(--blue-l);}
+
+  /* ====== 工作室三栏 ====== */
+  .studio{display:grid;grid-template-columns:1fr 380px;gap:var(--sp-4);max-width:1480px;margin:0 auto;padding:var(--sp-4) var(--sp-6) var(--sp-10);align-items:start;}
+  .node-nav{grid-column:1/-1;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;box-shadow:var(--shadow-sm);position:sticky;top:calc(var(--top-h) + 8px);z-index:20;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .node-nav .steps{display:flex;gap:6px;flex-wrap:wrap;}
+  .node-nav li{list-style:none;display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;font-size:var(--fs-13);font-weight:600;color:var(--muted);background:var(--surface);border:1px solid var(--border);cursor:pointer;transition:var(--e);}
+  .node-nav li .dot{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:var(--surface-2);color:var(--muted);}
+  .node-nav li.done{color:var(--step-done);border-color:var(--green-l);}
+  .node-nav li.done .dot{background:var(--green);color:#fff;}
+  .node-nav li.on{color:#fff;background:var(--blue);border-color:var(--blue);}
+  .node-nav li.on .dot{background:#fff;color:var(--blue-d);}
+  .node-nav .auto-toggle{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:var(--fs-12);color:var(--muted);font-weight:600;}
+
+  .col-mid{min-width:0;}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-xs);padding:var(--sp-5);margin-bottom:var(--sp-4);}
+  .card h3{margin:0 0 var(--sp-3);font-size:var(--fs-18);font-weight:800;display:flex;align-items:center;gap:8px;}
+  .card .sub{font-size:var(--fs-13);color:var(--muted);font-weight:500;margin-bottom:var(--sp-4);}
+
+  /* 改写编辑器 */
+  .mode-switch{display:inline-flex;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:3px;margin-bottom:var(--sp-4);}
+  .mode-switch button{border:none;background:transparent;padding:8px 18px;border-radius:999px;font-weight:700;font-size:var(--fs-13);color:var(--muted);transition:var(--e);}
+  .mode-switch button.on{background:var(--blue);color:#fff;box-shadow:var(--shadow-sm);}
+  .seg{border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--sp-3);margin-bottom:var(--sp-3);background:var(--surface);}
+  .seg-label{display:flex;align-items:center;gap:8px;font-size:var(--fs-13);font-weight:700;margin-bottom:8px;}
+  .seg-label .tag{padding:2px 9px;border-radius:6px;font-size:11px;color:#fff;}
+  .seg-label .tag.open{background:#e5484d;} .seg-label .tag.body{background:var(--blue);} .seg-label .tag.end{background:#d98a06;}
+  .editarea{width:100%;min-height:88px;padding:var(--sp-3);border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--ink);font-family:inherit;font-size:var(--fs-14);line-height:1.7;resize:vertical;outline:none;}
+  html[data-theme="dark"] .editarea{background:var(--surface-2);}
+  .editarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-l);}
+  .hitlist{margin-top:6px;font-size:var(--fs-12);color:var(--hi);font-weight:600;}
+  .hit{display:inline-flex;align-items:center;gap:4px;background:var(--amber-l);color:var(--amber);padding:2px 8px;border-radius:6px;margin:3px 4px 0 0;border:1px solid #ffe2a8;}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:var(--sp-4) 0;padding-top:var(--sp-4);border-top:1px dashed var(--border);}
+  .btn{padding:10px 18px;border-radius:10px;font-weight:700;font-size:var(--fs-14);border:1px solid transparent;transition:var(--e);}
+  .btn.primary{background:var(--blue);color:#fff;box-shadow:0 4px 12px -2px rgba(47,84,235,.4);}
+  .btn.primary:hover{background:var(--blue-d);transform:translateY(-1px);}
+  .btn.secondary{background:var(--panel);color:var(--ink);border-color:var(--border);}
+  .btn.secondary:hover{background:var(--surface);}
+  .btn.coin{background:linear-gradient(135deg,#d98a06,#f0b43a);color:#fff;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+  .field{display:flex;align-items:center;gap:8px;font-size:var(--fs-13);color:var(--muted);}
+  .field input[type=number]{width:64px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;text-align:center;font-family:inherit;background:var(--panel);color:var(--ink);}
+
+  /* 右栏产物预览 */
+  .col-right{position:sticky;top:calc(var(--top-h) + 76px);display:flex;flex-direction:column;gap:var(--sp-4);}
+  .preview-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-xs);overflow:hidden;}
+  .preview-head{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border);font-weight:800;font-size:var(--fs-14);}
+  .preview-head .step-tag{margin-left:auto;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--blue-l);color:var(--blue-d);}
+  .video-box{aspect-ratio:9/16;background:linear-gradient(160deg,#22304f,#0c1422);display:flex;align-items:center;justify-content:center;color:#fff;position:relative;}
+  .video-box .play{width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.2);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;transition:var(--e);}
+  .video-box .play:hover{transform:scale(1.08);background:rgba(255,255,255,.32);}
+  .video-box .tip{position:absolute;bottom:10px;left:10px;font-size:11px;background:rgba(0,0,0,.5);padding:4px 8px;border-radius:6px;}
+  .preview-body{padding:12px 14px;display:flex;flex-direction:column;gap:10px;}
+  .pv-row{display:flex;align-items:center;justify-content:space-between;font-size:var(--fs-13);}
+  .pv-row .k{color:var(--muted);} .pv-row .v{font-weight:700;}
+  .prod-strip{display:flex;gap:8px;overflow-x:auto;padding:0 14px 14px;}
+  .prod-strip .p{flex:0 0 auto;width:88px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px;text-align:center;cursor:pointer;transition:var(--e);}
+  .prod-strip .p:hover{border-color:var(--coin);}
+  .prod-strip .p .pi{width:100%;aspect-ratio:1;border-radius:8px;background:linear-gradient(160deg,#3a2a14,#1a1a2e);margin-bottom:6px;}
+  .prod-strip .p .pp{font-size:12px;font-weight:800;color:var(--coin);}
+  .mini-audio{width:100%;}
+
+  /* ====== 发布出口 ====== */
+  .publish-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--sp-4);}
+  .pub-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-5);box-shadow:var(--shadow-xs);transition:var(--e);cursor:pointer;}
+  .pub-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--blue-l);}
+  .pub-card .pi{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;margin-bottom:12px;}
+  .pub-card h4{margin:0 0 6px;font-size:var(--fs-16);font-weight:800;}
+  .pub-card p{margin:0;font-size:var(--fs-13);color:var(--muted);line-height:1.5;}
+  .pub-card .stat{margin-top:10px;font-size:11px;font-weight:700;color:var(--green);}
+
+  /* ====== 项目/账号中心 ====== */
+  .center-grid{display:grid;grid-template-columns:300px 1fr;gap:var(--sp-6);}
+  .side-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-5);box-shadow:var(--shadow-xs);}
+  .avatar{width:84px;height:84px;border-radius:24px;background:linear-gradient(135deg,#ff7a3c,#ffb020);display:flex;align-items:center;justify-content:center;font-size:30px;color:#fff;font-weight:800;margin-bottom:12px;}
+  .side-card .nm{font-size:var(--fs-20);font-weight:800;display:flex;align-items:center;gap:6px;}
+  .side-card .uid{font-size:var(--fs-13);color:var(--muted);margin:4px 0 14px;}
+  .stat-row{display:flex;gap:var(--sp-4);margin:var(--sp-4) 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:14px 0;}
+  .stat-row .s{flex:1;text-align:center;}
+  .stat-row .s .v{font-size:var(--fs-20);font-weight:800;font-family:var(--font);}
+  .stat-row .s .l{font-size:11px;color:var(--muted);margin-top:2px;}
+  .acct-list .acct{display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;cursor:pointer;transition:var(--e);border:1px solid transparent;}
+  .acct-list .acct:hover{background:var(--surface);}
+  .acct-list .acct.on{border-color:var(--blue);background:var(--blue-l);}
+  .acct-list .acct .av{width:38px;height:38px;border-radius:10px;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--blue-d);}
+  .acct-list .acct .meta{flex:1;}
+  .acct-list .acct .meta .n{font-weight:700;font-size:var(--fs-14);}
+  .acct-list .acct .meta .t{font-size:11px;color:var(--muted);}
+  .earn-card{background:linear-gradient(135deg,#2a2012,#1c2433);border:1px solid rgba(240,180,58,.28);border-radius:var(--radius);padding:var(--sp-5);color:#fff;display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-4);}
+  .earn-card .el .l{font-size:12px;opacity:.8;} .earn-card .el .v{font-size:26px;font-weight:800;color:var(--coin);font-family:var(--font);margin-top:4px;}
+  .earn-card .eb{background:var(--coin);color:#1c1505;font-weight:800;padding:10px 16px;border-radius:999px;}
+
+  /* 主题切换浮钮 */
+  .theme-fab{position:fixed;right:20px;bottom:20px;z-index:60;display:flex;gap:8px;}
+  .theme-fab button{background:var(--panel);border:1px solid var(--border);color:var(--ink);box-shadow:var(--shadow-md);border-radius:10px;padding:10px 14px;font-weight:700;font-size:var(--fs-13);transition:var(--e);}
+  .theme-fab button:hover{border-color:var(--blue);}
+  .theme-fab button.on{background:var(--blue);color:#fff;border-color:var(--blue);}
+
+  /* toast */
+  #toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:rgba(22,32,46,.92);color:#fff;font-size:var(--fs-13);padding:11px 18px;border-radius:12px;z-index:80;opacity:0;transition:opacity .2s;pointer-events:none;}
+
+  /* ====== 剪辑台 ====== */
+  .clip{display:grid;grid-template-columns:210px 1fr 260px;gap:var(--sp-4);max-width:1480px;margin:0 auto;padding:var(--sp-4) var(--sp-6) var(--sp-10);align-items:start;}
+  .crumbs{display:flex;align-items:center;gap:8px;font-size:var(--fs-13);color:var(--muted);margin-bottom:var(--sp-4);font-weight:600;}
+  .crumbs b{color:var(--ink);}
+  .media-list{display:flex;flex-direction:column;gap:8px;}
+  .media-item{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--panel);cursor:pointer;transition:var(--e);font-size:var(--fs-13);}
+  .media-item:hover{border-color:var(--blue);}
+  .media-item .ic{width:34px;height:34px;border-radius:8px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:16px;}
+  .clip-center{display:flex;flex-direction:column;gap:var(--sp-4);}
+  .clip-preview{display:grid;grid-template-columns:200px 1fr;gap:var(--sp-4);align-items:center;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-4);}
+  .clip-tools{display:flex;gap:8px;flex-wrap:wrap;}
+  .mini-btn{padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);font-size:var(--fs-13);font-weight:600;cursor:pointer;color:var(--ink);transition:var(--e);}
+  .mini-btn:hover{border-color:var(--blue);} .mini-btn.on{background:var(--blue);color:#fff;border-color:var(--blue);}
+  .timeline{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-4);box-shadow:var(--shadow-xs);}
+  .track{display:grid;grid-template-columns:72px 1fr;gap:10px;align-items:center;margin-bottom:10px;}
+  .track .tl{font-size:11px;font-weight:700;color:var(--muted);text-align:right;}
+  .track .bar{position:relative;height:40px;background:var(--surface);border-radius:8px;overflow:hidden;}
+  .clip-seg{position:absolute;top:4px;bottom:4px;border-radius:6px;display:flex;align-items:center;padding:0 8px;font-size:11px;font-weight:700;color:#fff;cursor:pointer;overflow:hidden;white-space:nowrap;}
+  .seg-v{background:var(--blue);} .seg-a{background:var(--green);} .seg-s{background:#7a5cff;} .seg-c{background:var(--coin);}
+  .playhead{position:absolute;top:0;bottom:0;width:2px;background:var(--hi);left:38%;}
+
+  /* ====== 字幕样式 ====== */
+  .sub-wrap{display:grid;grid-template-columns:1fr 320px;gap:var(--sp-4);max-width:1480px;margin:0 auto;padding:var(--sp-4) var(--sp-6) var(--sp-10);}
+  .sub-prev{position:relative;}
+  .sub-caption{position:absolute;left:50%;bottom:14%;transform:translateX(-50%);width:84%;text-align:center;color:#fff;font-weight:800;font-size:18px;line-height:1.5;text-shadow:0 2px 4px rgba(0,0,0,.6);padding:6px 10px;}
+  .sub-caption .bg{position:absolute;inset:0;background:rgba(0,0,0,.55);border-radius:8px;z-index:-1;}
+  .style-panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-4);box-shadow:var(--shadow-xs);}
+  .style-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px dashed var(--border);font-size:var(--fs-13);}
+  .style-row:last-child{border-bottom:none;}
+  .sw{display:flex;gap:6px;flex-wrap:wrap;}
+  .swatch{width:28px;height:28px;border-radius:8px;border:2px solid var(--border);cursor:pointer;transition:var(--e);}
+  .swatch.on{border-color:var(--blue);transform:scale(1.06);}
+  .preset-row{display:flex;gap:8px;flex-wrap:wrap;}
+  .preset{border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:var(--fs-12);font-weight:700;cursor:pointer;background:var(--surface);transition:var(--e);}
+  .preset.on{background:var(--blue);color:#fff;border-color:var(--blue);}
+
+  /* ====== 挂车落地页 ====== */
+  .land-wrap{display:grid;grid-template-columns:360px 1fr;gap:var(--sp-6);max-width:1280px;margin:0 auto;padding:var(--sp-6);}
+  .phone{width:300px;margin:0 auto;background:#0c0f16;border-radius:32px;padding:10px;box-shadow:var(--shadow-lg);}
+  .phone .scr{background:var(--bg);border-radius:24px;overflow:hidden;height:560px;display:flex;flex-direction:column;}
+  .phone .pv{aspect-ratio:9/10;background:linear-gradient(160deg,#22304f,#0c1422);display:flex;align-items:center;justify-content:center;color:#fff;font-size:30px;position:relative;}
+  .phone .pinfo{padding:12px;}
+  .phone .ptitle{font-size:var(--fs-14);font-weight:800;}
+  .phone .pprice{color:var(--coin);font-weight:800;font-size:var(--fs-18);margin:4px 0;}
+  .phone .pbtn{display:block;text-align:center;background:linear-gradient(135deg,#e23b3b,#ff7a3c);color:#fff;font-weight:800;padding:11px;border-radius:12px;margin-top:8px;}
+  .phone .ptrust{font-size:11px;color:var(--muted);text-align:center;margin-top:8px;}
+  .land-form{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-5);box-shadow:var(--shadow-xs);}
+  .land-form .row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px dashed var(--border);}
+  .land-form .row:last-child{border-bottom:none;}
+  .toggle{width:42px;height:24px;border-radius:999px;background:var(--surface-2);position:relative;cursor:pointer;transition:var(--e);}
+  .toggle.on{background:var(--green);}
+  .toggle::after{content:'';position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;top:3px;left:3px;transition:var(--e);}
+  .toggle.on::after{left:21px;}
+
+  @media (max-width:1100px){ .clip{grid-template-columns:1fr;} .sub-wrap{grid-template-columns:1fr;} .land-wrap{grid-template-columns:1fr;} .clip-preview{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<!-- 顶部品牌栏 -->
+<div class="topbar">
+  <div class="brand"><span class="logo">🎬</span><div>慧根堂短视频工作台<small>HGTStudio · 生产中枢</small></div></div>
+  <div class="topnav">
+    <a class="on" data-view="home">工作台首页</a>
+    <a data-view="studio">创作工作室</a>
+    <a data-view="publish">发布与分发</a>
+    <a data-view="center">项目 / 账号中心</a>
+  </div>
+  <div class="top-right">
+    <div class="proj-switch">
+      <div class="proj-cur" onclick="toast('项目面板（搜索/切换）')"><span>📁</span><span class="nm">公转私风险·老张独白</span><span>🔽</span></div>
+    </div>
+    <div class="status-pill" onclick="goStudio('qc')">✅ 安全 · 违禁词 0</div>
+    <div class="icon-btn" title="功能介绍" onclick="toast('功能指南')">📖</div>
+    <div class="icon-btn" title="主题" onclick="toggleTheme()">🌗</div>
+  </div>
+</div>
+
+<!-- ====== 首页：作品 + 模特库 ====== -->
+<div class="view active" id="view-home">
+  <div class="page">
+    <div class="hero">
+      <div class="hero-card h1" onclick="goStudio('topic')"><span class="ill">🚀</span><div class="hl">开始新作品</div><div class="hd">从选题到成片一条流水线：联网找爆款 → AI 改写 → 出音频 → 选模特 → 出片 → 质检 → 发布</div></div>
+      <div class="hero-card h2" onclick="goStudio('edit')"><span class="ill">✏️</span><div class="hl">继续草稿</div><div class="hd">「公转私风险·老张独白」已改写定稿，待出音频</div></div>
+      <div class="hero-card h3" onclick="goStudio('render')"><span class="ill">🎬</span><div class="hl">批量出片队列</div><div class="hd">3 条排队中 · 预计 12 分钟。可后台运行，完成后通知</div></div>
+    </div>
+
+    <div class="section-head">
+      <h2>📂 我的作品 <span class="ct">128</span></h2>
+      <div class="spacer"></div>
+      <div class="search-inp">🔍 <input placeholder="搜索视频名 / 模特 / 选题" /></div>
+    </div>
+    <div class="chip-row">
+      <span class="chip on">全部</span><span class="chip">已发布</span><span class="chip">草稿</span><span class="chip">渲染中</span><span class="chip">老张讲财税</span><span class="chip">营销号</span>
+    </div>
+    <div class="grid">
+      <div class="g-card" onclick="goStudio('render')"><div class="g-thumb">▶<span class="status">已发布</span><span class="dur">00:38</span></div><div class="g-body"><div class="g-title">个人卡流水超这个数，税务就找你了</div><div class="g-meta"><span class="acct"><span class="av"></span>老张讲财税</span><span>2.4w 赞</span></div></div></div>
+      <div class="g-card" onclick="goStudio('render')"><div class="g-thumb">▶<span class="status" style="background:rgba(217,138,6,.9)">渲染中</span><span class="dur">00:45</span></div><div class="g-body"><div class="g-title">暂估成本怎么做才不被稽查盯上</div><div class="g-meta"><span class="acct"><span class="av"></span>老张讲财税</span><span>—</span></div></div></div>
+      <div class="g-card" onclick="goStudio('edit')"><div class="g-thumb">▶<span class="status" style="background:rgba(47,84,235,.9)">草稿</span><span class="dur">00:30</span></div><div class="g-body"><div class="g-title">公转私的红线，踩了就麻烦</div><div class="g-meta"><span class="acct"><span class="av"></span>老张讲财税</span><span>—</span></div></div></div>
+      <div class="g-card" onclick="goStudio('render')"><div class="g-thumb">▶<span class="status">已发布</span><span class="dur">00:52</span></div><div class="g-body"><div class="g-title">工厂直供好物·源头实拍</div><div class="g-meta"><span class="acct"><span class="av"></span>营销号</span><span>8632 赞</span></div></div></div>
+      <div class="g-card" onclick="goStudio('render')"><div class="g-thumb">▶<span class="status">已发布</span><span class="dur">00:41</span></div><div class="g-body"><div class="g-title">老板最怕的三种稽查方式</div><div class="g-meta"><span class="acct"><span class="av"></span>老张讲财税</span><span>1.5w 赞</span></div></div></div>
+      <div class="g-card" onclick="goStudio('render')"><div class="g-thumb">▶<span class="status">已发布</span><span class="dur">00:36</span></div><div class="g-body"><div class="g-title">金税四期下公转私合规路径</div><div class="g-meta"><span class="acct"><span class="av"></span>老张讲财税</span><span>9861 赞</span></div></div></div>
+    </div>
+
+    <div class="section-head"><h2>🧍 我的数字模特 <span class="ct">6</span></h2><div class="spacer"></div><div class="btn secondary" style="padding:8px 14px" onclick="toast('上传模特')">＋ 上传新模特</div></div>
+    <div class="grid">
+      <div class="g-card" onclick="goStudio('model')"><div class="g-thumb" style="aspect-ratio:1;background:linear-gradient(160deg,#1d3a2e,#0c1422)">🧔</div><div class="g-body"><div class="g-title">张老师（男·本地）</div><div class="g-meta"><span>HEYGEM 本地</span><span>默认</span></div></div></div>
+      <div class="g-card" onclick="goStudio('model')"><div class="g-thumb" style="aspect-ratio:1;background:linear-gradient(160deg,#3a1d2e,#0c1422)">👩</div><div class="g-body"><div class="g-title">江老师（女·克隆音）</div><div class="g-meta"><span>克隆音 jiangnv3</span><span>对话</span></div></div></div>
+      <div class="g-card" onclick="goStudio('model')"><div class="g-thumb" style="aspect-ratio:1;background:linear-gradient(160deg,#2a2a3a,#0c1422)">🤖</div><div class="g-body"><div class="g-title">即创·形象A（营销）</div><div class="g-meta"><span>云端 SaaS</span><span>待启用</span></div></div></div>
+      <div class="g-card" onclick="goStudio('model')"><div class="g-thumb" style="aspect-ratio:1;background:linear-gradient(160deg,#2a3a1d,#0c1422)">🤖</div><div class="g-body"><div class="g-title">即创·形象B（营销）</div><div class="g-meta"><span>云端 SaaS</span><span>待启用</span></div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 创作工作室 ====== -->
+<div class="view" id="view-studio">
+  <div class="studio">
+    <div class="node-nav">
+      <ul class="steps" id="steps">
+        <li data-step="topic"><span class="dot">1</span>选题</li>
+        <li class="on" data-step="edit"><span class="dot">2</span>改写</li>
+        <li data-step="audio"><span class="dot">3</span>音频</li>
+        <li data-step="model"><span class="dot">4</span>模特</li>
+        <li data-step="render"><span class="dot">5</span>出片</li>
+        <li data-step="qc"><span class="dot">6</span>质检</li>
+        <li data-step="publish"><span class="dot">7</span>发布</li>
+      </ul>
+      <div class="auto-toggle"><input type="checkbox" checked id="autoStep" /> <label for="autoStep">自动推进步骤</label></div>
+    </div>
+
+    <div class="col-mid">
+      <!-- 改写卡片 -->
+      <div class="card">
+        <h3>✏️ 脚本改写 <span style="font-size:12px;font-weight:600;color:var(--muted)">违禁词实时标红</span></h3>
+        <div class="sub">AI 按设定改写，命中违禁词自动高亮，定稿前必过质检。</div>
+        <div class="mode-switch" id="modeSwitch">
+          <button class="on" data-mode="mono">🎙 独白模式</button>
+          <button data-mode="dialogue">💬 对话模式</button>
+        </div>
+
+        <div id="monoGroup">
+          <div class="seg"><div class="seg-label"><span class="tag open">开头</span> 抓眼球 / 抛痛点</div><textarea class="editarea">老板们注意了，最近税务稽查又盯上一个老问题——个人卡收营业款。</textarea><div class="hitlist"></div></div>
+          <div class="seg"><div class="seg-label"><span class="tag body">正文</span> 讲清风险 / 给路径</div><textarea class="editarea">很多老板觉得公户钱转到自己卡上很正常，其实这叫公转私。金税四期下，大额私户流水一查一个准。<span class="hit">⚠ 避税</span> 这种说法别用，改成“合规筹划”。正确路径是…</textarea><div class="hitlist"><span class="hit">⚠ 避税（建议改“合规筹划”）</span></div></div>
+          <div class="seg"><div class="seg-label"><span class="tag end">结尾（钩子）</span> 留资 / 关注</div><textarea class="editarea">想知道你公司现在的公转私风险有多大？点头像进主页，免费领自查表。</textarea><div class="hitlist"></div></div>
+        </div>
+
+        <div id="dialogueGroup" style="display:none">
+          <div class="seg"><div class="seg-label"><span class="tag body">男女对话稿</span> 用于「滚动字幕卡」双声出片</div><textarea class="editarea" style="min-height:140px">女：老板，公户的钱能直接转我自己卡上吗？
+男：千万别！这叫公转私，金税四期一查一个准。
+女：那我急用钱怎么办？
+男：走正规分红或工资，税交明白，比事后补罚强。</textarea><div class="hitlist"></div></div>
+        </div>
+
+        <div class="toolbar">
+          <button class="btn primary" onclick="toast('已保存定稿')">💾 保存定稿</button>
+          <button class="btn secondary" onclick="toast('AI 改写中…')">✨ AI 按设定改写</button>
+          <button class="btn secondary" onclick="toast('试听生成中…')">🔊 试听（当前草稿）</button>
+          <div class="field">目标时长 <input type="number" value="60" min="10" max="600" /> 秒 <span style="color:var(--blue-d);font-weight:700">≈ 252 字</span></div>
+        </div>
+      </div>
+
+      <!-- 出片与剪辑入口 -->
+      <div class="card">
+        <h3>🎬 出片与剪辑 <span style="font-size:12px;font-weight:600;color:var(--muted)">成片后精细加工</span></h3>
+        <div class="sub">出片后进入剪辑台做轨道精修（分割 / 调速 / 挂车标记），再到字幕样式页定稿。</div>
+        <div class="toolbar" style="border-top:none;padding-top:0;margin-top:0">
+          <button class="btn primary" onclick="goto('clip')">✂️ 进入剪辑台</button>
+          <button class="btn secondary" onclick="toast('批量出片队列')">⚡ 批量出片队列</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右栏产物预览 -->
+    <div class="col-right">
+      <div class="preview-card">
+        <div class="preview-head">📦 产物预览 <span class="step-tag" id="pvStep">改写</span></div>
+        <div class="video-box"><div class="play" onclick="toast('播放成片预览')">▶</div><div class="tip">成片 1080×1920 · 待出片</div></div>
+        <div class="preview-body">
+          <div class="pv-row"><span class="k">当前项目</span><span class="v">公转私风险</span></div>
+          <div class="pv-row"><span class="k">模式</span><span class="v" id="pvMode">独白</span></div>
+          <div class="pv-row"><span class="k">音色</span><span class="v">老张克隆音</span></div>
+          <div class="pv-row"><span class="k">违禁词</span><span class="v" style="color:var(--amber)">1 条待改</span></div>
+          <audio class="mini-audio" controls preload="none"><source src="#" /></audio>
+        </div>
+      </div>
+      <div class="preview-card">
+        <div class="preview-head">🛒 挂车商品 <span style="margin-left:auto;font-size:11px;color:var(--muted);font-weight:600">商业化</span></div>
+        <div class="prod-strip">
+          <div class="p" onclick="toast('财税合规自查手册')"><div class="pi"></div><div style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">自查手册</div><div class="pp">¥39.9</div></div>
+          <div class="p" onclick="toast('老板税务风险21讲')"><div class="pi"></div><div style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">21讲视频课</div><div class="pp">¥199</div></div>
+          <div class="p" onclick="toast('金税四期案例库')"><div class="pi"></div><div style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">案例库Pro</div><div class="pp">¥499</div></div>
+          <div class="p" style="border-style:dashed;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:24px" onclick="toast('添加挂车')">＋</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 发布与分发 ====== -->
+<div class="view" id="view-publish">
+  <div class="page">
+    <div class="section-head"><h2>📡 发布与分发</h2></div>
+    <div class="publish-grid">
+      <div class="pub-card" onclick="toast('发布到视频号')"><div class="pi" style="background:var(--green)">🟢</div><h4>视频号</h4><p>对接「老张讲财税」企业号，自动带合规挂车与留资组件。</p><div class="stat">✓ 已授权</div></div>
+      <div class="pub-card" onclick="toast('发布到抖音')"><div class="pi" style="background:#161823">🎵</div><h4>抖音</h4><p>企业号发布，自动匹配话题与商品橱窗。</p><div class="stat">✓ 已授权</div></div>
+      <div class="pub-card" onclick="toast('发布到快手')"><div class="pi" style="background:#ff4906">⚡</div><h4>快手</h4><p>小店挂车，源头工厂好物一键同步。</p><div class="stat">● 待授权</div></div>
+      <div class="pub-card" onclick="toast('定时发布')"><div class="pi" style="background:var(--blue)">⏰</div><h4>定时发布</h4><p>按账号最佳时段批量预约，错峰触达。</p><div class="stat">已排 6 条</div></div>
+      <div class="pub-card" onclick="toast('多平台同步')"><div class="pi" style="background:var(--coin)">🔀</div><h4>多平台同步</h4><p>一次成片，按比例裁剪适配各平台尺寸。</p><div class="stat">支持 5 平台</div></div>
+      <div class="pub-card" onclick="toast('数据看板')"><div class="pi" style="background:#7a5cff">📊</div><h4>数据看板</h4><p>播放 / 互动 / 挂车转化一体化追踪。</p><div class="stat">今日 +12.4w</div></div>
+    </div>
+    <div class="section-head"><h2>🛒 商品挂车</h2><div class="spacer"></div><button class="btn coin" onclick="goto('landing')">预览挂车落地页 →</button></div>
+    <div class="card" style="display:flex;align-items:center;gap:var(--sp-4)">
+      <div style="font-size:34px">🛒</div>
+      <div style="flex:1"><b>视频小黄车 → 落地页转化</b><div style="font-size:var(--fs-13);color:var(--muted);margin-top:4px">当前项目已挂 3 件商品，观众点击直达商品落地页。点右侧预览或编辑落地页。</div></div>
+      <button class="btn primary" onclick="goto('landing')">去配置</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 项目 / 账号中心 ====== -->
+<div class="view" id="view-center">
+  <div class="page">
+    <div class="center-grid">
+      <div>
+        <div class="side-card">
+          <div class="avatar">张</div>
+          <div class="nm">老张讲财税 <span style="color:var(--blue)">✓</span></div>
+          <div class="uid">ID: laozhang_caishui · 苏州</div>
+          <div class="stat-row">
+            <div class="s"><div class="v">128</div><div class="l">作品</div></div>
+            <div class="s"><div class="v">86.4w</div><div class="l">获赞</div></div>
+            <div class="s"><div class="v">12.7w</div><div class="l">粉丝</div></div>
+          </div>
+          <div class="btn primary" style="width:100%" onclick="toast('新建项目')">＋ 新建项目</div>
+        </div>
+        <div class="side-card" style="margin-top:var(--sp-4)">
+          <h3 style="font-size:var(--fs-16);margin:0 0 10px">多账号</h3>
+          <div class="acct-list">
+            <div class="acct on"><div class="av">张</div><div class="meta"><div class="n">老张讲财税</div><div class="t">财税知识 · 本地数字人</div></div></div>
+            <div class="acct"><div class="av">营</div><div class="meta"><div class="n">慧根堂营销号</div><div class="t">营销带货 · 云端数字人</div></div></div>
+            <div class="acct"><div class="av">＋</div><div class="meta"><div class="n">绑定新账号</div><div class="t">视频号 / 抖音 / 快手</div></div></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="earn-card">
+          <div class="el"><div class="l">本月预计收益（挂车 + 广告分成，含税）</div><div class="v">¥ 12,860</div></div>
+          <div class="eb" onclick="toast('提现 / 明细')">去提现</div>
+        </div>
+        <div class="card">
+          <h3>📁 项目列表</h3>
+          <div class="chip-row"><span class="chip on">最近</span><span class="chip">进行中</span><span class="chip">已归档</span><span class="chip">模板</span></div>
+          <div class="grid">
+            <div class="g-card" onclick="goStudio('edit')"><div class="g-thumb">✏️<span class="status" style="background:rgba(47,84,235,.9)">草稿</span></div><div class="g-body"><div class="g-title">公转私风险·老张独白</div><div class="g-meta"><span>改写定稿</span><span>今天</span></div></div></div>
+            <div class="g-card" onclick="goStudio('render')"><div class="g-thumb">🎬<span class="status" style="background:rgba(217,138,6,.9)">渲染中</span></div><div class="g-body"><div class="g-title">暂估成本合规路径</div><div class="g-meta"><span>出片中</span><span>10分钟前</span></div></div></div>
+            <div class="g-card" onclick="goStudio('qc')"><div class="g-thumb">✅<span class="status">质检</span></div><div class="g-body"><div class="g-title">稽查三方式解读</div><div class="g-meta"><span>待发布</span><span>昨天</span></div></div></div>
+            <div class="g-card" onclick="goStudio('edit')"><div class="g-thumb">✏️<span class="status" style="background:rgba(47,84,235,.9)">草稿</span></div><div class="g-body"><div class="g-title">营销号·源头工厂实拍</div><div class="g-meta"><span>改写中</span><span>昨天</span></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 剪辑台 ====== -->
+<div class="view" id="view-clip">
+  <div class="clip">
+    <div>
+      <div class="crumbs">🎬 创作工作室 / 出片 / <b>剪辑台</b></div>
+      <div class="media-list">
+        <div class="media-item" onclick="toast('主视频')"><span class="ic">🎞</span> 主视频_公转私.mp4</div>
+        <div class="media-item" onclick="toast('音频轨')"><span class="ic">🔊</span> 老张克隆音.wav</div>
+        <div class="media-item" onclick="toast('字幕轨')"><span class="ic">💬</span> 字幕_定稿.srt</div>
+        <div class="media-item" onclick="toast('挂车位')"><span class="ic">🛒</span> 自查手册卡</div>
+        <div class="media-item" onclick="toast('背景乐')"><span class="ic">🎵</span> 轻快BGM.mp3</div>
+        <div class="media-item" style="border-style:dashed;color:var(--muted);justify-content:center" onclick="toast('导入素材')">＋ 导入素材</div>
+      </div>
+    </div>
+    <div class="clip-center">
+      <div class="clip-preview">
+        <div class="video-box"><div class="play" onclick="toast('播放时间轴')">▶</div><div class="tip">1080×1920 · 00:23 / 00:60</div></div>
+        <div>
+          <div style="font-weight:800;font-size:var(--fs-16);margin-bottom:8px">公转私风险·老张独白</div>
+          <div style="font-size:var(--fs-13);color:var(--muted);margin-bottom:12px">当前片段：主视频 · 00:18-00:42（对话段落）</div>
+          <div class="clip-tools">
+            <button class="mini-btn on" onclick="segTool(this,'选择')">⬚ 选择</button>
+            <button class="mini-btn" onclick="segTool(this,'分割')">✂ 分割</button>
+            <button class="mini-btn" onclick="segTool(this,'删除')">🗑 删除</button>
+            <button class="mini-btn" onclick="segTool(this,'调速')">⏩ 调速</button>
+            <button class="mini-btn" onclick="segTool(this,'静音')">🔇 静音</button>
+            <button class="mini-btn" onclick="segTool(this,'挂车标记')">🛒 挂车标记</button>
+          </div>
+        </div>
+      </div>
+      <div class="timeline">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <b style="font-size:var(--fs-14)">轨道时间轴</b>
+          <span style="font-size:var(--fs-12);color:var(--muted)">总时长 00:60 · 缩放 100%</span>
+        </div>
+        <div class="track"><div class="tl">视频</div><div class="bar"><div class="clip-seg seg-v" style="left:0;width:60%">主视频_公转私</div><div class="playhead"></div></div></div>
+        <div class="track"><div class="tl">音频</div><div class="bar"><div class="clip-seg seg-a" style="left:0;width:60%">老张克隆音</div><div class="playhead"></div></div></div>
+        <div class="track"><div class="tl">字幕</div><div class="bar"><div class="clip-seg seg-s" style="left:0;width:60%">字幕_定稿</div><div class="playhead"></div></div></div>
+        <div class="track"><div class="tl">挂车</div><div class="bar"><div class="clip-seg seg-c" style="left:42%;width:14%">🛒 自查手册</div><div class="playhead"></div></div></div>
+      </div>
+      <div class="toolbar">
+        <button class="btn secondary" onclick="goto('studio')">← 返回工作室</button>
+        <button class="btn primary" onclick="goto('subtitle')">下一步：字幕样式 →</button>
+      </div>
+    </div>
+    <div class="style-panel">
+      <h3 style="font-size:var(--fs-16);margin:0 0 12px">片段属性</h3>
+      <div class="style-row"><span>时长</span><b>00:24</b></div>
+      <div class="style-row"><span>入点</span><b>00:18</b></div>
+      <div class="style-row"><span>出点</span><b>00:42</b></div>
+      <div class="style-row"><span>速度</span><b>1.0×</b></div>
+      <div class="style-row"><span>音量</span><b>100%</b></div>
+      <div class="style-row"><span>挂车标记</span><span class="toggle on" onclick="this.classList.toggle('on')"></span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 字幕样式 ====== -->
+<div class="view" id="view-subtitle">
+  <div class="sub-wrap">
+    <div>
+      <div class="crumbs">🎬 创作工作室 / 出片 / <b>字幕样式</b></div>
+      <div class="card" style="margin-bottom:var(--sp-4)">
+        <h3>📺 字幕实时预览</h3>
+        <div class="sub-prev">
+          <div class="video-box" style="aspect-ratio:9/16;min-height:420px">
+            <div class="play" onclick="toast('播放预览')">▶</div>
+            <div class="sub-caption" id="subCap"><span class="bg"></span>金税四期下，大额私户流水一查一个准</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>📝 字幕文本</h3>
+        <div class="seg"><div class="seg-label"><span class="tag body">00:18</span> 第 3 句</div><textarea class="editarea" style="min-height:64px">金税四期下，大额私户流水一查一个准。</textarea></div>
+        <div class="toolbar">
+          <button class="btn secondary" onclick="toast('AI 断句')">✨ AI 自动断句</button>
+          <button class="btn secondary" onclick="toast('批量校对')">🔍 校对</button>
+        </div>
+      </div>
+    </div>
+    <div class="style-panel" style="align-self:start">
+      <h3 style="font-size:var(--fs-16);margin:0 0 12px">样式面板</h3>
+      <div class="style-row"><span>字体</span><b>思源黑体</b></div>
+      <div class="style-row"><span>字号</span><div class="sw"><span class="swatch" style="background:var(--border)" onclick="toast('小')"></span><span class="swatch on" style="background:var(--blue);border-color:var(--blue)" onclick="sw(this)"></span><span class="swatch" style="background:var(--ink)" onclick="toast('大')"></span></div></div>
+      <div class="style-row"><span>颜色</span><div class="sw"><span class="swatch on" style="background:#fff" onclick="sw(this,'#fff')"></span><span class="swatch" style="background:#ffd84d" onclick="sw(this,'#ffd84d')"></span><span class="swatch" style="background:#7af0a0" onclick="sw(this,'#7af0a0')"></span><span class="swatch" style="background:#ff8aa0" onclick="sw(this,'#ff8aa0')"></span></div></div>
+      <div class="style-row"><span>描边</span><span class="toggle on" onclick="this.classList.toggle('on')"></span></div>
+      <div class="style-row"><span>背景</span><span class="toggle on" onclick="this.classList.toggle('on')"></span></div>
+      <div class="style-row"><span>位置</span><b>底部居中</b></div>
+      <div class="style-row"><span>动画</span><b>淡入</b></div>
+      <div style="margin-top:12px;font-weight:800;font-size:var(--fs-14)">预设模板</div>
+      <div class="preset-row" style="margin-top:8px">
+        <span class="preset on" onclick="preset(this)">简约白</span>
+        <span class="preset" onclick="preset(this)">财经金</span>
+        <span class="preset" onclick="preset(this)">醒目红</span>
+        <span class="preset" onclick="preset(this)">科技蓝</span>
+      </div>
+      <div class="toolbar" style="margin-top:16px">
+        <button class="btn primary" style="width:100%" onclick="goto('publish')">完成，去发布 →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 商品挂车落地页 ====== -->
+<div class="view" id="view-landing">
+  <div class="land-wrap">
+    <div>
+      <div class="crumbs">📡 发布与分发 / <b>商品挂车落地页</b></div>
+      <div class="phone">
+        <div class="scr">
+          <div class="pv">▶<span class="status" style="position:absolute;left:8px;top:8px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:rgba(226,59,59,.9)">视频同款</span></div>
+          <div class="pinfo">
+            <div class="ptitle">财税合规自查手册（老板必看）</div>
+            <div class="pprice">¥39.9 <span style="font-size:11px;color:var(--muted);text-decoration:line-through;font-weight:400">¥59</span></div>
+            <div class="pbtn" onclick="toast('立即购买')">🛒 立即购买</div>
+            <div class="ptrust">✓ 7天无理由 · 老张讲财税官方出品</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="land-form">
+      <h3 style="font-size:var(--fs-18);margin:0 0 8px">落地页配置</h3>
+      <div style="color:var(--muted);font-size:var(--fs-13);margin-bottom:12px">视频关联商品与转化组件，观众点小黄车直达此页。</div>
+      <div class="row"><span>关联视频</span><b>公转私风险·老张独白</b></div>
+      <div class="row"><span>商品名称</span><b>财税合规自查手册</b></div>
+      <div class="row"><span>售价</span><b style="color:var(--coin)">¥39.9</b></div>
+      <div class="row"><span>卖点标签</span><b>老板必看 / 合规</b></div>
+      <div class="row"><span>留资组件</span><span class="toggle on" onclick="this.classList.toggle('on')"></span></div>
+      <div class="row"><span>限时优惠券</span><span class="toggle" onclick="this.classList.toggle('on')"></span></div>
+      <div class="row"><span>信任背书</span><span class="toggle on" onclick="this.classList.toggle('on')"></span></div>
+      <div class="toolbar" style="margin-top:8px">
+        <button class="btn secondary" onclick="goto('publish')">← 返回发布</button>
+        <button class="btn coin" onclick="toast('落地页已保存')">💾 保存</button>
+        <button class="btn primary" onclick="toast('生成预览链接')">🔗 预览链接</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="theme-fab">
+  <button id="btnTheme" onclick="toggleTheme()">🌗 暗色</button>
+</div>
+<div id="toast"></div>
+
+<script>
+  // 顶部导航切换
+  const navs=document.querySelectorAll('.topnav a');
+  navs.forEach(a=>a.addEventListener('click',()=>{
+    navs.forEach(x=>x.classList.remove('on'));a.classList.add('on');
+    const v=a.dataset.view;
+    document.querySelectorAll('.view').forEach(vw=>vw.classList.remove('active'));
+    document.getElementById('view-'+v).classList.add('active');
+  }));
+  function goStudio(step){
+    navs.forEach(x=>x.classList.remove('on'));document.querySelector('.topnav a[data-view="studio"]').classList.add('on');
+    document.querySelectorAll('.view').forEach(vw=>vw.classList.remove('active'));
+    document.getElementById('view-studio').classList.add('active');
+    if(step){const li=document.querySelector('#steps li[data-step="'+step+'"]');if(li)setStep(li);}
+  }
+  // 步骤切换
+  function setStep(li){
+    document.querySelectorAll('#steps li').forEach(x=>x.classList.remove('on'));
+    li.classList.add('on');
+    const names={topic:'选题',edit:'改写',audio:'音频',model:'模特',render:'出片',qc:'质检',publish:'发布'};
+    document.getElementById('pvStep').textContent=names[li.dataset.step];
+  }
+  document.querySelectorAll('#steps li').forEach(li=>li.addEventListener('click',()=>setStep(li)));
+  // 模式切换
+  const ms=document.getElementById('modeSwitch');
+  ms.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    ms.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+    const d=b.dataset.mode;
+    document.getElementById('monoGroup').style.display = d==='mono'?'block':'none';
+    document.getElementById('dialogueGroup').style.display = d==='dialogue'?'block':'none';
+    document.getElementById('pvMode').textContent = d==='mono'?'独白':'双声对话';
+  }));
+  // 主题
+  function toggleTheme(){
+    const cur=document.documentElement.dataset.theme==='dark'?'light':'dark';
+    document.documentElement.dataset.theme=cur;
+    document.getElementById('btnTheme').textContent = cur==='dark'?'🌗 暗色':'🌗 明色';
+  }
+  // 链路跳转（剪辑/字幕/挂车 子页）
+  function goto(v){
+    document.querySelectorAll('.view').forEach(vw=>vw.classList.remove('active'));
+    document.getElementById('view-'+v).classList.add('active');
+    const navmap={home:'home',studio:'studio',publish:'publish',center:'center',clip:'studio',subtitle:'studio',landing:'publish'};
+    navs.forEach(x=>x.classList.remove('on'));
+    const nv=navmap[v];
+    if(nv) document.querySelector('.topnav a[data-view="'+nv+'"]').classList.add('on');
+    window.scrollTo(0,0);
+  }
+  function sw(el,color){document.querySelectorAll('.swatch').forEach(x=>x.classList.remove('on'));el.classList.add('on');if(color)document.getElementById('subCap').style.color=color;}
+  function preset(el){document.querySelectorAll('.preset').forEach(x=>x.classList.remove('on'));el.classList.add('on');const map={'简约白':'#fff','财经金':'#ffd84d','醒目红':'#ff8aa0','科技蓝':'#7ab8ff'};document.getElementById('subCap').style.color=map[el.textContent]||'#fff';}
+  function segTool(el,mode){document.querySelectorAll('.clip-tools .mini-btn').forEach(x=>x.classList.remove('on'));el.classList.add('on');toast('剪辑工具：'+mode);}
+  // toast
+  let tt;function toast(m){const e=document.getElementById('toast');e.textContent=m;e.style.opacity='1';clearTimeout(tt);tt=setTimeout(()=>e.style.opacity='0',1500);}
+</script>
+</body>
+</html>

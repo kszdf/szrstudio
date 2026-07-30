@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>商业短视频应用 · 高保真原型 · UI Designer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  /* ============================================================
+     设计令牌 (Design Tokens) — 暗色优先，支持明色主题
+     ============================================================ */
+  :root{
+    /* 品牌与语义色 */
+    --brand:        #ff5a3c;   /* 主品牌：活力珊瑚橙，用于主操作/品牌标识 */
+    --brand-strong: #e8431f;
+    --brand-soft:   rgba(255,90,60,.14);
+    --coin:         #ffb020;   /* 收益/电商：琥珀金 */
+    --trust:        #4c8dff;   /* 信任/认证/信息 */
+    --success:      #2ecc71;
+    --danger:       #ff4d4f;
+    --live:         #ff3b6b;   /* 直播标记 */
+
+    /* 间距体系 — 4px 基准 */
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px; --s10:40px; --s12:48px;
+
+    /* 圆角 */
+    --r-sm:10px; --r-md:14px; --r-lg:20px; --r-xl:28px; --r-pill:999px;
+
+    /* 动效 — 指数缓出，符合 impeccable 原则 */
+    --e-fast: 140ms cubic-bezier(.22,1,.36,1);
+    --e-norm: 260ms cubic-bezier(.22,1,.36,1);
+    --e-slow: 420ms cubic-bezier(.16,1,.3,1);
+
+    --nav-h: 56px;          /* 底部导航高度 */
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --font-d: 'Sora', system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    --font-b: 'Inter', system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+
+  /* 暗色主题（默认，视频消费场景） */
+  .phone[data-theme="dark"]{
+    --bg:        #0a0a0c;
+    --surface-1: #141417;
+    --surface-2: #1d1d22;
+    --surface-3: #2a2a31;
+    --line:      rgba(255,255,255,.08);
+    --line-strong: rgba(255,255,255,.16);
+    --text-1:    #f6f6f8;
+    --text-2:    #a6a6b0;
+    --text-3:    #6c6c76;
+    --scrim:     rgba(0,0,0,.55);
+  }
+  /* 明色主题 */
+  .phone[data-theme="light"]{
+    --bg:        #f4f5f7;
+    --surface-1: #ffffff;
+    --surface-2: #f0f1f4;
+    --surface-3: #e6e8ec;
+    --line:      rgba(0,0,0,.08);
+    --line-strong: rgba(0,0,0,.14);
+    --text-1:    #141417;
+    --text-2:    #56565f;
+    --text-3:    #8a8a93;
+    --scrim:     rgba(0,0,0,.32);
+  }
+
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:var(--font-b);
+    background:#1b1b20;
+    color:#fff;
+    display:flex; justify-content:center; align-items:center;
+    min-height:100vh; padding:24px;
+    background-image:radial-gradient(120% 120% at 50% 0%, #2a2a33 0%, #141417 60%, #0c0c0e 100%);
+  }
+
+  /* 舞台说明 */
+  .stage-note{position:fixed; left:24px; top:24px; max-width:230px; font-size:12px; line-height:1.6; color:#9a9aa4;}
+  .stage-note b{color:#fff; font-family:var(--font-d);}
+  .stage-ctl{position:fixed; right:24px; top:24px; display:flex; gap:8px;}
+  .stage-ctl button{
+    font-family:var(--font-b); font-size:12px; font-weight:600;
+    background:rgba(255,255,255,.08); color:#e8e8ee; border:1px solid rgba(255,255,255,.14);
+    padding:8px 12px; border-radius:10px; cursor:pointer; transition:var(--e-fast);
+  }
+  .stage-ctl button:hover{background:rgba(255,255,255,.16);}
+  .stage-ctl button.on{background:var(--brand); color:#fff; border-color:var(--brand);}
+
+  /* ============================================================
+     手机外壳
+     ============================================================ */
+  .phone{
+    position:relative; width:390px; height:844px; /* iPhone 14/15 逻辑尺寸 */
+    background:var(--bg); color:var(--text-1);
+    border-radius:46px; overflow:hidden;
+    box-shadow:0 40px 80px -20px rgba(0,0,0,.7), 0 0 0 11px #0a0a0c, 0 0 0 13px #2a2a31;
+    display:flex; flex-direction:column;
+    transition:background var(--e-norm), color var(--e-norm);
+  }
+  /* 灵动岛 */
+  .island{position:absolute; top:11px; left:50%; transform:translateX(-50%); width:118px; height:34px; background:#000; border-radius:20px; z-index:60; pointer-events:none;}
+
+  /* 状态栏 */
+  .statusbar{height:54px; display:flex; align-items:flex-end; justify-content:space-between; padding:0 26px 8px; font-size:14px; font-weight:600; font-family:var(--font-d); z-index:50; position:relative;}
+  .statusbar .icons{display:flex; gap:6px; align-items:center;}
+  .statusbar.light-text{color:#fff;}
+  .statusbar.dark-text{color:#141417;}
+
+  /* 屏幕滚动容器 */
+  .screen{flex:1; position:relative; overflow:hidden;}
+  .view{position:absolute; inset:0; display:none; flex-direction:column;}
+  .view.active{display:flex;}
+
+  /* ============================================================
+     底部导航
+     ============================================================ */
+  .tabbar{
+    height:calc(var(--nav-h) + var(--safe-b)); padding-bottom:var(--safe-b);
+    background:color-mix(in srgb, var(--surface-1) 86%, transparent);
+    backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+    border-top:1px solid var(--line);
+    display:flex; align-items:stretch; position:relative; z-index:40;
+  }
+  .tab{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; cursor:pointer; color:var(--text-3); font-size:10px; font-weight:600; transition:color var(--e-fast);}
+  .tab svg{width:24px; height:24px; stroke:currentColor; fill:none; stroke-width:1.9;}
+  .tab.active{color:var(--text-1);}
+  .tab.create{flex:0 0 64px; justify-content:center;}
+  .tab.create .plus{
+    width:46px; height:32px; border-radius:12px;
+    background:linear-gradient(135deg, var(--brand), #ff8a3c);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 6px 16px -4px rgba(255,90,60,.6);
+    transition:transform var(--e-fast);
+  }
+  .tab.create .plus:active{transform:scale(.92);}
+  .tab.create svg{stroke:#fff; width:22px; height:22px;}
+
+  /* ============================================================
+     首页 / 视频流
+     ============================================================ */
+  .feed{position:relative; flex:1; overflow-y:auto; scroll-snap-type:y mandatory; scrollbar-width:none;}
+  .feed::-webkit-scrollbar{display:none;}
+  .reel{position:relative; height:100%; scroll-snap-align:start; overflow:hidden; display:flex; flex-direction:column; justify-content:flex-end;}
+  .reel .poster{position:absolute; inset:0; z-index:0;}
+  .reel .poster::after{content:""; position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,.35) 0%, rgba(0,0,0,0) 26%, rgba(0,0,0,0) 52%, rgba(0,0,0,.72) 100%);}
+  .reel .topbar{position:relative; z-index:3; display:flex; justify-content:center; gap:4px; padding:0 0 10px;}
+  .reel .topbar .seg{font-size:15px; font-weight:700; color:rgba(255,255,255,.6); padding:6px 4px; cursor:pointer;}
+  .reel .topbar .seg.on{color:#fff;}
+  .reel .topbar .seg.on::after{content:""; display:block; height:2px; background:#fff; border-radius:2px; margin-top:4px;}
+  .reel .live-badge{position:absolute; top:14px; left:14px; z-index:4; display:flex; align-items:center; gap:6px; background:var(--live); color:#fff; font-size:11px; font-weight:700; padding:5px 9px; border-radius:var(--r-pill); box-shadow:0 4px 12px -2px rgba(255,59,107,.6);}
+  .reel .live-badge .dot{width:6px; height:6px; border-radius:50%; background:#fff; animation:pulse 1.4s infinite;}
+  @keyframes pulse{0%,100%{opacity:1} 50%{opacity:.3}}
+
+  /* 右侧操作栏 */
+  .rail{position:absolute; right:10px; bottom:118px; z-index:5; display:flex; flex-direction:column; align-items:center; gap:20px;}
+  .rail .act{display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; color:#fff;}
+  .rail .act .ic{width:46px; height:46px; border-radius:50%; background:rgba(0,0,0,.28); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; transition:transform var(--e-fast);}
+  .rail .act:active .ic{transform:scale(.85);}
+  .rail .act svg{width:27px; height:27px; stroke:#fff; fill:none; stroke-width:1.8;}
+  .rail .act.liked svg{fill:var(--brand); stroke:var(--brand);}
+  .rail .act.faved svg{fill:var(--coin); stroke:var(--coin);}
+  .rail .act .count{font-size:12px; font-weight:700; text-shadow:0 1px 3px rgba(0,0,0,.6);}
+  .rail .avatar-wrap{position:relative; margin-bottom:6px;}
+  .rail .avatar{width:48px; height:48px; border-radius:50%; border:2px solid #fff; background-size:cover;}
+  .rail .follow{position:absolute; bottom:-9px; left:50%; transform:translateX(-50%); width:20px; height:20px; border-radius:50%; background:var(--brand); color:#fff; font-size:14px; font-weight:800; display:flex; align-items:center; justify-content:center; line-height:1;}
+
+  /* 底部信息区 */
+  .meta{position:relative; z-index:4; padding:0 76px 96px 16px; color:#fff;}
+  .meta .author{display:flex; align-items:center; gap:8px; font-family:var(--font-d); font-weight:700; font-size:16px; margin-bottom:7px;}
+  .meta .author .verify{color:var(--trust);}
+  .meta .caption{font-size:14px; line-height:1.45; text-shadow:0 1px 4px rgba(0,0,0,.5); margin-bottom:8px;}
+  .meta .caption .tag{color:#ffd27a; font-weight:600;}
+  .meta .music{display:flex; align-items:center; gap:7px; font-size:12.5px; opacity:.92; text-shadow:0 1px 3px rgba(0,0,0,.5);}
+  .meta .music svg{width:14px; height:14px; stroke:#fff; fill:none; stroke-width:1.8; animation:spin 4s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* 商品卡（电商挂载，折叠态） */
+  .product-pill{position:absolute; left:16px; bottom:80px; z-index:5; display:flex; align-items:center; gap:10px; max-width:230px;
+    background:rgba(20,20,24,.7); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,.16);
+    border-radius:var(--r-pill); padding:6px 10px 6px 6px; cursor:pointer; color:#fff; transition:transform var(--e-fast);}
+  .product-pill:active{transform:scale(.97);}
+  .product-pill .thumb{width:38px; height:38px; border-radius:10px; background-size:cover; flex:0 0 auto;}
+  .product-pill .info{overflow:hidden;}
+  .product-pill .info .t{font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .product-pill .info .p{font-size:13px; font-weight:800; color:var(--coin);}
+  .product-pill .buy{margin-left:2px; background:var(--brand); color:#fff; font-size:12px; font-weight:700; padding:6px 12px; border-radius:var(--r-pill); flex:0 0 auto;}
+
+  /* ============================================================
+     评论抽屉
+     ============================================================ */
+  .sheet-mask{position:absolute; inset:0; background:var(--scrim); z-index:30; opacity:0; pointer-events:none; transition:opacity var(--e-norm);}
+  .sheet-mask.show{opacity:1; pointer-events:auto;}
+  .sheet{position:absolute; left:0; right:0; bottom:0; z-index:31; height:68%; background:var(--surface-1); border-radius:22px 22px 0 0;
+    transform:translateY(102%); transition:transform var(--e-slow); display:flex; flex-direction:column; overflow:hidden;}
+  .sheet.show{transform:translateY(0);}
+  .sheet .grab{width:38px; height:4px; border-radius:4px; background:var(--line-strong); margin:10px auto 6px;}
+  .sheet .sheet-head{padding:4px 18px 12px; display:flex; justify-content:space-between; align-items:center; font-family:var(--font-d); font-weight:700; font-size:15px; border-bottom:1px solid var(--line);}
+  .sheet .sheet-head .close{color:var(--text-3); font-size:22px; cursor:pointer; line-height:1;}
+  .sheet .body{flex:1; overflow-y:auto; padding:8px 18px 14px;}
+  .comment{display:flex; gap:11px; padding:11px 0; border-bottom:1px solid var(--line);}
+  .comment .ca{width:38px; height:38px; border-radius:50%; background-size:cover; flex:0 0 auto;}
+  .comment .cc{flex:1;}
+  .comment .cn{font-size:13px; font-weight:700; color:var(--text-2); margin-bottom:3px;}
+  .comment .ct{font-size:14px; line-height:1.45; color:var(--text-1);}
+  .comment .cm{margin-top:6px; font-size:12px; color:var(--text-3); display:flex; gap:14px;}
+  .comment .cm .lk{display:flex; align-items:center; gap:4px; cursor:pointer;}
+  .comment .cm svg{width:14px; height:14px; stroke:var(--text-3); fill:none; stroke-width:1.8;}
+  .comment.reply .ct{color:var(--text-2);}
+  .comment.reply{padding-left:18px;}
+  .sheet .compose{display:flex; gap:10px; padding:12px 16px calc(12px + var(--safe-b)); border-top:1px solid var(--line); background:var(--surface-1);}
+  .sheet .compose input{flex:1; background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-pill); padding:11px 16px; color:var(--text-1); font-size:14px; font-family:var(--font-b);}
+  .sheet .compose input::placeholder{color:var(--text-3);}
+  .sheet .compose .send{background:var(--brand); color:#fff; font-weight:700; font-size:14px; border:none; border-radius:var(--r-pill); padding:0 18px; cursor:pointer;}
+
+  /* ============================================================
+     发布底部菜单
+     ============================================================ */
+  .publish-sheet{height:auto; max-height:74%;}
+  .publish-grid{padding:18px 18px 6px; display:grid; grid-template-columns:repeat(4,1fr); gap:14px 6px;}
+  .pcell{display:flex; flex-direction:column; align-items:center; gap:8px; cursor:pointer;}
+  .pcell .pic{width:58px; height:58px; border-radius:18px; display:flex; align-items:center; justify-content:center; box-shadow:0 6px 16px -6px rgba(0,0,0,.5);}
+  .pcell .pic svg{width:28px; height:28px; stroke:#fff; fill:none; stroke-width:1.8;}
+  .pcell .pl{font-size:12.5px; font-weight:600; color:var(--text-1);}
+  .pcell.primary .pic{background:linear-gradient(135deg,var(--brand),#ff8a3c);}
+  .pcell.shop .pic{background:linear-gradient(135deg,var(--coin),#ff7a3c);}
+  .pcell.live .pic{background:linear-gradient(135deg,var(--live),#ff7a3c);}
+  .pcell.draft .pic{background:var(--surface-3);}
+  .publish-tip{padding:4px 18px 14px; font-size:12px; color:var(--text-3); text-align:center;}
+
+  /* ============================================================
+     个人中心
+     ============================================================ */
+  .profile-head{padding:14px 18px 16px; background:linear-gradient(160deg, var(--surface-2), var(--surface-1)); border-bottom:1px solid var(--line);}
+  .profile-head .top{display:flex; align-items:center; justify-content:space-between;}
+  .profile-head .top .set{color:var(--text-2); cursor:pointer;}
+  .profile-head .top .set svg{width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.8;}
+  .profile-id{display:flex; gap:14px; align-items:center; margin-top:10px;}
+  .profile-id .pav{width:74px; height:74px; border-radius:24px; background-size:cover; border:2px solid var(--line-strong);}
+  .profile-id .pinfo .pn{font-family:var(--font-d); font-weight:800; font-size:21px; display:flex; align-items:center; gap:6px;}
+  .profile-id .pinfo .pn .v{color:var(--trust);}
+  .profile-id .pinfo .pui{font-size:13px; color:var(--text-3); margin-top:3px;}
+  .profile-id .pinfo .pbio{font-size:13px; color:var(--text-2); margin-top:7px; line-height:1.4; max-width:230px;}
+  .profile-stats{display:flex; gap:26px; margin-top:16px;}
+  .profile-stats .st{text-align:center; cursor:pointer;}
+  .profile-stats .st .sv{font-family:var(--font-d); font-weight:800; font-size:18px;}
+  .profile-stats .st .sl{font-size:12px; color:var(--text-3); margin-top:2px;}
+  .profile-actions{display:flex; gap:10px; margin-top:16px;}
+  .profile-actions .pa{flex:1; text-align:center; padding:11px 0; border-radius:var(--r-md); font-weight:700; font-size:14px; cursor:pointer; border:1px solid var(--line-strong); background:var(--surface-2); color:var(--text-1);}
+  .profile-actions .pa.brand{background:var(--brand); border-color:var(--brand); color:#fff;}
+  .profile-actions .pa.coin{background:var(--brand-soft); border-color:transparent; color:var(--coin);}
+
+  /* 收益卡（商业化） */
+  .earn-card{margin:14px 18px 0; background:linear-gradient(135deg,#211a12,#1a1a1f); border:1px solid rgba(255,176,32,.28); border-radius:var(--r-lg); padding:14px 16px; display:flex; align-items:center; justify-content:space-between;}
+  .earn-card .el .el-l{font-size:12px; color:var(--text-3);}
+  .earn-card .el .el-v{font-family:var(--font-d); font-weight:800; font-size:22px; color:var(--coin); margin-top:3px;}
+  .earn-card .eb{background:rgba(255,176,32,.16); color:var(--coin); font-size:13px; font-weight:700; padding:9px 14px; border-radius:var(--r-pill); cursor:pointer;}
+
+  /* 作品 tab */
+  .ptabs{display:flex; border-bottom:1px solid var(--line); margin-top:14px;}
+  .ptabs .pt{flex:1; text-align:center; padding:12px 0; font-size:13px; font-weight:700; color:var(--text-3); cursor:pointer; position:relative;}
+  .ptabs .pt.on{color:var(--text-1);}
+  .ptabs .pt.on::after{content:""; position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:26px; height:3px; border-radius:3px; background:var(--brand);}
+  .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:2px; padding:2px;}
+  .grid .cell{aspect-ratio:9/14; border-radius:6px; position:relative; overflow:hidden; background-size:cover; cursor:pointer;}
+  .grid .cell .playcnt{position:absolute; left:6px; bottom:6px; font-size:11px; font-weight:700; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.7); display:flex; align-items:center; gap:3px;}
+  .grid .cell .playcnt svg{width:12px; height:12px; fill:#fff;}
+
+  /* ============================================================
+     发现 / 分类
+     ============================================================ */
+  .disc-head{padding:14px 18px 8px; display:flex; align-items:center; gap:10px;}
+  .disc-head .search{flex:1; display:flex; align-items:center; gap:8px; background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-pill); padding:10px 14px; color:var(--text-3); font-size:14px;}
+  .disc-head .search svg{width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:1.9;}
+  .chips{display:flex; gap:8px; overflow-x:auto; padding:6px 18px 12px; scrollbar-width:none;}
+  .chips::-webkit-scrollbar{display:none;}
+  .chip{flex:0 0 auto; padding:8px 14px; border-radius:var(--r-pill); background:var(--surface-2); color:var(--text-2); font-size:13px; font-weight:600; border:1px solid var(--line); cursor:pointer; transition:var(--e-fast);}
+  .chip.on{background:var(--brand); color:#fff; border-color:var(--brand);}
+  .disc-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px; padding:4px 16px 16px; overflow-y:auto;}
+  .disc-card{background:var(--surface-1); border:1px solid var(--line); border-radius:var(--r-md); overflow:hidden; cursor:pointer;}
+  .disc-card .dc-poster{aspect-ratio:3/4; background-size:cover; position:relative;}
+  .disc-card .dc-poster .badge{position:absolute; top:8px; left:8px; background:rgba(0,0,0,.55); color:#fff; font-size:10px; font-weight:700; padding:3px 7px; border-radius:var(--r-pill);}
+  .disc-card .dc-body{padding:10px 11px 12px;}
+  .disc-card .dc-t{font-size:13px; font-weight:600; line-height:1.4; margin-bottom:8px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+  .disc-card .dc-m{display:flex; align-items:center; justify-content:space-between; font-size:11.5px; color:var(--text-3);}
+  .disc-card .dc-m .au{display:flex; align-items:center; gap:5px;}
+  .disc-card .dc-m .au .a{width:18px; height:18px; border-radius:50%; background-size:cover;}
+
+  /* ============================================================
+     消息
+     ============================================================ */
+  .msg-head{padding:14px 18px 10px; font-family:var(--font-d); font-weight:800; font-size:20px;}
+  .msg-list{overflow-y:auto; flex:1;}
+  .msg{display:flex; gap:12px; padding:13px 18px; align-items:center; cursor:pointer; transition:background var(--e-fast);}
+  .msg:active{background:var(--surface-2);}
+  .msg .mi{width:50px; height:50px; border-radius:16px; background-size:cover; flex:0 0 auto; position:relative; display:flex; align-items:center; justify-content:center;}
+  .msg .mi svg{width:24px; height:24px; stroke:#fff; fill:none; stroke-width:1.8;}
+  .msg .mi.sys{background:var(--trust);} .msg .mi.shop{background:var(--coin);} .msg .mi.order{background:var(--success);}
+  .msg .mi .nb{position:absolute; top:-3px; right:-3px; min-width:18px; height:18px; border-radius:9px; background:var(--danger); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; padding:0 5px; border:2px solid var(--surface-1);}
+  .msg .mc{flex:1; min-width:0;}
+  .msg .mc .mr{display:flex; justify-content:space-between; align-items:baseline;}
+  .msg .mc .mn{font-weight:700; font-size:15px;}
+  .msg .mc .mt{font-size:11.5px; color:var(--text-3); flex:0 0 auto; margin-left:8px;}
+  .msg .mc .mp{font-size:13px; color:var(--text-2); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+  /* ============================================================
+     电商 / 商城
+     ============================================================ */
+  .shop-head{padding:14px 18px 6px;}
+  .shop-banner{margin:8px 16px 4px; height:96px; border-radius:var(--r-lg); background:linear-gradient(120deg,#2a1d12,#3a2415); border:1px solid rgba(255,176,32,.3); display:flex; align-items:center; gap:14px; padding:0 16px; position:relative; overflow:hidden;}
+  .shop-banner .sb-t{font-family:var(--font-d); font-weight:800; font-size:17px; color:var(--coin);}
+  .shop-banner .sb-d{font-size:12px; color:var(--text-2); margin-top:4px;}
+  .shop-banner .sb-go{margin-left:auto; background:var(--coin); color:#1a1208; font-weight:800; font-size:12px; padding:8px 13px; border-radius:var(--r-pill);}
+  .shop-list{padding:12px 16px 16px; display:grid; grid-template-columns:repeat(2,1fr); gap:12px; overflow-y:auto;}
+  .prod{background:var(--surface-1); border:1px solid var(--line); border-radius:var(--r-md); overflow:hidden; cursor:pointer;}
+  .prod .pp{aspect-ratio:1; background-size:cover;}
+  .prod .pb{padding:10px 11px 12px;}
+  .prod .pb .pt{font-size:13.5px; font-weight:600; line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+  .prod .pb .ppr{display:flex; align-items:baseline; gap:6px; margin-top:8px;}
+  .prod .pb .ppr .pr{font-family:var(--font-d); font-weight:800; color:var(--brand); font-size:17px;}
+  .prod .pb .ppr .po{font-size:11px; color:var(--text-3); text-decoration:line-through;}
+  .prod .pb .ppr .ps{margin-left:auto; font-size:11px; color:var(--text-3);}
+
+  /* 拇指可达区可视化 */
+  .thumb-zone{position:absolute; inset:0; z-index:80; pointer-events:none; display:none;}
+  .thumb-zone.show{display:block;}
+  .thumb-zone .arc{position:absolute; right:0; bottom:0; width:300px; height:300px; border-radius:50%;
+    background:radial-gradient(circle at 80% 100%, rgba(46,204,113,.32), rgba(46,204,113,0) 70%);
+    border:2px dashed rgba(46,204,113,.6);}
+  .thumb-zone .lab{position:absolute; right:60px; bottom:70px; color:#2ecc71; font-size:11px; font-weight:700; font-family:var(--font-d);}
+
+  /* 顶部渐变遮罩用于信息流 */
+  .feed-fade{position:absolute; top:0; left:0; right:0; height:90px; background:linear-gradient(180deg, rgba(0,0,0,.4), transparent); z-index:3; pointer-events:none;}
+</style>
+</head>
+<body>
+
+<div class="stage-note">
+  <b>商业短视频 App · 交互原型</b><br/>
+  设计：UI Designer（像素君）<br/>
+  暗色优先 · 单手操作 · 拇指可达区已标注<br/>
+  点击底部 Tab / + / 右侧操作按钮试交互。
+</div>
+<div class="stage-ctl">
+  <button id="btnTheme">🌗 切换主题</button>
+  <button id="btnThumb">👍 拇指可达区</button>
+</div>
+
+<div class="phone" id="phone" data-theme="dark">
+  <div class="island"></div>
+  <div class="statusbar light-text" id="statusbar">
+    <span id="clock">9:41</span>
+    <span class="icons">
+      <svg width="17" height="12" viewBox="0 0 17 12" fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="4.5" y="4.5" width="3" height="7.5" rx="1"/><rect x="9" y="2" width="3" height="10" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="#fff"><path d="M8 2.5c2 0 3.8.8 5.2 2.1l1.2-1.3C12.6 1.4 10.4.5 8 .5S3.4 1.4 1.6 3.3l1.2 1.3C4.2 3.3 6 2.5 8 2.5z"/><circle cx="8" cy="9.5" r="2.4" fill="#fff"/></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13" fill="none"><rect x="1" y="1.5" width="21" height="10" rx="3" stroke="#fff" stroke-opacity=".5"/><rect x="3" y="3.5" width="16" height="6" rx="1.5" fill="#fff"/><rect x="23" y="4.5" width="2" height="4" rx="1" fill="#fff" fill-opacity=".5"/></svg>
+    </span>
+  </div>
+
+  <div class="screen">
+    <!-- ============ 首页 / 视频流 ============ -->
+    <div class="view active" id="view-feed">
+      <div class="feed" id="feed">
+        <div class="feed-fade"></div>
+        <!-- Reel 1 -->
+        <div class="reel">
+          <div class="poster" style="background:linear-gradient(160deg,#2b1d3a,#0f1a2e)"></div>
+          <div class="live-badge"><span class="dot"></span>直播中 · 工厂直供</div>
+          <div class="topbar">
+            <span class="seg on">关注</span><span class="seg">推荐</span><span class="seg">同城</span>
+          </div>
+          <div class="rail">
+            <div class="avatar-wrap">
+              <div class="avatar" style="background-image:url('https://i.pravatar.cc/100?img=12')"></div>
+              <div class="follow">+</div>
+            </div>
+            <div class="act liked" onclick="toggleLike(this)"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.3C.6 8.4 2.3 5 5.5 5 7.3 5 8.8 6 12 9c3.2-3 4.7-4 6.5-4 3.2 0 4.9 3.4 3.5 6.7C19.5 16.4 12 21 12 21z"/></svg></div><span class="count">2.4w</span></div>
+            <div class="act" onclick="openSheet('comments')"><div class="ic"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z"/></svg></div><span class="count">1863</span></div>
+            <div class="act faved" onclick="toggleFav(this)"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.3 5.7.8-4.1 4 1 5.7L12 16.8 6.9 19.4l1-5.7-4.1-4 5.7-.8z"/></svg></div><span class="count">收藏</span></div>
+            <div class="act" onclick="toast('已复制分享链接')"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v13"/></svg></div><span class="count">转发</span></div>
+          </div>
+          <div class="product-pill" onclick="goShop()">
+            <div class="thumb" style="background-image:url('https://picsum.photos/seed/p1/80')"></div>
+            <div class="info"><div class="t">财税合规自查手册 · 实体印刷</div><div class="p">¥39.9</div></div>
+            <div class="buy">下单</div>
+          </div>
+          <div class="meta">
+            <div class="author">慧根堂 · 老张讲财税 <svg class="verify" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.3 2.1 3.1-.4 1 3 2.6 1.7-1 3 1 3-2.6 1.7-1 3-3.1-.4L12 22l-2.3-2.1-3.1.4-1-3L3 15.6l1-3-1-3 2.6-1.7 1-3 3.1.4z"/><path d="M10.5 14.6l-2-2 1.1-1.1 1 1 3.3-3.3 1.1 1.1z" fill="#0a0a0c"/></svg></div>
+            <div class="caption">老板必看：个人卡流水超过这个数，税务就要找你了。 <span class="tag">#财税干货 #老板避坑</span></div>
+            <div class="music"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5" fill="#fff" stroke="none"/></svg> 原声 · 老张讲财税</div>
+          </div>
+        </div>
+        <!-- Reel 2 -->
+        <div class="reel">
+          <div class="poster" style="background:linear-gradient(160deg,#0f2e2a,#10202e)"></div>
+          <div class="topbar"><span class="seg">关注</span><span class="seg on">推荐</span><span class="seg">同城</span></div>
+          <div class="rail">
+            <div class="avatar-wrap"><div class="avatar" style="background-image:url('https://i.pravatar.cc/100?img=32')"></div><div class="follow">+</div></div>
+            <div class="act" onclick="toggleLike(this)"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.3C.6 8.4 2.3 5 5.5 5 7.3 5 8.8 6 12 9c3.2-3 4.7-4 6.5-4 3.2 0 4.9 3.4 3.5 6.7C19.5 16.4 12 21 12 21z"/></svg></div><span class="count">8961</span></div>
+            <div class="act" onclick="openSheet('comments')"><div class="ic"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z"/></svg></div><span class="count">532</span></div>
+            <div class="act" onclick="toggleFav(this)"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.3 5.7.8-4.1 4 1 5.7L12 16.8 6.9 19.4l1-5.7-4.1-4 5.7-.8z"/></svg></div><span class="count">收藏</span></div>
+            <div class="act" onclick="toast('已复制分享链接')"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v13"/></svg></div><span class="count">转发</span></div>
+          </div>
+          <div class="meta">
+            <div class="author">工厂直供优选 <svg class="verify" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.3 2.1 3.1-.4 1 3 2.6 1.7-1 3 1 3-2.6 1.7-1 3-3.1-.4L12 22l-2.3-2.1-3.1.4-1-3L3 15.6l1-3-1-3 2.6-1.7 1-3 3.1.4z"/><path d="M10.5 14.6l-2-2 1.1-1.1 1 1 3.3-3.3 1.1 1.1z" fill="#0a0a0c"/></svg></div>
+            <div class="caption">源头工厂实拍，今天直播间专享价。点小黄车直接带走。 <span class="tag">#源头好物 #工厂直供</span></div>
+            <div class="music"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5" fill="#fff" stroke="none"/></svg> 热门BGM · 活力节拍</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 发现 ============ -->
+    <div class="view" id="view-discover">
+      <div class="disc-head">
+        <div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg> 搜索话题 / 商品 / 创作者</div>
+      </div>
+      <div class="chips">
+        <span class="chip on">推荐</span><span class="chip">财税</span><span class="chip">老板课堂</span><span class="chip">源头工厂</span><span class="chip">本地生活</span><span class="chip">美食</span><span class="chip">穿搭</span>
+      </div>
+      <div class="disc-grid">
+        <div class="disc-card"><div class="dc-poster" style="background:linear-gradient(160deg,#3a2a1a,#1a1a2e)"><span class="badge">🔥 9.8w 赞</span></div><div class="dc-body"><div class="dc-t">三张表看明白公司到底赚没赚钱</div><div class="dc-m"><span class="au"><span class="a" style="background-image:url('https://i.pravatar.cc/40?img=12')"></span>老张讲财税</span><span>2.1w</span></div></div></div>
+        <div class="disc-card"><div class="dc-poster" style="background:linear-gradient(160deg,#1a3a2e,#10202e)"><span class="badge">🛒 带货</span></div><div class="dc-body"><div class="dc-t">工厂清仓！这套工具真香</div><div class="dc-m"><span class="au"><span class="a" style="background-image:url('https://i.pravatar.cc/40?img=32')"></span>工厂优选</span><span>8632</span></div></div></div>
+        <div class="disc-card"><div class="dc-poster" style="background:linear-gradient(160deg,#2a1a3a,#1a1a2e)"></div><div class="dc-body"><div class="dc-t">公转私的红线，踩了就麻烦</div><div class="dc-m"><span class="au"><span class="a" style="background-image:url('https://i.pravatar.cc/40?img=15')"></span>财税参谋</span><span>1.5w</span></div></div></div>
+        <div class="disc-card"><div class="dc-poster" style="background:linear-gradient(160deg,#3a1a1a,#2a1a1a)"></div><div class="dc-body"><div class="dc-t">本地老板都在用的获客法</div><div class="dc-m"><span class="au"><span class="a" style="background-image:url('https://i.pravatar.cc/40?img=20')"></span>同城优选</span><span>6421</span></div></div></div>
+      </div>
+    </div>
+
+    <!-- ============ 消息 ============ -->
+    <div class="view" id="view-msg">
+      <div class="msg-head">消息</div>
+      <div class="msg-list">
+        <div class="msg"><div class="mi shop"><svg viewBox="0 0 24 24"><path d="M6 6h15l-1.5 9h-12zM6 6L5 3H2M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm9 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg><span class="nb">2</span></div><div class="mc"><div class="mr"><span class="mn">买家咨询</span><span class="mt">刚刚</span></div><div class="mp">亲，手册有电子版吗？想先看看目录</div></div></div>
+        <div class="msg"><div class="mi order"><svg viewBox="0 0 24 24"><path d="M5 7h14v12H5zM5 7l-1-3H2M9 11v4"/></svg><span class="nb">1</span></div><div class="mc"><div class="mr"><span class="mn">订单通知</span><span class="mt">12分钟前</span></div><div class="mp">您的订单已发货，预计明天送达</div></div></div>
+        <div class="msg"><div class="mi sys"><svg viewBox="0 0 24 24"><path d="M12 3l9 16H3zM12 10v4M12 17v.5"/></svg></div><div class="mc"><div class="mr"><span class="mn">系统通知</span><span class="mt">1小时前</span></div><div class="mp">您的视频「个人卡流水」已通过审核</div></div></div>
+        <div class="msg"><div class="mi" style="background:var(--trust)"><svg viewBox="0 0 24 24"><path d="M14 9V5l7 7-7 7v-4H4V9z"/></svg></div><div class="mc"><div class="mr"><span class="mn">互动消息</span><span class="mt">昨天</span></div><div class="mp">小李老板 等 32 人赞了你的评论</div></div></div>
+      </div>
+    </div>
+
+    <!-- ============ 个人中心 ============ -->
+    <div class="view" id="view-profile">
+      <div class="profile-head">
+        <div class="top"><span style="font-family:var(--font-d);font-weight:800;font-size:18px">我</span><span class="set"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.3 1a7 7 0 0 0-1.7-1l-.3-2.6h-4l-.3 2.6a7 7 0 0 0-1.7 1l-2.3-1-2 3.4 2 1.5a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 1.7 1l.3 2.6h4l.3-2.6a7 7 0 0 0 1.7-1l2.3 1 2-3.4-2-1.5a7 7 0 0 0 .1-1z"/></svg></span></div>
+        <div class="profile-id">
+          <div class="pav" style="background-image:url('https://i.pravatar.cc/150?img=12')"></div>
+          <div class="pinfo">
+            <div class="pn">老张讲财税 <svg class="v" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.3 2.1 3.1-.4 1 3 2.6 1.7-1 3 1 3-2.6 1.7-1 3-3.1-.4L12 22l-2.3-2.1-3.1.4-1-3L3 15.6l1-3-1-3 2.6-1.7 1-3 3.1.4z"/><path d="M10.5 14.6l-2-2 1.1-1.1 1 1 3.3-3.3 1.1 1.1z" fill="#0a0a0c"/></svg></div>
+            <div class="pui">ID: laozhang_caishui · 苏州</div>
+            <div class="pbio">20年财税实战，专治老板看得懂的税务风险。点击下方挂车，带走合规手册。</div>
+          </div>
+        </div>
+        <div class="profile-stats">
+          <div class="st"><div class="sv">328</div><div class="sl">作品</div></div>
+          <div class="st"><div class="sv">86.4w</div><div class="sl">获赞</div></div>
+          <div class="st"><div class="sv">12.7w</div><div class="sl">粉丝</div></div>
+          <div class="st"><div class="sv">1023</div><div class="sl">关注</div></div>
+        </div>
+        <div class="profile-actions">
+          <div class="pa brand" onclick="openSheet('publish')">发布作品</div>
+          <div class="pa coin" onclick="toast('收益明细')">收益中心</div>
+          <div class="pa" onclick="goShop()">我的小店</div>
+        </div>
+      </div>
+      <div class="earn-card">
+        <div class="el"><div class="el-l">本月预计收益（含税）</div><div class="el-v">¥ 12,860</div></div>
+        <div class="eb" onclick="toast('提现/明细')">去提现</div>
+      </div>
+      <div class="ptabs">
+        <div class="pt on">作品</div><div class="pt">喜欢</div><div class="pt">收藏</div>
+      </div>
+      <div class="grid" style="overflow-y:auto; flex:1">
+        <div class="cell" style="background:linear-gradient(160deg,#2b1d3a,#0f1a2e)"><div class="playcnt"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>9.8w</div></div>
+        <div class="cell" style="background:linear-gradient(160deg,#0f2e2a,#10202e)"><div class="playcnt"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>6.2w</div></div>
+        <div class="cell" style="background:linear-gradient(160deg,#3a2a1a,#1a1a2e)"><div class="playcnt"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>4.1w</div></div>
+        <div class="cell" style="background:linear-gradient(160deg,#1a2a3a,#1a1a2e)"><div class="playcnt"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>3.3w</div></div>
+        <div class="cell" style="background:linear-gradient(160deg,#2a1a3a,#2a1a1a)"><div class="playcnt"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>2.9w</div></div>
+        <div class="cell" style="background:linear-gradient(160deg,#1a3a2a,#10202e)"><div class="playcnt"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>2.1w</div></div>
+      </div>
+    </div>
+
+    <!-- ============ 商城 / 电商 ============ -->
+    <div class="view" id="view-shop">
+      <div class="shop-head"><div style="font-family:var(--font-d);font-weight:800;font-size:20px">小店</div></div>
+      <div class="shop-banner"><div><div class="sb-t">品牌旗舰 · 慧根堂</div><div class="sb-d">财税合规好物 · 满99包邮</div></div><div class="sb-go" onclick="toast('进入品牌页')">进店</div></div>
+      <div class="chips"><span class="chip on">全部</span><span class="chip">书籍</span><span class="chip">课程</span><span class="chip">工具</span><span class="chip">咨询</span></div>
+      <div class="shop-list">
+        <div class="prod"><div class="pp" style="background:linear-gradient(160deg,#3a2a1a,#1a1a2e)"></div><div class="pb"><div class="pt">财税合规自查手册（实体书）</div><div class="ppr"><span class="pr">¥39.9</span><span class="po">¥59</span><span class="ps">已售 2.3w</span></div></div></div>
+        <div class="prod"><div class="pp" style="background:linear-gradient(160deg,#1a3a2e,#10202e)"></div><div class="pb"><div class="pt">老板税务风险 21 讲（视频课）</div><div class="ppr"><span class="pr">¥199</span><span class="po">¥299</span><span class="ps">已售 8612</span></div></div></div>
+        <div class="prod"><div class="pp" style="background:linear-gradient(160deg,#2a1a3a,#1a1a2e)"></div><div class="pb"><div class="pt">金税四期案例库 · 专业版</div><div class="ppr"><span class="pr">¥499</span><span class="ps">已售 3201</span></div></div></div>
+        <div class="prod"><div class="pp" style="background:linear-gradient(160deg,#3a1a1a,#2a1a1a)"></div><div class="pb"><div class="pt">一对一税务顾问（体验券）</div><div class="ppr"><span class="pr">¥99</span><span class="po">¥500</span><span class="ps">已售 1543</span></div></div></div>
+      </div>
+    </div>
+
+    <!-- 评论抽屉 -->
+    <div class="sheet-mask" id="mask-comments" onclick="closeSheet('comments')"></div>
+    <div class="sheet" id="sheet-comments">
+      <div class="grab"></div>
+      <div class="sheet-head"><span>评论 · 1863</span><span class="close" onclick="closeSheet('comments')">×</span></div>
+      <div class="body" id="commentBody">
+        <div class="comment"><div class="ca" style="background-image:url('https://i.pravatar.cc/60?img=5')"></div><div class="cc"><div class="cn">王总-制造业</div><div class="ct">讲得太及时了，我们公司正好踩在这个点上，求详细解读！</div><div class="cm"><span>2小时前</span><span class="lk" onclick="likeComment(this)"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.3C.6 8.4 2.3 5 5.5 5 7.3 5 8.8 6 12 9c3.2-3 4.7-4 6.5-4 3.2 0 4.9 3.4 3.5 6.7C19.5 16.4 12 21 12 21z"/></svg> <span>326</span></span><span>回复</span></div></div></div>
+        <div class="comment reply"><div class="ca" style="background-image:url('https://i.pravatar.cc/60?img=12')"></div><div class="cc"><div class="cn">老张讲财税（作者）</div><div class="ct">@王总 下条视频专门讲，先点关注不迷路～</div><div class="cm"><span>1小时前</span><span class="lk" onclick="likeComment(this)"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.3C.6 8.4 2.3 5 5.5 5 7.3 5 8.8 6 12 9c3.2-3 4.7-4 6.5-4 3.2 0 4.9 3.4 3.5 6.7C19.5 16.4 12 21 12 21z"/></svg> <span>88</span></span><span>回复</span></div></div></div>
+        <div class="comment"><div class="ca" style="background-image:url('https://i.pravatar.cc/60?img=8')"></div><div class="cc"><div class="cn">小李创业中</div><div class="ct">收藏了，这就去查我们公户流水，感谢老张！</div><div class="cm"><span>3小时前</span><span class="lk" onclick="likeComment(this)"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.3C.6 8.4 2.3 5 5.5 5 7.3 5 8.8 6 12 9c3.2-3 4.7-4 6.5-4 3.2 0 4.9 3.4 3.5 6.7C19.5 16.4 12 21 12 21z"/></svg> <span>54</span></span><span>回复</span></div></div></div>
+      </div>
+      <div class="compose"><input placeholder="留下你的看法…" /><button class="send" onclick="postComment()">发送</button></div>
+    </div>
+
+    <!-- 发布底部菜单 -->
+    <div class="sheet-mask" id="mask-publish" onclick="closeSheet('publish')"></div>
+    <div class="sheet publish-sheet" id="sheet-publish">
+      <div class="grab"></div>
+      <div class="sheet-head"><span>创作中心</span><span class="close" onclick="closeSheet('publish')">×</span></div>
+      <div class="publish-grid">
+        <div class="pcell primary" onclick="toast('打开拍摄')"><div class="pic"><svg viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L19 6h0a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="12.5" r="3.5"/></svg></div><div class="pl">拍摄</div></div>
+        <div class="pcell" onclick="toast('打开相册')"><div class="pic" style="background:var(--surface-3)"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-4 4-2-2-7 7"/></svg></div><div class="pl">相册</div></div>
+        <div class="pcell" onclick="toast('模板创作')"><div class="pic" style="background:linear-gradient(135deg,#4c8dff,#7a5cff)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg></div><div class="pl">模板</div></div>
+        <div class="pcell live" onclick="toast('开直播')"><div class="pic"><svg viewBox="0 0 24 24"><path d="M6 9a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3z"/><path d="M10 9.5v5l4-2.5z" fill="#fff" stroke="none"/></svg></div><div class="pl">直播</div></div>
+        <div class="pcell shop" onclick="toast('带货发布')"><div class="pic"><svg viewBox="0 0 24 24"><path d="M6 6h15l-1.5 9h-12zM6 6L5 3H2M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm9 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg></div><div class="pl">带货</div></div>
+        <div class="pcell draft" onclick="toast('我的草稿')"><div class="pic"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5zM9 9h6M9 13h6M9 17h4"/></svg></div><div class="pl">草稿箱</div></div>
+        <div class="pcell draft" onclick="toast('预约发布')"><div class="pic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></div><div class="pl">定时</div></div>
+        <div class="pcell draft" onclick="toast('多平台分发')"><div class="pic"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8 11l8-4M8 13l8 4"/></svg></div><div class="pl">多平台</div></div>
+      </div>
+      <div class="publish-tip">发布即同步至「推荐」与你的粉丝流 · 可一键挂车变现</div>
+    </div>
+
+    <!-- 拇指可达区 -->
+    <div class="thumb-zone" id="thumbZone"><div class="arc"></div><div class="lab">拇指可达区</div></div>
+  </div>
+
+  <!-- 底部导航 -->
+  <div class="tabbar">
+    <div class="tab active" data-view="feed"><svg viewBox="0 0 24 24"><path d="M3 10l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>首页</div>
+    <div class="tab" data-view="discover"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9l-2 5-5 2 2-5z"/></svg>发现</div>
+    <div class="tab create" onclick="openSheet('publish')"><div class="plus"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div></div>
+    <div class="tab" data-view="msg"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/></svg>消息</div>
+    <div class="tab" data-view="profile"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>我</div>
+  </div>
+</div>
+
+<script>
+  // Tab 切换
+  const tabs = document.querySelectorAll('.tab[data-view]');
+  tabs.forEach(t=>t.addEventListener('click',()=>{
+    tabs.forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    const v=t.dataset.view;
+    document.querySelectorAll('.view').forEach(vw=>vw.classList.remove('active'));
+    document.getElementById('view-'+v).classList.add('active');
+  }));
+
+  // 抽屉
+  function openSheet(name){document.getElementById('mask-'+name).classList.add('show');document.getElementById('sheet-'+name).classList.add('show');}
+  function closeSheet(name){document.getElementById('mask-'+name).classList.remove('show');document.getElementById('sheet-'+name).classList.remove('show');}
+
+  // 点赞 / 收藏
+  function toggleLike(el){el.classList.toggle('liked');const c=el.querySelector('.count');let n=parseInt((c.textContent||'0'));c.textContent=el.classList.contains('liked')?(n+1):(n-1);}
+  function toggleFav(el){el.classList.toggle('faved');}
+  function likeComment(el){el.classList.toggle('on');const s=el.querySelector('span');let n=parseInt(s.textContent)||0;s.textContent=el.classList.contains('on')?n+1:n-1;}
+
+  // 发布评论
+  function postComment(){
+    const input=document.querySelector('#sheet-comments .compose input');
+    const val=input.value.trim(); if(!val)return;
+    const body=document.getElementById('commentBody');
+    const d=document.createElement('div');d.className='comment';
+    d.innerHTML='<div class="ca" style="background-image:url(\'https://i.pravatar.cc/60?img=12\')"></div><div class="cc"><div class="cn">我</div><div class="ct">'+val.replace(/</g,'&lt;')+'</div><div class="cm"><span>刚刚</span><span class="lk" onclick="likeComment(this)"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.3C.6 8.4 2.3 5 5.5 5 7.3 5 8.8 6 12 9c3.2-3 4.7-4 6.5-4 3.2 0 4.9 3.4 3.5 6.7C19.5 16.4 12 21 12 21z"/></svg> <span>0</span></span><span>回复</span></div></div>';
+    body.insertBefore(d,body.firstChild);input.value='';body.scrollTop=0;
+  }
+
+  // 主题切换
+  const phone=document.getElementById('phone');
+  const statusbar=document.getElementById('statusbar');
+  document.getElementById('btnTheme').addEventListener('click',function(){
+    const cur=phone.dataset.theme;const next=cur==='dark'?'light':'dark';
+    phone.dataset.theme=next;statusbar.className='statusbar '+(next==='dark'?'light-text':'dark-text');
+    this.classList.toggle('on',next==='light');
+  });
+
+  // 拇指可达区
+  document.getElementById('btnThumb').addEventListener('click',function(){
+    document.getElementById('thumbZone').classList.toggle('show');this.classList.toggle('on');
+  });
+
+  // 简单 toast
+  let tt;function toast(msg){let e=document.getElementById('toast');if(!e){e=document.createElement('div');e.id='toast';e.style.cssText='position:absolute;left:50%;bottom:120px;transform:translateX(-50%);background:rgba(0,0,0,.82);color:#fff;font-size:13px;padding:10px 16px;border-radius:12px;z-index:90;pointer-events:none;transition:opacity .2s;white-space:nowrap';document.querySelector('.phone').appendChild(e);}e.textContent=msg;e.style.opacity='1';clearTimeout(tt);tt=setTimeout(()=>e.style.opacity='0',1400);}
+
+  // 进店
+  function goShop(){document.querySelectorAll('.view').forEach(vw=>vw.classList.remove('active'));document.getElementById('view-shop').classList.add('active');tabs.forEach(x=>x.classList.remove('active'));document.querySelector('.tab[data-view="profile"]').classList.add('active');}
+
+  // 时钟
+  function tick(){const d=new Date();document.getElementById('clock').textContent=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+  tick();setInterval(tick,20000);
+</script>
+</body>
+</html>

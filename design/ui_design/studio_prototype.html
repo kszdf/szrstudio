@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>慧根堂 · 数字人视频工作台（商用化原型）</title>
+<style>
+/* ============ 设计令牌（浅色为主 / 商用 SaaS 风格，清新通透） ============ */
+:root{
+  --bg:#f5f7fc; --bg-2:#eef2f9; --panel:#ffffff; --panel-2:#f8fafd;
+  --border:#e6ebf4; --border-soft:#eef1f7;
+  --ink:#1b2133; --muted:#5d6a86; --faint:#9aa4bd;
+  --brand:#4f7cff; --brand-2:#7a5cff; --brand-ink:#fff;
+  --grad:linear-gradient(135deg,#4f7cff,#7a5cff);
+  --coin:#f0a020; --ok:#19b56a; --warn:#f0a020; --err:#ef4d5e; --hi:#ff4d8d;
+  --radius:14px; --radius-sm:10px; --radius-lg:20px;
+  --shadow-sm:0 1px 2px rgba(20,30,60,.06);
+  --shadow:0 8px 24px rgba(20,30,60,.10);
+  --shadow-lg:0 20px 50px rgba(20,30,60,.14);
+  --fs-12:12px; --fs-13:13px; --fs-14:14px; --fs-15:15px; --fs-16:16px; --fs-18:18px; --fs-22:22px; --fs-28:28px;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px; --sp-10:40px;
+  --sidebar-w:228px; --top-h:56px;
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+[data-theme="dark"]{
+  --bg:#171b29; --bg-2:#1e2435; --panel:#20283c; --panel-2:#283150;
+  --border:#2e3850; --border-soft:#262f45;
+  --ink:#eef2fb; --muted:#9aa6c4; --faint:#69748f;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.25);
+  --shadow:0 8px 24px rgba(0,0,0,.30);
+  --shadow-lg:0 20px 50px rgba(0,0,0,.40);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:"PingFang SC","Microsoft YaHei",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  background:var(--bg);color:var(--ink);font-size:var(--fs-14);line-height:1.5;
+  -webkit-font-smoothing:antialiased;overflow:hidden;transition:background .3s var(--ease),color .3s var(--ease)}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:9px}
+::-webkit-scrollbar-thumb:hover{background:var(--faint)}
+
+/* ============ 顶部栏 ============ */
+.topbar{height:var(--top-h);display:flex;align-items:center;gap:var(--sp-4);
+  padding:0 var(--sp-4);background:color-mix(in srgb,var(--panel) 80%,transparent);
+  backdrop-filter:blur(18px);border-bottom:1px solid var(--border);position:relative;z-index:30}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:var(--fs-15);letter-spacing:.3px}
+.brand .logo{width:30px;height:30px;border-radius:9px;background:var(--grad);display:grid;place-items:center;color:#fff;font-size:15px;box-shadow:0 4px 14px rgba(79,124,255,.45)}
+.workspace{display:flex;align-items:center;gap:8px;padding:6px 12px;border:1px solid var(--border);border-radius:999px;background:var(--panel-2);font-size:var(--fs-13);font-weight:600;transition:.2s}
+.workspace:hover{border-color:var(--brand)}
+.workspace .dot{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+.topbar .proj{color:var(--muted);font-size:var(--fs-13)}
+.topbar .spacer{flex:1}
+.plan-badge{font-size:var(--fs-12);font-weight:700;padding:5px 11px;border-radius:999px;background:rgba(79,124,255,.16);color:#9db4ff;border:1px solid rgba(79,124,255,.3)}
+.usage{display:flex;align-items:center;gap:9px;font-size:var(--fs-12);color:var(--muted)}
+.usage .bar{width:74px;height:6px;border-radius:6px;background:var(--border);overflow:hidden}
+.usage .bar i{display:block;height:100%;width:24%;background:var(--grad);border-radius:6px}
+.btn-up{font-size:var(--fs-13);font-weight:700;padding:7px 14px;border-radius:10px;background:var(--grad);color:#fff;box-shadow:0 4px 14px rgba(122,92,255,.35);transition:.2s var(--ease)}
+.btn-up:hover{transform:translateY(-1px);box-shadow:0 7px 20px rgba(122,92,255,.45)}
+.icon-btn{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:16px;color:var(--muted);border:1px solid transparent;transition:.2s}
+.icon-btn:hover{background:var(--panel-2);color:var(--ink);border-color:var(--border)}
+.avatar-me{width:34px;height:34px;border-radius:50%;background:var(--grad);display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px}
+
+/* ============ 布局 ============ */
+.shell{display:grid;grid-template-columns:var(--sidebar-w) 1fr;height:calc(100vh - var(--top-h))}
+.sidebar{background:var(--bg-2);border-right:1px solid var(--border);padding:var(--sp-4) var(--sp-3);display:flex;flex-direction:column;gap:4px;overflow:auto}
+.nav-group{font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--faint);text-transform:none;padding:14px 12px 6px}
+.nav-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;color:var(--muted);font-weight:600;font-size:var(--fs-14);transition:.18s;position:relative}
+.nav-item .ni{width:20px;text-align:center;font-size:16px}
+.nav-item:hover{background:var(--panel);color:var(--ink)}
+.nav-item.on{background:var(--panel);color:var(--ink)}
+.nav-item.on::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:3px;background:var(--grad)}
+.nav-item .tag{margin-left:auto;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;background:rgba(255,176,46,.18);color:var(--coin)}
+.side-cta{margin-top:auto;padding:14px;border-radius:14px;background:var(--grad);color:#fff;box-shadow:0 8px 22px rgba(79,124,255,.35)}
+.side-cta h4{font-size:var(--fs-14);margin-bottom:4px}
+.side-cta p{font-size:11.5px;opacity:.85;margin-bottom:10px}
+.side-cta button{width:100%;padding:8px;border-radius:9px;background:#fff;color:#4f56c4;font-weight:800;font-size:var(--fs-13)}
+
+.main{overflow:auto;position:relative}
+.view{display:none;animation:fade .35s var(--ease)}
+.view.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ============ 通用卡片 ============ */
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+.chip{font-size:var(--fs-12);padding:5px 11px;border-radius:999px;background:var(--panel-2);border:1px solid var(--border);color:var(--muted);font-weight:600;transition:.18s}
+.chip:hover{color:var(--ink);border-color:var(--faint)}
+.chip.on{background:rgba(79,124,255,.16);color:#9db4ff;border-color:rgba(79,124,255,.35)}
+.btn{font-weight:700;font-size:var(--fs-14);padding:9px 16px;border-radius:10px;background:var(--panel-2);border:1px solid var(--border);color:var(--ink);transition:.2s var(--ease)}
+.btn:hover{border-color:var(--faint);transform:translateY(-1px)}
+.btn.primary{background:var(--grad);color:#fff;border:none;box-shadow:0 4px 14px rgba(79,124,255,.35)}
+.btn.primary:hover{box-shadow:0 7px 20px rgba(79,124,255,.45)}
+
+/* ============ 工作台首页 ============ */
+.dash{padding:var(--sp-8) var(--sp-8) var(--sp-10);max-width:1280px;margin:0 auto}
+.hero{display:grid;grid-template-columns:1.4fr 1fr;gap:var(--sp-6);align-items:stretch;margin-bottom:var(--sp-8)}
+.hero-main{padding:var(--sp-8);border-radius:var(--radius-lg);background:
+  radial-gradient(120% 120% at 0% 0%,rgba(79,124,255,.22),transparent 55%),
+  radial-gradient(120% 120% at 100% 100%,rgba(122,92,255,.18),transparent 50%),var(--panel);
+  border:1px solid var(--border);position:relative;overflow:hidden}
+.hero-main h1{font-size:var(--fs-28);line-height:1.25;font-weight:800;margin-bottom:10px}
+.hero-main h1 .g{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero-main p{color:var(--muted);max-width:440px;margin-bottom:var(--sp-6)}
+.hero-steps{display:flex;gap:8px;margin-bottom:var(--sp-6);flex-wrap:wrap}
+.hs{display:flex;align-items:center;gap:8px;font-size:var(--fs-13);font-weight:600;color:var(--muted);background:var(--bg-2);border:1px solid var(--border);padding:7px 12px;border-radius:999px}
+.hs b{width:20px;height:20px;border-radius:50%;background:var(--grad);color:#fff;display:grid;place-items:center;font-size:11px}
+.hero-cta{display:flex;gap:12px}
+.hero-side{display:flex;flex-direction:column;gap:var(--sp-4)}
+.stat-card{padding:var(--sp-5);border-radius:var(--radius);background:var(--panel);border:1px solid var(--border);box-shadow:var(--shadow-sm)}
+.stat-card .k{font-size:var(--fs-13);color:var(--muted);margin-bottom:6px}
+.stat-card .v{font-size:var(--fs-28);font-weight:800}
+.stat-card .v small{font-size:var(--fs-14);color:var(--muted);font-weight:600}
+.stat-card .row{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
+.plan-pill{font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px;background:rgba(47,208,122,.16);color:var(--ok)}
+.section-h{display:flex;align-items:center;justify-content:space-between;margin:var(--sp-8) 0 var(--sp-4)}
+.section-h h3{font-size:var(--fs-18);font-weight:800}
+.section-h a{color:var(--brand);font-size:var(--fs-13);font-weight:700;cursor:pointer}
+.tpl-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--sp-4)}
+.tpl{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:.25s var(--ease);cursor:pointer}
+.tpl:hover{transform:translateY(-4px);box-shadow:var(--shadow-lg);border-color:var(--brand)}
+.tpl .thumb{height:118px;display:grid;place-items:center;font-size:30px;color:#fff;position:relative}
+.tpl .thumb .dur{position:absolute;right:8px;bottom:8px;font-size:10px;font-weight:700;background:rgba(0,0,0,.55);padding:2px 7px;border-radius:6px;color:#fff}
+.tpl .body{padding:12px 14px}
+.tpl .body h5{font-size:var(--fs-14);font-weight:700;margin-bottom:3px}
+.tpl .body p{font-size:11.5px;color:var(--muted)}
+.recent{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--sp-4)}
+.vid{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:.25s var(--ease);cursor:pointer}
+.vid:hover{transform:translateY(-3px);box-shadow:var(--shadow);border-color:var(--brand)}
+.vid .cv{aspect-ratio:9/16;display:grid;place-items:center;font-size:26px;color:#fff;position:relative}
+.vid .cv .st{position:absolute;top:8px;left:8px;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px}
+.st.done{background:rgba(47,208,122,.9);color:#04210f}
+.st.rendering{background:rgba(255,176,46,.92);color:#3a2600}
+.st.queue{background:rgba(79,124,255,.92);color:#fff}
+.vid .cv .more{position:absolute;right:8px;top:8px;width:24px;height:24px;border-radius:7px;background:rgba(0,0,0,.5);display:grid;place-items:center;color:#fff;font-size:13px}
+.vid .meta{padding:10px 12px}
+.vid .meta h5{font-size:var(--fs-13);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vid .meta p{font-size:11px;color:var(--muted)}
+
+/* ============ 创作工作室 ============ */
+.studio{padding:var(--sp-4) var(--sp-5) var(--sp-6);height:100%;display:flex;flex-direction:column;gap:var(--sp-3)}
+.wizard{display:flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--border);border-radius:999px;padding:6px;width:max-content}
+.wz{display:flex;align-items:center;gap:9px;padding:8px 16px;border-radius:999px;font-size:var(--fs-13);font-weight:700;color:var(--muted);transition:.2s}
+.wz b{width:22px;height:22px;border-radius:50%;background:var(--panel-2);border:1px solid var(--border);display:grid;place-items:center;font-size:11px}
+.wz.on{background:rgba(79,124,255,.14);color:#aebdff}
+.wz.on b{background:var(--grad);color:#fff;border:none}
+.wz.done b{background:var(--ok);color:#04210f;border:none}
+.wz-sep{width:18px;height:1px;background:var(--border)}
+
+.studio-body{flex:1;display:grid;grid-template-columns:200px 1fr 312px;gap:var(--sp-3);min-height:0}
+.scene-list{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-3);overflow:auto;display:flex;flex-direction:column;gap:8px}
+.scene-list .sl-h{font-size:11px;font-weight:800;color:var(--faint);letter-spacing:.5px;padding:2px 4px 4px}
+.scene{display:flex;gap:9px;padding:8px;border-radius:10px;border:1px solid var(--border);background:var(--panel-2);cursor:pointer;transition:.18s}
+.scene:hover{border-color:var(--faint)}
+.scene.on{border-color:var(--brand);background:rgba(79,124,255,.08)}
+.scene .num{width:22px;height:22px;border-radius:6px;background:var(--bg-2);display:grid;place-items:center;font-size:11px;font-weight:800;color:var(--muted)}
+.scene .txt{font-size:11.5px;color:var(--muted);line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.scene.add{border-style:dashed;justify-content:center;color:var(--faint);font-weight:700}
+
+.canvas-col{display:flex;flex-direction:column;gap:var(--sp-3);min-height:0}
+.canvas-wrap{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);flex:1;display:flex;flex-direction:column;min-height:0}
+.canvas-top{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)}
+.canvas-top .seg{display:flex;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:3px}
+.canvas-top .seg button{font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:6px;color:var(--muted)}
+.canvas-top .seg button.on{background:var(--brand);color:#fff}
+.canvas{flex:1;display:grid;place-items:center;background:
+  radial-gradient(80% 80% at 50% 30%,rgba(79,124,255,.10),transparent),var(--bg);
+  min-height:0;padding:var(--sp-4);position:relative}
+.stage{width:min(280px,100%);aspect-ratio:9/16;background:#0a0c12;border-radius:14px;box-shadow:var(--shadow-lg);position:relative;overflow:hidden;display:grid;place-items:center}
+.stage .bg{position:absolute;inset:0;background:linear-gradient(160deg,#1b2748,#2a1b48);opacity:.9}
+.stage .av{position:relative;width:120px;height:120px;border-radius:50%;background:var(--grad);display:grid;place-items:center;color:#fff;font-size:38px;font-weight:800;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.stage .av.f{background:linear-gradient(135deg,#ff7eb3,#ff4d8d)}
+.stage .dual{position:relative;display:flex;gap:18px}
+.stage .dual .av{width:84px;height:84px;font-size:26px}
+.stage .cap{position:absolute;left:14px;right:14px;bottom:16px;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);border-radius:10px;padding:8px 11px;font-size:12px;color:#fff;text-align:center;line-height:1.4}
+.stage .badge-live{position:absolute;top:10px;left:10px;font-size:10px;font-weight:800;background:var(--hi);color:#fff;padding:3px 8px;border-radius:6px}
+.timeline{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px}
+.timeline .tl-h{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:11px;color:var(--muted);font-weight:600}
+.timeline .tl-h .tool{margin-left:auto;display:flex;gap:6px}
+.timeline .tl-h .tool button{font-size:13px;width:26px;height:26px;border-radius:7px;background:var(--panel-2);border:1px solid var(--border);color:var(--muted)}
+.track{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.track .lab{width:46px;font-size:10.5px;color:var(--faint);font-weight:700;flex-shrink:0}
+.track .lane{flex:1;height:26px;background:var(--bg-2);border-radius:7px;position:relative;overflow:hidden}
+.track .clip{position:absolute;top:3px;bottom:3px;border-radius:5px;display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden}
+.clip.v{background:linear-gradient(90deg,#4f7cff,#6f8dff)}
+.clip.a{background:linear-gradient(90deg,#2fd07a,#37e08a);color:#04210f}
+.clip.s{background:linear-gradient(90deg,#ffb02e,#ffc24d);color:#3a2600}
+.clip.p{background:linear-gradient(90deg,#ff4d8d,#ff7eb3)}
+
+.inspector{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.insp-tabs{display:flex;border-bottom:1px solid var(--border);padding:0 6px}
+.insp-tabs button{flex:1;padding:12px 4px;font-size:12px;font-weight:700;color:var(--muted);border-bottom:2px solid transparent;transition:.18s}
+.insp-tabs button.on{color:var(--ink);border-bottom-color:var(--brand)}
+.insp-body{padding:var(--sp-4);overflow:auto;flex:1}
+.field{margin-bottom:var(--sp-4)}
+.field>label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:7px}
+.av-pick{display:flex;gap:8px}
+.av-pick .opt{flex:1;aspect-ratio:1;border-radius:12px;background:var(--grad);display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;cursor:pointer;border:2px solid transparent;transition:.18s}
+.av-pick .opt.f{background:linear-gradient(135deg,#ff7eb3,#ff4d8d)}
+.av-pick .opt.sel{border-color:#fff;box-shadow:0 0 0 3px rgba(79,124,255,.4)}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border-soft)}
+.toggle-row:last-child{border-bottom:none}
+.toggle-row .t-l{font-size:13px;font-weight:600}
+.toggle-row .t-l small{display:block;color:var(--faint);font-size:11px;font-weight:500}
+.switch{width:40px;height:23px;border-radius:999px;background:var(--border);position:relative;transition:.2s;flex-shrink:0}
+.switch.on{background:var(--brand)}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:17px;height:17px;border-radius:50%;background:#fff;transition:.2s}
+.switch.on::after{left:20px}
+.range{width:100%;accent-color:var(--brand)}
+.seg-row{display:flex;gap:6px;flex-wrap:wrap}
+.swatches{display:flex;gap:7px;flex-wrap:wrap}
+.sw{width:28px;height:28px;border-radius:8px;cursor:pointer;border:2px solid transparent}
+.sw.sel{border-color:#fff;box-shadow:0 0 0 2px var(--brand)}
+
+.script-bar{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-3) var(--sp-4);display:grid;grid-template-columns:1fr auto;gap:var(--sp-4);align-items:center}
+.script-bar .sb-input{display:flex;flex-direction:column;gap:8px}
+.script-bar textarea{width:100%;min-height:54px;resize:vertical;background:var(--bg-2);border:1px solid var(--border);border-radius:10px;color:var(--ink);padding:10px 12px;font-size:13px;font-family:inherit;line-height:1.6}
+.script-bar textarea:focus{outline:none;border-color:var(--brand)}
+.tag-m{color:#9db4ff;font-weight:800}.tag-f{color:#ff9ec7;font-weight:800}
+.render-status{display:flex;align-items:center;gap:14px}
+.rs-item{display:flex;flex-direction:column;align-items:center}
+.rs-item .n{font-size:var(--fs-18);font-weight:800}
+.rs-item .l{font-size:10px;color:var(--muted)}
+.rs-eta{font-size:11px;color:var(--muted);text-align:right}
+.rs-eta b{color:var(--coin)}
+
+/* ============ 形象库 ============ */
+.avatars{padding:var(--sp-6) var(--sp-8) var(--sp-10);max-width:1280px;margin:0 auto}
+.av-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:var(--sp-4)}
+.av-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:.25s var(--ease);cursor:pointer}
+.av-card:hover{transform:translateY(-4px);box-shadow:var(--shadow-lg);border-color:var(--brand)}
+.av-card .pic{aspect-ratio:1;border-radius:0;display:grid;place-items:center;color:#fff;font-size:40px;font-weight:800}
+.av-card .info{padding:11px 13px}
+.av-card .info h5{font-size:var(--fs-14);font-weight:700}
+.av-card .info p{font-size:11.5px;color:var(--muted);margin-top:2px}
+.av-card .info .meta{display:flex;gap:6px;margin-top:8px}
+.mini-tag{font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--panel-2);border:1px solid var(--border);color:var(--muted)}
+.mini-tag.v{color:#9db4ff;border-color:rgba(79,124,255,.3)}
+.dual-banner{margin:var(--sp-6) 0;padding:var(--sp-6);border-radius:var(--radius-lg);display:flex;align-items:center;gap:var(--sp-5);
+  background:radial-gradient(120% 140% at 100% 0%,rgba(255,77,141,.18),transparent 55%),var(--panel);border:1px solid var(--border)}
+.dual-banner .av{width:64px;height:64px;border-radius:50%;background:var(--grad);display:grid;place-items:center;color:#fff;font-weight:800;font-size:22px}
+.dual-banner .av{width:64px;height:64px;border-radius:50%;background:var(--grad);display:grid;place-items:center;color:#fff;font-weight:800;font-size:22px}
+.dual-banner .av.f{background:linear-gradient(135deg,#ff7eb3,#ff4d8d)}
+.dual-banner h4{font-size:var(--fs-18);font-weight:800;margin-bottom:5px}
+.dual-banner p{color:var(--muted);font-size:var(--fs-13);max-width:560px}
+.dual-banner .btn{margin-left:auto;flex-shrink:0}
+
+/* ============ 模板市场 / 素材 / API ============ */
+.simple{padding:var(--sp-8);max-width:1100px;margin:0 auto}
+.simple h2{font-size:var(--fs-22);font-weight:800;margin-bottom:6px}
+.simple .sub{color:var(--muted);margin-bottom:var(--sp-5)}
+.api-box{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-5);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;color:var(--muted);line-height:1.8}
+.api-box .k{color:var(--brand)}
+.api-box .s{color:var(--ok)}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);padding:11px 20px;border-radius:12px;font-weight:700;font-size:13px;opacity:0;transition:.3s var(--ease);z-index:100;box-shadow:var(--shadow-lg);pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (max-width:1180px){
+  .hero{grid-template-columns:1fr}.tpl-grid,.recent,.av-grid{grid-template-columns:repeat(3,1fr)}
+  .studio-body{grid-template-columns:160px 1fr 280px}
+}
+@media (max-width:900px){
+  .shell{grid-template-columns:1fr}.sidebar{display:none}.tpl-grid,.recent,.av-grid{grid-template-columns:repeat(2,1fr)}
+}
+
+/* ============ 登录 / 注册 闸门（商用账号体系） ============ */
+.auth-screen{position:fixed;inset:0;z-index:200;display:grid;place-items:center;padding:24px;overflow:auto;
+  background:radial-gradient(120% 120% at 0% 0%,rgba(79,124,255,.16),transparent 50%),
+             radial-gradient(120% 120% at 100% 100%,rgba(122,92,255,.13),transparent 50%),var(--bg)}
+.auth-card{width:min(900px,100%);background:var(--panel);border:1px solid var(--border);border-radius:24px;box-shadow:var(--shadow-lg);overflow:hidden;display:grid;grid-template-columns:1fr 1fr;min-height:540px}
+.auth-aside{background:linear-gradient(155deg,#4f7cff,#7a5cff);color:#fff;padding:42px 38px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+.auth-aside::after{content:"";position:absolute;right:-60px;bottom:-60px;width:220px;height:220px;border-radius:50%;background:rgba(255,255,255,.12)}
+.auth-aside .a-logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:17px}
+.auth-aside .a-logo .logo{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.22);display:grid;place-items:center;font-size:17px}
+.auth-aside h2{font-size:27px;font-weight:800;line-height:1.32;position:relative;z-index:1}
+.auth-aside p{font-size:13.5px;opacity:.9;line-height:1.7;position:relative;z-index:1}
+.auth-aside .a-points{display:flex;flex-direction:column;gap:11px;position:relative;z-index:1}
+.auth-aside .a-points span{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600}
+.auth-aside .a-points span i{width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.22);display:grid;place-items:center;font-size:11px;font-style:normal}
+.auth-main{padding:42px 40px;display:flex;flex-direction:column;justify-content:center}
+.auth-tabs{display:flex;gap:20px;margin-bottom:24px}
+.auth-tabs button{font-size:15px;font-weight:700;color:var(--muted);padding-bottom:9px;border-bottom:2px solid transparent;transition:.18s}
+.auth-tabs button.on{color:var(--ink);border-bottom-color:var(--brand)}
+.auth-form{display:none}.auth-form.on{display:block;animation:fade .3s var(--ease)}
+.form-field{margin-bottom:16px}
+.form-field label{display:block;font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:7px}
+.form-input{padding:12px 14px;border:1px solid var(--border);border-radius:11px;font-size:14px;width:100%;background:var(--panel-2);color:var(--ink);transition:.18s;font-family:inherit}
+.form-input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(79,124,255,.12)}
+.auth-row{display:flex;align-items:center;justify-content:space-between;margin:4px 0 18px;font-size:12.5px;color:var(--muted)}
+.auth-link{color:var(--brand);font-weight:700;cursor:pointer}.auth-link:hover{text-decoration:underline}
+.btn-block{width:100%;padding:13px;border-radius:11px;font-weight:800;font-size:15px;background:var(--grad);color:#fff;border:none;box-shadow:0 6px 18px rgba(122,92,255,.32);transition:.2s var(--ease)}
+.btn-block:hover{transform:translateY(-1px);box-shadow:0 9px 24px rgba(122,92,255,.42)}
+.auth-sub{text-align:center;margin-top:16px;font-size:12.5px;color:var(--muted)}
+.auth-sub .auth-link{margin-left:4px}
+.auth-tip{margin-top:14px;font-size:11.5px;color:var(--faint);text-align:center;line-height:1.6}
+
+/* ============ 顶栏头像下拉菜单 ============ */
+.acc-wrap{position:relative}
+.acc-menu{position:absolute;right:0;top:46px;width:200px;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:6px;z-index:50;display:none}
+.acc-menu.show{display:block;animation:fade .2s var(--ease)}
+.acc-menu .mi{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;transition:.15s}
+.acc-menu .mi:hover{background:var(--panel-2)}
+.acc-menu .mi.danger{color:var(--err)}
+.acc-menu .sep{height:1px;background:var(--border);margin:5px 0}
+
+/* ============ 账号设置页 ============ */
+.acct{padding:var(--sp-8);max-width:820px;margin:0 auto}
+.acct-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-6);margin-bottom:var(--sp-5)}
+.acct-card h3{font-size:var(--fs-16);font-weight:800;margin-bottom:var(--sp-4)}
+.acct-row{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--border-soft)}
+.acct-row:last-child{border-bottom:none}
+.acct-row .l{font-size:13.5px;font-weight:600}.acct-row .l small{display:block;color:var(--faint);font-size:11.5px;font-weight:500;margin-top:2px}
+.acct-row .r{font-size:13px;color:var(--muted);font-weight:600}
+.acct-row .r .ok{color:var(--ok)}
+</style>
+</head>
+<body>
+
+<!-- ===== 登录 / 注册 闸门（商用账号体系） ===== -->
+<div class="auth-screen" id="authScreen">
+  <div class="auth-card">
+    <div class="auth-aside">
+      <div class="a-logo"><span class="logo">慧</span> 慧根堂 · 数字人工坊</div>
+      <div>
+        <h2>把文案变成<br>会说话的数字人视频</h2>
+        <p>财税行业「双声对播」数字人引擎。粘贴脚本，自动拆分男女声线，一键生成可发布短视频。</p>
+      </div>
+      <div class="a-points">
+        <span><i>✓</i> 注册即开通标准版工作空间</span>
+        <span><i>✓</i> 多租户隔离，团队共享形象与素材</span>
+        <span><i>✓</i> 开放 API，可嵌入自有业务系统</span>
+      </div>
+    </div>
+    <div class="auth-main">
+      <div class="auth-tabs">
+        <button class="on" onclick="switchAuth('login')">登录</button>
+        <button onclick="switchAuth('register')">注册</button>
+      </div>
+
+      <!-- 登录 -->
+      <form class="auth-form on" id="f-login" onsubmit="return doLogin(event)">
+        <div class="form-field">
+          <label>账号（手机号 / 邮箱）</label>
+          <input class="form-input" type="text" placeholder="请输入注册时的账号" required>
+        </div>
+        <div class="form-field">
+          <label>密码</label>
+          <input class="form-input" type="password" placeholder="请输入密码" required>
+        </div>
+        <div class="auth-row">
+          <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-weight:600">
+            <input type="checkbox" checked> 记住登录
+          </label>
+          <span class="auth-link" onclick="switchAuth('forgot')">忘记密码？</span>
+        </div>
+        <button class="btn-block" type="submit">登录</button>
+        <div class="auth-tip">仅查看界面原型？点击下方可直接进入工作台演示。</div>
+        <div class="auth-sub">仅想查看界面？<span class="auth-link" onclick="enterApp()">进入演示工作台 →</span></div>
+      </form>
+
+      <!-- 注册 -->
+      <form class="auth-form" id="f-register" onsubmit="return doRegister(event)">
+        <div class="form-field">
+          <label>账号（手机号 / 邮箱）</label>
+          <input class="form-input" type="text" placeholder="用于登录与找回密码" required>
+        </div>
+        <div class="form-field">
+          <label>设置密码</label>
+          <input class="form-input" type="password" placeholder="8-20 位，含字母与数字" required>
+        </div>
+        <div class="form-field">
+          <label>确认密码</label>
+          <input class="form-input" type="password" placeholder="再次输入密码" required>
+        </div>
+        <div class="form-field">
+          <label>工作空间名称</label>
+          <input class="form-input" type="text" placeholder="如：慧根堂财税" required>
+        </div>
+        <div class="auth-row" style="margin-top:2px">
+          <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-weight:600">
+            <input type="checkbox" required> 我已阅读并同意《服务协议》《隐私政策》
+          </label>
+        </div>
+        <button class="btn-block" type="submit">注册并创建工作空间</button>
+        <div class="auth-sub">已有账号？<span class="auth-link" onclick="switchAuth('login')">返回登录</span></div>
+      </form>
+
+      <!-- 找回密码 -->
+      <form class="auth-form" id="f-forgot" onsubmit="return doForgot(event)">
+        <div class="form-field">
+          <label>账号（手机号 / 邮箱）</label>
+          <input class="form-input" type="text" placeholder="输入注册时的账号" required>
+        </div>
+        <div class="form-field">
+          <label>验证码</label>
+          <input class="form-input" type="text" placeholder="6 位验证码" required>
+        </div>
+        <div class="form-field">
+          <label>设置新密码</label>
+          <input class="form-input" type="password" placeholder="8-20 位，含字母与数字" required>
+        </div>
+        <button class="btn-block" type="submit">重置密码</button>
+        <div class="auth-sub">记起密码了？<span class="auth-link" onclick="switchAuth('login')">返回登录</span></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 顶部栏 ===== -->
+<div class="topbar">
+  <div class="brand"><span class="logo">慧</span> 慧根堂 · 数字人工坊</div>
+  <button class="workspace" onclick="toast('工作空间切换（多租户预留）')"><span class="dot"></span> 慧根堂工作室 <span style="color:var(--faint)">▾</span></button>
+  <span class="proj">／ 未命名视频</span>
+  <div class="spacer"></div>
+  <span class="plan-badge">标准版</span>
+  <div class="usage" title="本月已用生成时长">
+    <span>生成额度</span><span class="bar"><i></i></span><span>12 / 50 分钟</span>
+  </div>
+  <button class="btn-up" onclick="goView('account')">⬆ 升级套餐</button>
+  <button class="icon-btn" id="btnTheme" onclick="toggleTheme()" title="切换明/暗主题">🌗</button>
+  <button class="icon-btn" title="通知">🔔</button>
+  <div class="acc-wrap">
+    <div class="avatar-me" id="accBtn" onclick="toggleAcc()" title="张德富 · 点击账号菜单">张</div>
+    <div class="acc-menu" id="accMenu">
+      <div class="mi" onclick="goView('account')">⚙️ 账号设置</div>
+      <div class="mi" onclick="goView('account')">🔐 修改密码</div>
+      <div class="mi" onclick="goView('account')">💳 我的订单</div>
+      <div class="sep"></div>
+      <div class="mi danger" onclick="logout()">⏻ 退出登录</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 主体 ===== -->
+<div class="shell">
+  <!-- 左侧栏 -->
+  <aside class="sidebar">
+    <div class="nav-group">工作区</div>
+    <a class="nav-item on" data-view="dashboard"><span class="ni">🏠</span> 工作台首页</a>
+    <a class="nav-item" data-view="studio"><span class="ni">✨</span> 创建视频</a>
+    <a class="nav-item" data-view="avatars"><span class="ni">🧑</span> 形象库</a>
+    <a class="nav-item" data-view="videos"><span class="ni">🎬</span> 我的视频</a>
+    <div class="nav-group">资源与扩展</div>
+    <a class="nav-item" data-view="templates"><span class="ni">📐</span> 模板市场</a>
+    <a class="nav-item" data-view="media"><span class="ni">🗂️</span> 素材库</a>
+    <a class="nav-item" data-view="apidocs"><span class="ni">🔌</span> API 文档 <span class="tag">Pro</span></a>
+    <div class="nav-group">账号</div>
+    <a class="nav-item" data-view="account"><span class="ni">⚙️</span> 账号设置</a>
+    <div class="side-cta">
+      <h4>从脚本到成片</h4>
+      <p>粘贴文案，3 步出片。双人对播自动拆分男女声。</p>
+      <button onclick="goStudio()">＋ 新建视频</button>
+    </div>
+  </aside>
+
+  <!-- 主区域 -->
+  <main class="main">
+
+    <!-- ===== 工作台首页 ===== -->
+    <section class="view active" id="view-dashboard">
+      <div class="dash">
+        <div class="hero">
+          <div class="hero-main">
+            <h1>把文案变成<span class="g">会说话的数字人视频</span><br>无需拍摄 · 无需剪辑</h1>
+            <p>财税行业首个「双声对播」数字人引擎。粘贴脚本，自动拆分男女声线，一键生成可发布的短视频。</p>
+            <div class="hero-steps">
+              <span class="hs"><b>1</b> 选形象</span>
+              <span class="hs"><b>2</b> 输文稿</span>
+              <span class="hs"><b>3</b> 调设置</span>
+              <span class="hs"><b>4</b> 生成</span>
+            </div>
+            <div class="hero-cta">
+              <button class="btn primary" style="font-size:15px;padding:12px 22px" onclick="goStudio()">✨ 创建视频</button>
+              <button class="btn" onclick="goView('templates')">浏览模板</button>
+            </div>
+          </div>
+          <div class="hero-side">
+            <div class="stat-card">
+              <div class="k">本月已生成</div>
+              <div class="v">23 <small>条</small></div>
+              <div class="row"><span style="font-size:12px;color:var(--muted)">较上周 +18%</span><span class="plan-pill">标准版</span></div>
+            </div>
+            <div class="stat-card">
+              <div class="k">当前套餐额度</div>
+              <div class="v">12<small> / 50 分钟</small></div>
+              <div class="row"><span style="font-size:12px;color:var(--muted)">预计可用至月末</span><button class="chip on" onclick="goView('account')">扩容</button></div>
+            </div>
+            <div class="stat-card">
+              <div class="k">队列状态</div>
+              <div class="v" style="font-size:var(--fs-18)">空闲 <span style="color:var(--ok)">●</span></div>
+              <div class="row"><span style="font-size:12px;color:var(--muted)">渲染节点 1 / 本机</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-h"><h3>推荐模板</h3><a onclick="goView('templates')">查看全部 →</a></div>
+        <div class="tpl-grid" id="tplGrid"></div>
+
+        <div class="section-h"><h3>最近视频</h3><a onclick="goView('videos')">我的视频 →</a></div>
+        <div class="recent" id="recentGrid"></div>
+      </div>
+    </section>
+
+    <!-- ===== 创作工作室 ===== -->
+    <section class="view" id="view-studio">
+      <div class="studio">
+        <div class="wizard" id="wizard">
+          <div class="wz on" data-step="1" onclick="setStep(1)"><b>1</b> 选形象</div>
+          <div class="wz-sep"></div>
+          <div class="wz" data-step="2" onclick="setStep(2)"><b>2</b> 输文稿</div>
+          <div class="wz-sep"></div>
+          <div class="wz" data-step="3" onclick="setStep(3)"><b>3</b> 调设置</div>
+          <div class="wz-sep"></div>
+          <div class="wz" data-step="4" onclick="setStep(4)"><b>4</b> 生成</div>
+        </div>
+
+        <div class="studio-body">
+          <!-- 场景列表 -->
+          <div class="scene-list">
+            <div class="sl-h">分镜（场景）</div>
+            <div class="scene on"><span class="num">1</span><span class="txt">虚开普票的风险提醒，老张开场白</span></div>
+            <div class="scene"><span class="num">2</span><span class="txt">江老师补充：进项抵扣的合规红线</span></div>
+            <div class="scene add" onclick="toast('新增分镜')">＋ 添加分镜</div>
+          </div>
+
+          <!-- 画布 + 时间轴 -->
+          <div class="canvas-col">
+            <div class="canvas-wrap">
+              <div class="canvas-top">
+                <div class="seg">
+                  <button class="on" onclick="setRatio(this,'9/16')">9:16</button>
+                  <button onclick="setRatio(this,'16/9')">16:9</button>
+                  <button onclick="setRatio(this,'1/1')">1:1</button>
+                </div>
+                <span style="font-size:12px;color:var(--muted)">场景 1 / 2</span>
+                <div style="margin-left:auto;display:flex;gap:8px">
+                  <button class="chip" onclick="toast('预览低清草稿（ Predictive 预览）')">▶ 预览</button>
+                  <button class="chip" onclick="toggleDual()" id="dualBtn">👥 双人对播</button>
+                </div>
+              </div>
+              <div class="canvas">
+                <div class="stage" id="stage">
+                  <div class="bg"></div>
+                  <div class="badge-live" id="liveBadge" style="display:none">● 双人对播</div>
+                  <div class="dual" id="dualBox" style="display:none">
+                    <div class="av">张</div><div class="av f">江</div>
+                  </div>
+                  <div class="av" id="singleAv" style="position:relative">张</div>
+                  <div class="cap" id="capText">虚开普通发票，同样属于虚开发票，老板们千万别踩这条红线。</div>
+                </div>
+              </div>
+            </div>
+            <div class="timeline">
+              <div class="tl-h"><span>时间轴</span> 总时长 00:48
+                <div class="tool"><button onclick="toast('分割')">✂</button><button onclick="toast('放大')">＋</button><button onclick="toast('缩小')">－</button></div>
+              </div>
+              <div class="track"><span class="lab">视频</span><div class="lane"><div class="clip v" style="left:0;width:88%">场景1+场景2</div></div></div>
+              <div class="track"><span class="lab">音频</span><div class="lane"><div class="clip a" style="left:0;width:42%">男声·老张</div><div class="clip a" style="left:44%;width:44%;background:linear-gradient(90deg,#ff7eb3,#ff4d8d)">女声·江老师</div></div></div>
+              <div class="track"><span class="lab">字幕</span><div class="lane"><div class="clip s" style="left:0;width:88%">卡拉OK高亮</div></div></div>
+              <div class="track"><span class="lab">挂车</span><div class="lane"><div class="clip p" style="left:60%;width:18%">小黄车</div></div></div>
+            </div>
+          </div>
+
+          <!-- 右侧属性面板 -->
+          <div class="inspector">
+            <div class="insp-tabs" id="inspTabs">
+              <button class="on" data-tab="avatar" onclick="setTab(this,'avatar')">形象</button>
+              <button data-tab="voice" onclick="setTab(this,'voice')">语音</button>
+              <button data-tab="bg" onclick="setTab(this,'bg')">背景</button>
+              <button data-tab="sub" onclick="setTab(this,'sub')">字幕</button>
+              <button data-tab="brand" onclick="setTab(this,'brand')">品牌</button>
+            </div>
+            <div class="insp-body" id="inspBody"></div>
+          </div>
+        </div>
+
+        <!-- 底部脚本条 + 渲染状态 -->
+        <div class="script-bar">
+          <div class="sb-input">
+            <div style="display:flex;gap:8px;align-items:center">
+              <span style="font-size:12px;font-weight:700;color:var(--muted)">脚本（支持 <span class="tag-m">男：</span> / <span class="tag-f">女：</span> 自动拆分双声）</span>
+              <button class="chip" onclick="toast('AI 改写（违禁词标红）')">✨ AI 改写</button>
+            </div>
+            <textarea id="scriptBox" oninput="renderScript()">男：虚开普通发票，同样属于虚开发票，老板们千万别踩这条红线。
+女：对，而且进项抵扣也有合规红线，取得不合规发票一样有风险。</textarea>
+          </div>
+          <div class="render-status">
+            <div class="rs-item"><span class="n" style="color:var(--brand)">0</span><span class="l">排队</span></div>
+            <div class="rs-item"><span class="n" style="color:var(--coin)">1</span><span class="l">渲染中</span></div>
+            <div class="rs-item"><span class="n" style="color:var(--ok)">23</span><span class="l">完成</span></div>
+            <div class="rs-eta">预计剩余 <b>00:42</b><br>节点：本机 HEYGEM</div>
+            <button class="btn primary" style="padding:11px 22px" onclick="toast('提交渲染（进入异步队列）')">🚀 生成视频</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 形象库 ===== -->
+    <section class="view" id="view-avatars">
+      <div class="avatars">
+        <div class="section-h" style="margin-top:0"><h3>我的数字人</h3><button class="btn" onclick="toast('克隆新形象（上传2分钟视频）')">＋ 克隆形象</button></div>
+        <div class="dual-banner">
+          <div><div class="av" style="display:inline-grid;vertical-align:middle">张</div> <div class="av f" style="display:inline-grid;vertical-align:middle">江</div></div>
+          <div>
+            <h4>双人对播 · 本平台独有能力</h4>
+            <p>同一段脚本自动按「男：/女：」标签拆分声线，老张与江老师同框对话。财税答疑、政策解读类内容转化显著高于单人播报。</p>
+          </div>
+          <button class="btn primary" onclick="goStudio()">用双人对播创建 →</button>
+        </div>
+        <div class="av-grid" id="avGrid"></div>
+      </div>
+    </section>
+
+    <!-- ===== 我的视频 ===== -->
+    <section class="view" id="view-videos">
+      <div class="avatars">
+        <div class="section-h" style="margin-top:0"><h3>我的视频</h3><button class="btn primary" onclick="goStudio()">＋ 新建视频</button></div>
+        <div class="recent" id="videosGrid" style="grid-template-columns:repeat(5,1fr)"></div>
+      </div>
+    </section>
+
+    <!-- ===== 模板市场 ===== -->
+    <section class="view" id="view-templates">
+      <div class="simple">
+        <h2>模板市场</h2>
+        <p class="sub">按行业与场景预制好的分镜结构，替换文案与形象即可出片。支持「团队模板」与「品牌模板」，可创建企业专属分镜库。</p>
+        <div class="tpl-grid" id="tplGrid2"></div>
+      </div>
+    </section>
+
+    <!-- ===== 素材库 ===== -->
+    <section class="view" id="view-media">
+      <div class="simple">
+        <h2>素材库</h2>
+        <p class="sub">背景、背景音乐、贴纸与品牌元素统一管理。已接入对象存储，支持团队共享与版权校验。</p>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px" id="mediaGrid"></div>
+      </div>
+    </section>
+
+    <!-- ===== API 文档 ===== -->
+    <section class="view" id="view-apidocs">
+      <div class="simple">
+        <h2>API 文档</h2>
+        <p class="sub">面向开发者的开放集成接口，支持脚本提交、任务队列、渲染状态查询与 Webhook 回调，便于第三方系统嵌入。</p>
+        <div class="api-box">
+<span class="k">POST</span> /v1/videos&nbsp;&nbsp;<span class="s"># 提交生成任务（异步）</span><br>
+{<br>
+&nbsp;&nbsp;"workspace_id": "ws_xxx",<br>
+&nbsp;&nbsp;"script": "男：...\n女：...",<br>
+&nbsp;&nbsp;"avatar": ["zhangc2","jiangnv3"],<br>
+&nbsp;&nbsp;"ratio": "9:16",<br>
+&nbsp;&nbsp;"webhook_url": "https://your-cb.com/done"<br>
+}<br>
+<span class="k">→ 200</span> { "job_id":"job_abc", "status":"queued" }<br>
+<br>
+<span class="s"># 任务完成通过 Webhook 通知（多租户隔离）</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 账号设置 ===== -->
+    <section class="view" id="view-account">
+      <div class="acct">
+        <div class="acct-card">
+          <h3>账号信息</h3>
+          <div class="acct-row"><div class="l">登录账号<small>用于登录与找回密码</small></div><div class="r">zhang@huigentang.com</div></div>
+          <div class="acct-row"><div class="l">工作空间</div><div class="r">慧根堂工作室</div></div>
+          <div class="acct-row"><div class="l">当前套餐</div><div class="r"><span class="plan-pill" style="position:static">标准版</span></div></div>
+          <div class="acct-row"><div class="l">账号状态</div><div class="r"><span class="ok">● 正常</span></div></div>
+        </div>
+
+        <div class="acct-card">
+          <h3>修改密码</h3>
+          <div class="form-field"><label>当前密码</label><input class="form-input" type="password" placeholder="请输入当前密码"></div>
+          <div class="form-field"><label>新密码</label><input class="form-input" type="password" placeholder="8-20 位，含字母与数字"></div>
+          <div class="form-field"><label>确认新密码</label><input class="form-input" type="password" placeholder="再次输入新密码"></div>
+          <button class="btn primary" onclick="toast('密码已更新（演示）')">保存修改</button>
+        </div>
+
+        <div class="acct-card">
+          <h3>安全设置</h3>
+          <div class="acct-row"><div class="l">两步验证<small>登录时额外校验短信/验证器</small></div><div class="r"><span class="switch" onclick="this.classList.toggle('on')"></span></div></div>
+          <div class="acct-row"><div class="l">绑定手机号<small>用于找回密码与通知</small></div><div class="r">138****6021 <span class="auth-link" onclick="toast('更换手机号（演示）')">更换</span></div></div>
+          <div class="acct-row"><div class="l">登录设备<small>当前 1 台设备在线</small></div><div class="r"><span class="auth-link" onclick="toast('查看设备（演示）')">管理</span></div></div>
+        </div>
+
+        <div class="acct-card">
+          <h3>我的订单</h3>
+          <div class="acct-row"><div class="l">标准版套餐<small>月付 · 自动续费</small></div><div class="r">¥299 / 月 <span class="auth-link" onclick="toast('查看账单（演示）')">账单</span></div></div>
+          <div class="acct-row"><div class="l">生成额度包<small>额外 50 分钟</small></div><div class="r">¥99 <span class="auth-link" onclick="toast('续费额度（演示）')">续费</span></div></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===== 主题 ===== */
+function toggleTheme(){
+  const h=document.documentElement;
+  const next = h.getAttribute('data-theme')==='dark'?'light':'dark';
+  h.setAttribute('data-theme',next);
+  localStorage.setItem('hgt_theme',next);
+  document.getElementById('btnTheme').textContent = next==='dark'?'🌗':'☀️';
+}
+(function(){ const t=localStorage.getItem('hgt_theme')||'light'; document.documentElement.setAttribute('data-theme',t); document.getElementById('btnTheme').textContent = t==='dark'?'🌗':'☀️'; })();
+
+/* ===== 账号菜单 ===== */
+function toggleAcc(){ document.getElementById('accMenu').classList.toggle('show'); }
+document.addEventListener('click',e=>{ const w=e.target.closest('.acc-wrap'); if(!w) document.getElementById('accMenu').classList.remove('show'); });
+
+/* ===== 登录 / 注册 闸门 ===== */
+function switchAuth(tab){
+  document.querySelectorAll('.auth-tabs button').forEach((b,i)=>{
+    const map={login:0,register:1,forgot:2}; b.classList.toggle('on', map[tab]===i);
+  });
+  document.querySelectorAll('.auth-form').forEach(f=>f.classList.remove('on'));
+  document.getElementById('f-'+tab).classList.add('on');
+}
+function enterApp(){ document.getElementById('authScreen').style.display='none'; }
+function doLogin(e){ e.preventDefault(); document.getElementById('authScreen').style.display='none'; toast('登录成功，欢迎回来'); return false; }
+function doRegister(e){ e.preventDefault(); document.getElementById('authScreen').style.display='none'; toast('注册成功，工作空间已创建'); return false; }
+function doForgot(e){ e.preventDefault(); toast('新密码已设置，请重新登录'); switchAuth('login'); return false; }
+function logout(){ document.getElementById('authScreen').style.display='grid'; switchAuth('login'); }
+
+/* ===== 视图切换 ===== */
+function goView(v){
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  const el=document.getElementById('view-'+v); if(el) el.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('on',n.dataset.view===v));
+  document.querySelector('.main').scrollTop=0;
+}
+document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>goView(n.dataset.view));
+function goStudio(){ goView('studio'); }
+
+/* ===== 向导步进 ===== */
+function setStep(s){
+  document.querySelectorAll('#wizard .wz').forEach(w=>{
+    const ws=+w.dataset.step;
+    w.classList.toggle('on',ws===s);
+    w.classList.toggle('done',ws<s);
+  });
+  if(s===2){ setTab(document.querySelector('#inspTabs button[data-tab=voice]'),'voice'); }
+  if(s===3){ setTab(document.querySelector('#inspTabs button[data-tab=bg]'),'bg'); }
+}
+
+/* ===== 比例切换 ===== */
+function setRatio(btn,r){
+  document.querySelectorAll('.canvas-top .seg button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  const st=document.getElementById('stage');
+  st.style.width = r==='9/16'?'min(280px,100%)' : r==='16/9'?'min(420px,100%)' : 'min(320px,100%)';
+}
+
+/* ===== 双人对播切换 ===== */
+function toggleDual(){
+  const on=document.getElementById('dualBox').style.display!=='none';
+  document.getElementById('dualBox').style.display = on?'none':'flex';
+  document.getElementById('singleAv').style.display = on?'relative':'none';
+  document.getElementById('liveBadge').style.display = on?'none':'block';
+  document.getElementById('dualBtn').classList.toggle('on',!on);
+}
+
+/* ===== 属性面板 ===== */
+const insp={
+  avatar:`<div class="field"><label>选择数字人</label><div class="av-pick">
+      <div class="opt sel" onclick="pickAv(this,'张')">张</div>
+      <div class="opt f" onclick="pickAv(this,'江')">江</div></div>
+      <p style="font-size:11.5px;color:var(--muted);margin-top:8px">开启「双人对播」可同框。克隆专属形象需上传 2 分钟视频。</p></div>
+    <div class="field"><label>姿态 / 构图</label><div class="seg-row">
+      <span class="chip on">站姿</span><span class="chip">头像框</span><span class="chip">半身</span></div></div>`,
+  voice:`<div class="field"><label>声线（自动按标签分配）</label>
+      <div class="toggle-row"><div class="t-l">男声 · 老张克隆音<small>cosyvoice-v3 · zhangc2</small></div><span class="switch on"></span></div>
+      <div class="toggle-row"><div class="t-l">女声 · 江老师克隆音<small>cosyvoice-v3 · jiangnv3</small></div><span class="switch on"></span></div></div>
+    <div class="field"><label>语速 <span id="spd">1.0x</span></label><input class="range" type="range" min="50" max="150" value="100" oninput="document.getElementById('spd').textContent=(this.value/100).toFixed(1)+'x'"></div>
+    <div class="field"><label>音量</label><input class="range" type="range" min="0" max="100" value="80"></div>
+    <div class="field"><label>情绪</label><div class="seg-row"><span class="chip on">专业</span><span class="chip">亲切</span><span class="chip">警示</span></div></div>`,
+  bg:`<div class="field"><label>背景类型</label><div class="seg-row"><span class="chip on">纯色</span><span class="chip">渐变</span><span class="chip">图片</span><span class="chip">视频</span></div></div>
+    <div class="field"><label>预设背景</label><div class="swatches">
+      <span class="sw sel" style="background:#1b2748" onclick="pickSw(this)"></span>
+      <span class="sw" style="background:linear-gradient(135deg,#2a1b48,#1b2748)" onclick="pickSw(this)"></span>
+      <span class="sw" style="background:#0f3b2e" onclick="pickSw(this)"></span>
+      <span class="sw" style="background:#3a2a12" onclick="pickSw(this)"></span>
+      <span class="sw" style="background:#222" onclick="pickSw(this)"></span></div></div>
+    <div class="field"><label>背景模糊</label><div class="toggle-row"><div class="t-l">高斯模糊<small>让人物更突出</small></div><span class="switch" onclick="this.classList.toggle('on')"></span></div></div>`,
+  sub:`<div class="field"><label>字幕样式</label><div class="seg-row"><span class="chip on">卡拉OK高亮</span><span class="chip">底部描边</span><span class="chip">无</span></div></div>
+    <div class="field"><label>字号 <span id="fsz">36px</span></label><input class="range" type="range" min="24" max="56" value="36" oninput="document.getElementById('fsz').textContent=this.value+'px'"></div>
+    <div class="field"><label>文字颜色</label><div class="swatches">
+      <span class="sw sel" style="background:#fff" onclick="pickSw(this)"></span>
+      <span class="sw" style="background:#ffd24d" onclick="pickSw(this)"></span>
+      <span class="sw" style="background:#9db4ff" onclick="pickSw(this)"></span></div></div>
+    <div class="field"><label>描边 / 阴影</label><div class="toggle-row"><div class="t-l">黑色描边<small>提升可读性</small></div><span class="switch on" onclick="this.classList.toggle('on')"></span></div></div>`,
+  brand:`<div class="field"><label>品牌套件</label><p style="font-size:11.5px;color:var(--muted)">上传 Logo、设定主色，所有视频自动带品牌标识。支持团队共享品牌套件。</p></div>
+    <div class="field"><label>主色</label><div class="swatches">
+      <span class="sw sel" style="background:#4f7cff" onclick="pickSw(this)"></span>
+      <span class="sw" style="background:#ff4d8d" onclick="pickSw(this)"></span>
+      <span class="sw" style="background:#2fd07a" onclick="pickSw(this)"></span></div></div>
+    <div class="field"><label>片头 / 片尾</label><div class="toggle-row"><div class="t-l">自动加品牌尾板<small>5 秒</small></div><span class="switch on" onclick="this.classList.toggle('on')"></span></div></div>`
+};
+function setTab(btn,tab){
+  document.querySelectorAll('#inspTabs button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('inspBody').innerHTML = insp[tab];
+}
+document.getElementById('inspBody').innerHTML = insp.avatar;
+function pickAv(el,name){ document.querySelectorAll('.av-pick .opt').forEach(o=>o.classList.remove('sel')); el.classList.add('sel');
+  if(document.getElementById('dualBox').style.display!=='flex'){ document.getElementById('singleAv').textContent=name; } }
+function pickSw(el){ const g=el.parentElement; g.querySelectorAll('.sw').forEach(s=>s.classList.remove('sel')); el.classList.add('sel'); }
+
+
+/* ===== 脚本高亮 ===== */
+function renderScript(){
+  const t=document.getElementById('scriptBox').value;
+  const cap=t.replace(/^.*[：:].*$/m,'').replace(/[男女][：:]/g,'').trim().slice(0,40);
+  document.getElementById('capText').textContent = cap || '（输入脚本后实时预览字幕）';
+}
+renderScript();
+
+/* ===== 数据填充 ===== */
+const templates=[
+  {t:'财税答疑·双人对播',i:'💬',c:'#4f7cff',d:'0:48',p:'政策解读'},
+  {t:'老板避坑·单人播报',i:'⚠️',c:'#ff4d8d',d:'0:35',p:'风险提醒'},
+  {t:'产品介绍·口播',i:'📦',c:'#2fd07a',d:'0:30',p:'营销'},
+  {t:'知识科普·图文',i:'📘',c:'#ffb02e',d:'1:02',p:'教育'},
+  {t:'节日问候·竖屏',i:'🎉',c:'#7a5cff',d:'0:15',p:'品牌'},
+  {t:'直播切片·金句',i:'✂️',c:'#4f7cff',d:'0:22',p:'引流'},
+  {t:'案例拆解·分镜',i:'🔍',c:'#ff4d8d',d:'1:20',p:'深度'},
+  {t:'招聘宣讲·横版',i:'🤝',c:'#2fd07a',d:'0:45',p:'HR'}
+];
+function tplCard(x){return `<div class="tpl" onclick="goStudio()"><div class="thumb" style="background:linear-gradient(135deg,${x.c},${shade(x.c)})">${x.i}<span class="dur">${x.d}</span></div><div class="body"><h5>${x.t}</h5><p>${x.p}</p></div></div>`}
+function shade(c){return c+'88'}
+document.getElementById('tplGrid').innerHTML=templates.slice(0,4).map(tplCard).join('');
+document.getElementById('tplGrid2').innerHTML=templates.map(tplCard).join('');
+
+const recent=[
+  {t:'虚开发票风险提醒',s:'done',c:'#4f7cff',d:'2小时前'},
+  {t:'进项抵扣合规红线',s:'done',c:'#ff4d8d',d:'今天',d2:'江老师'},
+  {t:'个税汇算操作指引',s:'rendering',c:'#2fd07a',d:'渲染中'},
+  {t:'老板必看·公转私',s:'queue',c:'#ffb02e',d:'排队中'}
+];
+const stMap={done:['完成','done'],rendering:['渲染中','rendering'],queue:['排队','queue']};
+function vidCard(x){const[lab,cls]=stMap[x.s];return `<div class="vid" onclick="goStudio()"><div class="cv" style="background:linear-gradient(160deg,${x.c},${shade(x.c)})"><span class="st ${cls}">${lab}</span><span class="more">⋯</span></div><div class="meta"><h5>${x.t}</h5><p>${x.d}</p></div></div>`}
+document.getElementById('recentGrid').innerHTML=recent.map(vidCard).join('');
+document.getElementById('videosGrid').innerHTML=[...recent,...recent].map(vidCard).join('');
+
+const avatars=[
+  {n:'张老师（男）',d:'财税主讲 · 克隆音 zhangc2',c:'#4f7cff',tag:'自有'},
+  {n:'江老师（女）',d:'答疑助手 · 克隆音 jiangnv3',c:'#ff4d8d',tag:'自有'},
+  {n:'主播·晓琳',d:'营销口播预设',c:'#2fd07a',tag:'预设'},
+  {n:'专家·建国',d:'政策解读预设',c:'#ffb02e',tag:'预设'},
+  {n:'客服·安然',d:'服务答疑预设',c:'#7a5cff',tag:'预设'},
+  {n:'主播·子涵',d:'年轻化口播',c:'#4f7cff',tag:'预设'},
+  {n:'讲师·明哲',d:'培训场景预设',c:'#ff4d8d',tag:'预设'},
+  {n:'主播·思琪',d:'电商带货预设',c:'#2fd07a',tag:'预设'},
+  {n:'＋ 克隆新形象',d:'上传 2 分钟视频生成专属数字人',c:'#262d42',tag:'',plus:true},
+  {n:'团队共享形象',d:'多租户协作共享形象库',c:'#7a5cff',tag:'团队'}
+];
+document.getElementById('avGrid').innerHTML=avatars.map(a=>{
+  if(a.plus) return `<div class="av-card" onclick="toast('克隆新形象')"><div class="pic" style="background:${a.c};color:var(--muted);font-size:34px">＋</div><div class="info"><h5>${a.n}</h5><p>${a.d}</p></div></div>`;
+  return `<div class="av-card" onclick="goStudio()"><div class="pic" style="background:linear-gradient(135deg,${a.c},${shade(a.c)})">${a.n[0]}</div><div class="info"><h5>${a.n}</h5><p>${a.d}</p><div class="meta"><span class="mini-tag v">${a.tag}</span><span class="mini-tag">可用</span></div></div></div>`;
+}).join('');
+
+document.getElementById('mediaGrid').innerHTML=[
+  {t:'背景 · 财经蓝',i:'🖼️',c:'#1b2748'},{t:'背景音乐 · 轻快',i:'🎵',c:'#2fd07a'},
+  {t:'贴纸 · 警示',i:'⚠️',c:'#ffb02e'},{t:'Logo 占位',i:'🏷️',c:'#4f7cff'},
+  {t:'背景 · 渐变紫',i:'🖼️',c:'#2a1b48'},{t:'音效 · 提示',i:'🔔',c:'#ff4d8d'}
+].map(m=>`<div class="card" style="padding:18px;display:flex;align-items:center;gap:12px"><div style="width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,${m.c},${shade(m.c)});display:grid;place-items:center;font-size:20px">${m.i}</div><div><h5 style="font-size:14px;font-weight:700">${m.t}</h5><p style="font-size:11.5px;color:var(--muted)">点击使用</p></div></div>`).join('');
+
+/* ===== toast ===== */
+let tt;function toast(m){const e=document.getElementById('toast');e.textContent=m;e.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>e.classList.remove('show'),1600);}
+</script>
+</body>
+</html>
