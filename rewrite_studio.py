@@ -132,6 +132,7 @@ ensure_env()  # 让 model_keys.env 里的 key 自动生效
 from content_pipeline import llm, STYLE_GUIDE  # 复用文本模型 + 老张叙事风
 import build_package as bp
 import thirdparty_avatar as tp   # 第三方数字人出片（与 HEYGEM 并列，可任选）
+import studio_db   # 多租户数据层（账号/会话/形象/声音隔离）
 
 # ------------------------------------------------------------------ 三段解析
 MARKER = re.compile(r"^\s*={3,}\s*(.+?)\s*={3,}\s*$", re.M)
@@ -293,7 +294,7 @@ def friendly_tts_error(raw: str) -> str:
         return "网络异常，无法连接阿里云语音合成服务，请检查网络后重试。"
     return raw
 
-def do_tts(name: str, segs: dict | None = None) -> dict:
+def do_tts(name: str, segs: dict | None = None, tenant_id: int | None = None) -> dict:
     """用三段定稿（去标记）出音频，保存 04_音频.wav + 复制到集中库。
     优先用界面实时文本 segs（保证音频==界面文字）；缺则回退磁盘 03_逐字稿定稿.md。"""
     p = project_path(name)
@@ -310,7 +311,9 @@ def do_tts(name: str, segs: dict | None = None) -> dict:
         return {"ok": False, "error": "定稿为空，无法合成"}
     out = p / "04_音频.wav"
     try:
-        qwen_tts.synth(clean, qwen_tts.DEFAULT_VOICE_ID, str(out),
+        tid = tenant_id if tenant_id is not None else studio_db.get_default_tenant().get("id")
+        voice_id = studio_db.get_tenant_voice_id(tid, "male")
+        qwen_tts.synth(clean, voice_id, str(out),
                        model=qwen_tts.DEFAULT_MODEL)
     except SystemExit as e:
         return {"ok": False, "error": friendly_tts_error(str(e))}
@@ -323,7 +326,7 @@ def do_tts(name: str, segs: dict | None = None) -> dict:
     return {"ok": True, "out": str(out), "audio_url": f"/api/audio/{name}"}
 
 
-def do_tts_dialogue(name: str, dialogue_text: str = "") -> dict:
+def do_tts_dialogue(name: str, dialogue_text: str = "", tenant_id: int | None = None) -> dict:
     """用男女对话稿合成双声试听音频，保存 04_对话音频.wav + 复制到集中库。
     固定音色：男=张老师克隆音 zhangc2，女=江老师克隆音 jiangnv3，不再弹窗确认。"""
     p = project_path(name)
@@ -342,7 +345,11 @@ def do_tts_dialogue(name: str, dialogue_text: str = "") -> dict:
     out = p / "04_对话音频.wav"
     try:
         import make_scroll_video as smv
-        smv.synth_dialogue_audio(dialogue_text, str(out), dry=False, gap=0.18)
+        tid = tenant_id if tenant_id is not None else studio_db.get_default_tenant().get("id")
+        female_v = studio_db.get_tenant_voice_id(tid, "female")
+        male_v = studio_db.get_tenant_voice_id(tid, "male")
+        smv.synth_dialogue_audio(dialogue_text, str(out), dry=False, gap=0.18,
+                                 female_voice=female_v, male_voice=male_v)
     except SystemExit as e:
         return {"ok": False, "error": friendly_tts_error(str(e))}
     except Exception as e:  # noqa
@@ -440,20 +447,25 @@ JOBS = {}
 JOB_LOCK = threading.Lock()
 
 
-def start_render(name: str, model_id: str, provider: str = "heygem",
+def start_render(name: str, model_id: str = "", provider: str = "heygem",
                  avatar_id: str | None = None, voice_mode: str = "official",
                  bg: str | None = None, title: str | None = None,
-                 subtitle: str | None = None, bg_fit: str | None = None) -> dict:
+                 subtitle: str | None = None, bg_fit: str | None = None,
+                 tenant_id: int | None = None) -> dict:
     """出片入口。provider 默认 heygem（原本地流程，零改动）；
     provider=thirdparty 走第三方官方数字人，不动 HEYGEM 任何逻辑；
     provider=scroll 走不出镜·滚动字幕卡（男女对话），输出同一 VIDEO_DIR/<name>.mp4，下游无缝复用。"""
     if provider == "thirdparty":
         return _start_render_thirdparty(name, avatar_id, voice_mode)
     if provider == "scroll":
-        return _start_render_scroll(name, bg, title, subtitle, bg_fit=bg_fit)
+        return _start_render_scroll(name, bg, title, subtitle, bg_fit=bg_fit, tenant_id=tenant_id)
     models = {m["id"]: m for m in list_models()}
-    if model_id not in models:
-        return {"ok": False, "error": "模特不存在，请刷新模特列表"}
+    if model_id in models:
+        model_container = models[model_id]["container"]
+    else:
+        # 未指定/无效模特 → 回退该租户默认形象（多租户隔离：各租户用各自上传的静音驱动视频）
+        tid = tenant_id if tenant_id is not None else studio_db.get_default_tenant().get("id")
+        model_container = studio_db.get_tenant_avatar_path(tid)
     p = project_path(name)
     audio = p / "04_音频.wav"
     if not audio.exists():
@@ -467,7 +479,6 @@ def start_render(name: str, model_id: str, provider: str = "heygem",
     if not ass.exists():
         return {"ok": False, "error": "字幕生成失败"}
     out = VIDEO_DIR / f"{name}.mp4"
-    model_container = models[model_id]["container"]
     # 关键：-u 强制子进程无缓冲输出，否则 make_avatar_video.py 的 print 被管道 block 缓冲，
     # 父进程读不到 (code=...) 与 [N] 步骤，导致 heygem_code 抓不到、进度条卡 0%。
     cmd = [PY310, "-u", str(MAKE_AVATAR), "--audio", str(audio), "--ass", str(ass),
@@ -545,7 +556,8 @@ def _start_render_thirdparty(name: str, avatar_id: str | None,
 def _start_render_scroll(name: str, bg: str | None = None,
                           title: str | None = None,
                           subtitle: str | None = None,
-                          bg_fit: str | None = None) -> dict:
+                          bg_fit: str | None = None,
+                          tenant_id: int | None = None) -> dict:
     """不出镜·滚动字幕卡（男女对话）出片：调 make_scroll_video.py，输出到 VIDEO_DIR/<name>.mp4。
     下游（预览/字幕/质检/发布/队列）只认这个 mp4，与数字人出片零差别复用。"""
     p = project_path(name)
@@ -561,7 +573,11 @@ def _start_render_scroll(name: str, bg: str | None = None,
         dlg = p / "_auto_dialogue.txt"
         dlg.write_text("男：" + clean.replace("\n", " ") + "\n", encoding="utf-8")
     out = VIDEO_DIR / f"{name}.mp4"
-    cmd = [PY313, "-u", str(MAKE_SCROLL), "--dialogue", str(dlg), "--out", str(out)]
+    tid = tenant_id if tenant_id is not None else studio_db.get_default_tenant().get("id")
+    female_v = studio_db.get_tenant_voice_id(tid, "female")
+    male_v = studio_db.get_tenant_voice_id(tid, "male")
+    cmd = [PY313, "-u", str(MAKE_SCROLL), "--dialogue", str(dlg), "--out", str(out),
+           "--female-voice", female_v, "--male-voice", male_v]
     # 背景：seaside(默认，省略)/gif(用户GIF)/其他=自定义路径
     if bg == "gif":
         cmd += ["--bg", SCROLL_DEFAULT_GIF]
@@ -784,10 +800,8 @@ def _queue_next_id() -> str:
     return f"q{_queue_seq}_{int(time.time()*1000)}"
 
 
-def add_to_queue(name: str, model_id: str) -> dict:
+def add_to_queue(name: str, model_id: str, tenant_id: int | None = None) -> dict:
     models = {m["id"]: m for m in list_models()}
-    if model_id not in models:
-        return {"ok": False, "error": "模特不存在，请刷新模特列表"}
     p = project_path(name)
     if not (p / "04_音频.wav").exists():
         return {"ok": False, "error": "请先在「出音频」步骤生成 04_音频.wav 再入队"}
@@ -799,11 +813,13 @@ def add_to_queue(name: str, model_id: str) -> dict:
                         "duplicate": True, "queue": get_queue()["queue"]}
         if len([x for x in QUEUE if x["status"] in ("waiting", "rendering")]) >= QUEUE_MAX:
             return {"ok": False, "error": f"队列已满（最多 {QUEUE_MAX} 个），先处理完几个再入队"}
+        valid = model_id in models
         item = {
             "id": _queue_next_id(),
             "name": name,
-            "model_id": model_id,
-            "model_label": models[model_id].get("label", model_id),
+            "model_id": model_id if valid else "",
+            "model_label": models[model_id].get("label", model_id) if valid else "租户默认形象",
+            "tenant_id": tenant_id,
             "status": "waiting",
             "pos": (QUEUE[-1]["pos"] + 1) if QUEUE else 0,
             "job_id": None,
@@ -883,7 +899,8 @@ def queue_worker():
             # 取出队首等待项，标记为渲染中并提交
             with QUEUE_LOCK:
                 next_item["status"] = "rendering"
-            r = start_render(next_item["name"], next_item["model_id"])
+            r = start_render(next_item["name"], next_item.get("model_id", ""),
+                             tenant_id=next_item.get("tenant_id"))
             if not r.get("ok"):
                 with QUEUE_LOCK:
                     next_item["status"] = "error"
@@ -966,16 +983,49 @@ def _auth_ok(self) -> bool:
             return True
     return False
 
+# ───────────────────────── 多租户：鉴权开关 / 会话 / 租户解析 ─────────────────────────
+def _auth_enabled() -> bool:
+    """AUTH_ENABLED=1 时才强制账号登录；默认 0（局域网试用）维持原单一令牌放行。"""
+    return os.environ.get("AUTH_ENABLED", "0") == "1"
+
+def _session_token_from(self) -> str | None:
+    """从 Cookie(hgtv2_session) 或 Authorization: Bearer 取会话令牌。"""
+    c = self.headers.get("Cookie", "")
+    if "hgtv2_session=" in c:
+        for part in c.split(";"):
+            part = part.strip()
+            if part.startswith("hgtv2_session="):
+                return part[len("hgtv2_session="):].strip() or None
+    auth = self.headers.get("Authorization", "")
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip() or None
+    return None
+
+def _resolve_tenant_id(self) -> int:
+    """解析当前请求所属租户 id；鉴权关闭时一律回退默认(创建者)租户。"""
+    dt = studio_db.get_default_tenant()
+    dtid = dt.get("id")
+    if not _auth_enabled():
+        return dtid
+    tok = _session_token_from(self)
+    s = studio_db.get_session(tok) if tok else None
+    return s["tenant_id"] if s else dtid
+
 def _auth_gate(self) -> bool:
-    """返回 True 表示已放行；返回 False 表示已发送 401 并应 return。"""
+    """返回 True 表示已放行；返回 False 表示已发送 401 并应 return。
+    AUTH_ENABLED=1 时：单一 ACCESS_TOKEN（管理员后门）或有效会话令牌均可放行。"""
     if _auth_ok(self):
         return True
+    if _auth_enabled():
+        tok = _session_token_from(self)
+        if tok and studio_db.get_session(tok):
+            return True
     self.send_response(401)
     self.send_header("Content-Type", "application/json; charset=utf-8")
     self.send_header("WWW-Authenticate", 'Bearer realm="hgtv2"')
     self.send_header("Cache-Control", "no-store")
     self.end_headers()
-    self.wfile.write(json.dumps({"error": "unauthorized", "hint": "请在请求头携带 Authorization: Bearer <token> 或 Cookie hgtv2_token"}, ensure_ascii=False).encode("utf-8"))
+    self.wfile.write(json.dumps({"error": "unauthorized", "hint": "请先调用 /api/login 获取会话令牌"}, ensure_ascii=False).encode("utf-8"))
     return False
 # =====================================================
 
@@ -1177,12 +1227,35 @@ class Handler(BaseHTTPRequestHandler):
         # http.server 默认不支持 DELETE，复用 POST 处理逻辑
         self.do_POST()
 
+    def _handle_login(self):
+        """POST /api/login {username,password} → 校验 studio_db.users，下发会话 Cookie。"""
+        body = self._body()
+        username = (body.get("username") or "").strip()
+        password = body.get("password") or ""
+        u = studio_db.verify_user(username, password)
+        if not u:
+            return self._send_json({"ok": False, "error": "账号或密码错误"}, 401)
+        token = studio_db.create_session(u["tenant_id"], u["id"])
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Set-Cookie",
+            f"hgtv2_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            "ok": True, "token": token,
+            "tenant_id": u["tenant_id"], "username": u["username"], "role": u["role"]
+        }, ensure_ascii=False).encode("utf-8"))
+
     def do_POST(self):
         u = urlparse(self.path)
         path = u.path
         # P0-1 数据面鉴权：仅 gate /api/*，放行首页与静态资源
-        if path.startswith("/api/") and not _auth_gate(self):
+        # 登录接口本身免网关（否则永远登不进）
+        if path.startswith("/api/") and path != "/api/login" and not _auth_gate(self):
             return
+        if path == "/api/login":
+            return self._handle_login()
         # 上传模特（multipart/form-data，需在 _body 之前直接读流）
         if path == "/api/models/upload":
             try:
@@ -1316,8 +1389,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json(do_new(body.get("title", ""), body.get("account_type", "")))
         # —— 批量渲染队列 ——
         if path == "/api/queue" and self.command == "POST":
+            tid = self._resolve_tenant_id()
             return self._send_json(add_to_queue(body.get("name", ""),
-                                                 body.get("model", "")))
+                                                 body.get("model", ""),
+                                                 tenant_id=tid))
         if path == "/api/queue" and self.command == "DELETE":
             return self._send_json(queue_remove(body.get("id", "")))
         if path == "/api/queue/remove":
@@ -1335,6 +1410,7 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             name = unquote(m.group(1))
             action = m.group(2)
+            tid = self._resolve_tenant_id()
             if action == "save":
                 return self._send_json(do_save(name, body.get("opening", ""),
                                                body.get("body", ""),
@@ -1347,9 +1423,9 @@ class Handler(BaseHTTPRequestHandler):
                     "opening": body.get("opening", ""),
                     "body": body.get("body", ""),
                     "ending": body.get("ending", ""),
-                }))
+                }, tenant_id=tid))
             if action == "tts_dialogue":
-                return self._send_json(do_tts_dialogue(name, body.get("dialogue", "")))
+                return self._send_json(do_tts_dialogue(name, body.get("dialogue", ""), tenant_id=tid))
             if action == "render":
                 return self._send_json(start_render(
                     name, body.get("model", ""),
@@ -1358,7 +1434,8 @@ class Handler(BaseHTTPRequestHandler):
                     voice_mode=body.get("voice_mode", "official"),
                     bg=body.get("bg"),
                     title=body.get("title"),
-                    subtitle=body.get("subtitle")))
+                    subtitle=body.get("subtitle"),
+                    tenant_id=tid))
             if action == "publish":
                 return self._send_json(do_publish(name, generate=True))
             if action == "publish-check":
@@ -2171,6 +2248,11 @@ class StudioServer(ThreadingHTTPServer):
 
 
 def main():
+    # 多租户数据层初始化：建表 + 预置默认租户形象/声音/管理员账号（幂等，可重复调用）
+    try:
+        studio_db.init_all()
+    except Exception as e:  # noqa
+        print("⚠️ studio_db.init_all 失败（非致命，继续启动）:", e)
     init_default_bg()
     httpd = StudioServer(("0.0.0.0", PORT), Handler)
     print(f"二创改写台 v2 已启动: http://localhost:{PORT}  (Ctrl+C 停止)")

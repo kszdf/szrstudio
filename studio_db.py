@@ -627,6 +627,56 @@ def _fire_billing_event(tenant_id: int, etype: str, metric: str, threshold: floa
     cx.commit(); cx.close()
 
 
+# ───────────────────────── 会话（登录态） ─────────────────────────
+def init_sessions_table() -> None:
+    cx = _conn()
+    cx.executescript("""
+    CREATE TABLE IF NOT EXISTS sessions(
+        token      TEXT PRIMARY KEY,
+        tenant_id  INTEGER NOT NULL,
+        user_id    INTEGER NOT NULL,
+        created_at INTEGER,
+        expires_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_sess_tenant ON sessions(tenant_id);
+    """)
+    cx.close()
+
+
+def create_session(tenant_id, user_id, ttl: int = 86400) -> str:
+    tok = "s-" + secrets.token_hex(24)
+    now = int(time.time())
+    cx = _conn()
+    cx.execute(
+        "INSERT INTO sessions(token,tenant_id,user_id,created_at,expires_at) VALUES(?,?,?,?,?)",
+        (tok, tenant_id, user_id, now, now + ttl),
+    )
+    cx.commit(); cx.close()
+    return tok
+
+
+def get_session(token) -> dict | None:
+    if not token:
+        return None
+    cx = _conn()
+    row = cx.execute("SELECT * FROM sessions WHERE token=?", (token,)).fetchone()
+    cx.close()
+    if not row:
+        return None
+    if row["expires_at"] and row["expires_at"] < int(time.time()):
+        _ec = _conn()
+        _ec.execute("DELETE FROM sessions WHERE token=?", (token,))
+        _ec.commit(); _ec.close()
+        return None
+    return dict(row)
+
+
+def delete_session(token) -> None:
+    cx = _conn()
+    cx.execute("DELETE FROM sessions WHERE token=?", (token,))
+    cx.commit(); cx.close()
+
+
 def get_usage(tenant_id: int, metric: str, period: str = "") -> int:
     if not period:
         period = time.strftime("%Y-%m")
@@ -637,12 +687,164 @@ def get_usage(tenant_id: int, metric: str, period: str = "") -> int:
     return row[0]["value"] if row else 0
 
 
+# ───────────────────────── 租户形象 / 声音隔离（Phase 2+） ─────────────────────────
+def init_avatar_voice_table() -> None:
+    cx = _conn()
+    cx.executescript("""
+    CREATE TABLE IF NOT EXISTS tenant_avatars(
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id   INTEGER NOT NULL,
+        avatar_name TEXT NOT NULL,
+        model_path  TEXT NOT NULL,
+        role        TEXT DEFAULT 'solo',
+        source      TEXT DEFAULT 'local_clone',
+        status      TEXT DEFAULT 'active',
+        is_default  INTEGER DEFAULT 0,
+        created_at  INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS tenant_voices(
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id   INTEGER NOT NULL,
+        voice_label TEXT NOT NULL,
+        cosy_voice_id TEXT NOT NULL,
+        ref_audio   TEXT DEFAULT '',
+        gender      TEXT DEFAULT 'male',
+        status      TEXT DEFAULT 'active',
+        is_default  INTEGER DEFAULT 0,
+        created_at  INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_av_tenant ON tenant_avatars(tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_vc_tenant ON tenant_voices(tenant_id);
+    """)
+    cx.close()
+
+
+def register_tenant_avatar(tenant_id, avatar_name, model_path, role="solo",
+                           source="local_clone", is_default=0) -> dict:
+    cx = _conn()
+    cx.execute(
+        "INSERT INTO tenant_avatars(tenant_id,avatar_name,model_path,role,source,status,is_default,created_at) "
+        "VALUES(?,?,?,?,?,?,?,?)",
+        (tenant_id, avatar_name, model_path, role, source, "active", is_default, int(time.time())),
+    )
+    cx.commit(); cx.close()
+    return {"ok": True}
+
+
+def list_tenant_avatars(tenant_id) -> list:
+    cx = _conn()
+    rows = cx.execute("SELECT * FROM tenant_avatars WHERE tenant_id=? ORDER BY is_default DESC, id",
+                      (tenant_id,)).fetchall()
+    cx.close()
+    return [dict(r) for r in rows]
+
+
+def register_tenant_voice(tenant_id, voice_label, cosy_voice_id, gender="male",
+                          ref_audio="", is_default=0) -> dict:
+    cx = _conn()
+    cx.execute(
+        "INSERT INTO tenant_voices(tenant_id,voice_label,cosy_voice_id,ref_audio,gender,status,is_default,created_at) "
+        "VALUES(?,?,?,?,?,?,?,?)",
+        (tenant_id, voice_label, cosy_voice_id, ref_audio, gender, "active", is_default, int(time.time())),
+    )
+    cx.commit(); cx.close()
+    return {"ok": True}
+
+
+def list_tenant_voices(tenant_id) -> list:
+    cx = _conn()
+    rows = cx.execute("SELECT * FROM tenant_voices WHERE tenant_id=? ORDER BY is_default DESC, gender, id",
+                      (tenant_id,)).fetchall()
+    cx.close()
+    return [dict(r) for r in rows]
+
+
+def get_tenant_avatar_path(tenant_id, role="solo") -> str:
+    """该租户默认形象（静音驱动视频）路径；无则返回创建者默认。"""
+    cx = _conn()
+    row = cx.execute(
+        "SELECT model_path FROM tenant_avatars WHERE tenant_id=? AND status='active' "
+        "ORDER BY is_default DESC, id LIMIT 1", (tenant_id,)
+    ).fetchone()
+    cx.close()
+    if row:
+        return row["model_path"]
+    return str(BASE / "face2face" / "BGZSP20260721_t18_silent.mp4")
+
+
+def get_tenant_voice_id(tenant_id, gender="male") -> str:
+    """该租户指定性别默认声音 cosy_voice_id；无则回退创建者默认。"""
+    cx = _conn()
+    row = cx.execute(
+        "SELECT cosy_voice_id FROM tenant_voices WHERE tenant_id=? AND gender=? AND status='active' "
+        "ORDER BY is_default DESC, id LIMIT 1", (tenant_id, gender)
+    ).fetchone()
+    cx.close()
+    if row:
+        return row["cosy_voice_id"]
+    return default_settings()["tts_voice_map"].get(gender,
+           default_settings()["tts_voice_map"]["male"])
+
+
+def _seed_default_avatar_voice(tenant_id) -> None:
+    """预置创建者默认形象/声音（仅当该租户尚无记录）。"""
+    cx = _conn()
+    acnt = cx.execute("SELECT COUNT(*) c FROM tenant_avatars WHERE tenant_id=?", (tenant_id,)).fetchone()["c"]
+    vcnt = cx.execute("SELECT COUNT(*) c FROM tenant_voices WHERE tenant_id=?", (tenant_id,)).fetchone()["c"]
+    cx.close()
+    if acnt == 0:
+        register_tenant_avatar(tenant_id, "张老师·财税主讲",
+                               str(BASE / "face2face" / "BGZSP20260721_t18_silent.mp4"),
+                               role="solo", is_default=1)
+    if vcnt == 0:
+        register_tenant_voice(tenant_id, "老张·男声",
+                              default_settings()["tts_voice_map"]["male"], gender="male", is_default=1)
+        register_tenant_voice(tenant_id, "江老师·女声",
+                              default_settings()["tts_voice_map"]["female"], gender="female", is_default=1)
+    # 预置默认管理员账号（仅当该租户尚无用户）
+    _ucx = _conn()
+    ucnt = _ucx.execute("SELECT COUNT(*) c FROM users WHERE tenant_id=?", (tenant_id,)).fetchone()["c"]
+    _ucx.close()
+    if ucnt == 0:
+        create_user(tenant_id, "admin", "admin888", role="admin")
+
+
+# ───────────────────────── 账号 / 会话（多租户鉴权） ─────────────────────────
+import hashlib
+_PW_SALT = "hgt_pw_salt_v1"
+
+def _hash_pw(pw: str) -> str:
+    return hashlib.sha256((pw + _PW_SALT).encode("utf-8")).hexdigest()
+
+def create_user(tenant_id, username, password, role="editor") -> dict:
+    cx = _conn()
+    try:
+        cx.execute("INSERT INTO users(tenant_id,username,password_hash,role,created_at) VALUES(?,?,?,?,?)",
+                   (tenant_id, username, _hash_pw(password), role, int(time.time())))
+        cx.commit(); cx.close(); return {"ok": True}
+    except sqlite3.IntegrityError as e:
+        cx.rollback(); cx.close(); return {"ok": False, "error": str(e)}
+
+def verify_user(username: str, password: str) -> dict | None:
+    cx = _conn()
+    row = cx.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+    cx.close()
+    if not row:
+        return None
+    if row["password_hash"] != _hash_pw(password):
+        return None
+    return dict(row)
+
+
 # 初始化时一并建表
 def init_all() -> dict:
     t = init_db()
     init_devices_table()
     init_permissions_table()
     init_billing_table()
+    init_sessions_table()
+    init_avatar_voice_table()
+    _seed_default_avatar_voice(t["id"])
     # 默认权限模板（系统内置，可复用）
     cx = _conn()
     has = cx.execute("SELECT COUNT(*) c FROM permission_templates").fetchone()["c"]
