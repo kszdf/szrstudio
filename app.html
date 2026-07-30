@@ -628,7 +628,7 @@ function runTopicCreate(){
     target_seconds: 0,
     mode: "create",
     keep_core: document.getElementById("rwStyle").value,
-    topic_index: -1,
+    topic_index: 0,
     topics_cache: JSON.stringify([_selectedTopic])
   }).then(d => {
     btn.disabled = false; btn.textContent = "✨ AI 二创生成";
