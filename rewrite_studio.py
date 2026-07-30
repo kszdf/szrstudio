@@ -919,8 +919,68 @@ threading.Thread(target=queue_worker, daemon=True).start()
 
 
 # ------------------------------------------------------------------ HTTP Handler
+# ============ P0-1 阶段0 局域网访问令牌鉴权 ============
+# 说明：本服务原无鉴权，局域网内任何人可触发出片/上传。此处加一层最简令牌门禁，
+# 仅 gate 数据面 /api/*，放行 / 与 /static/（首页与 LOGO），避免影响现有前端 fetch。
+# 令牌读取优先级：.access_token 文件(.access_token 文件优先) > 环境变量 HGTV2_TOKEN > 自动生成持久化。
+def _load_access_token() -> str:
+    tok_file = ROOT / ".access_token"
+    try:
+        if tok_file.exists():
+            t = tok_file.read_text(encoding="utf-8").strip()
+            if t:
+                return t
+    except Exception:
+        pass
+    env = os.environ.get("HGTV2_TOKEN", "").strip()
+    if env:
+        return env
+    # 兜底：首次启动自动生成并落盘（重启后不变）
+    try:
+        import secrets
+        t = "hgt-" + secrets.token_hex(24)
+        tok_file.write_text(t, encoding="utf-8")
+        try:
+            os.chmod(tok_file, 0o600)
+        except Exception:
+            pass
+        return t
+    except Exception:
+        return "hgt-insecure-fallback"
+
+ACCESS_TOKEN = _load_access_token()
+
+def _auth_ok(self) -> bool:
+    # 支持 Cookie(hgtv2_token) 或 Authorization: Bearer，兼容浏览器与脚本
+    c = self.headers.get("Cookie", "")
+    if "hgtv2_token=" in c:
+        for part in c.split(";"):
+            part = part.strip()
+            if part.startswith("hgtv2_token="):
+                if part[len("hgtv2_token="):].strip() == ACCESS_TOKEN:
+                    return True
+    auth = self.headers.get("Authorization", "")
+    if auth.lower().startswith("bearer "):
+        if auth[7:].strip() == ACCESS_TOKEN:
+            return True
+    return False
+
+def _auth_gate(self) -> bool:
+    """返回 True 表示已放行；返回 False 表示已发送 401 并应 return。"""
+    if _auth_ok(self):
+        return True
+    self.send_response(401)
+    self.send_header("Content-Type", "application/json; charset=utf-8")
+    self.send_header("WWW-Authenticate", 'Bearer realm="hgtv2"')
+    self.send_header("Cache-Control", "no-store")
+    self.end_headers()
+    self.wfile.write(json.dumps({"error": "unauthorized", "hint": "请在请求头携带 Authorization: Bearer <token> 或 Cookie hgtv2_token"}, ensure_ascii=False).encode("utf-8"))
+    return False
+# =====================================================
+
+
 class Handler(BaseHTTPRequestHandler):
-    server_version = "RewriteStudio/2.0"
+    server_version = "RewriteStudio/2.1"
 
     def log_message(self, *args):  # 安静日志
         pass
@@ -1010,6 +1070,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
         path = u.path
+        # P0-1 数据面鉴权：仅 gate /api/*，放行首页与静态资源
+        if path.startswith("/api/") and not _auth_gate(self):
+            return
         if path in ("/", "/index.html"):
             return self._send_html()
         # 静态资源（LOGO 等）
@@ -1098,6 +1161,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         u = urlparse(self.path)
         path = u.path
+        # P0-1 数据面鉴权：仅 gate /api/*，放行首页与静态资源
+        if path.startswith("/api/") and not _auth_gate(self):
+            return
         # 上传模特（multipart/form-data，需在 _body 之前直接读流）
         if path == "/api/models/upload":
             try:
@@ -1484,10 +1550,22 @@ def generate_title_for_video(opening: str, body: str, ending: str, dialogue: str
 """
     try:
         raw = llm(prompt, retries=2)
-        m = re.search(r"\{[\\s\\S]*?\"title\"[\\s\\S]*?\"subtitle\"[\\s\\S]*?\}", raw)
-        if not m:
-            return {"ok": False, "error": "模型返回格式异常", "raw": raw[:200]}
-        obj = json.loads(m.group(0))
+        candidate = raw.strip()
+        # 去 markdown 代码围栏（模型偶尔会包一层 ```json）
+        if candidate.startswith("```"):
+            candidate = re.sub(r"^```[a-zA-Z]*\s*", "", candidate)
+            candidate = re.sub(r"\s*```$", "", candidate).strip()
+        try:
+            obj = json.loads(candidate)
+        except Exception:
+            # 兜底：宽松正则抓 {..."title"... "subtitle"...}（re.S 含换行）
+            m = re.search(r"\{.*?\"title\".*?\"subtitle\".*?\}", candidate, re.S)
+            if not m:
+                return {"ok": False, "error": "模型返回格式异常", "raw": raw[:200]}
+            try:
+                obj = json.loads(m.group(0))
+            except Exception:
+                return {"ok": False, "error": "模型返回格式异常", "raw": raw[:200]}
         title = (obj.get("title") or "").strip()
         subtitle = (obj.get("subtitle") or "").strip()
         # 硬截断兜底（按字符数，防止 LLM 超长）
