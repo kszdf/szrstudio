@@ -1295,7 +1295,15 @@ class Handler(BaseHTTPRequestHandler):
                                       float(body.get("target_seconds", 0) or 0),
                                       body.get("mode", "list"),
                                       int(body.get("topic_index", -1)),
-                                      body.get("topics_cache") or None)
+                                      _tc = body.get("topics_cache")
+                # 防御：前端可能双重 JSON 序列化（JSON.stringify + fetch自动序列化）
+                if isinstance(_tc, str) and _tc.strip():
+                    import json as _json
+                    try:
+                        _tc = _json.loads(_tc)
+                    except Exception:
+                        _tc = None
+                _tc or None)
             except Exception as e:  # noqa
                 import traceback as _tb
                 return self._send_json({"ok": False,

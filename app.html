@@ -5,847 +5,1032 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>慧根堂 · 数字人视频工作台</title>
 <style>
-/* ============ 设计令牌（浅色为主 / 商用 SaaS 风格，清新通透） ============ */
+/* ═══════════════════ 设计令牌系统 v3 · 重塑版 ═══════════════════ */
 :root{
-  --bg:#f5f7fc; --bg-2:#eef2f9; --panel:#ffffff; --panel-2:#f8fafd;
-  --border:#e6ebf4; --border-soft:#eef1f7;
-  --ink:#1b2133; --muted:#5d6a86; --faint:#9aa4bd;
-  --brand:#4f7cff; --brand-2:#7a5cff; --brand-ink:#fff;
-  --grad:linear-gradient(135deg,#4f7cff,#7a5cff);
-  --coin:#f0a020; --ok:#19b56a; --warn:#f0a020; --err:#ef4d5e; --hi:#ff4d8d;
-  --radius:14px; --radius-sm:10px; --radius-lg:20px;
-  --shadow-sm:0 1px 2px rgba(20,30,60,.06);
-  --shadow:0 8px 24px rgba(20,30,60,.10);
-  --shadow-lg:0 20px 50px rgba(20,30,60,.14);
-  --fs-12:12px; --fs-13:13px; --fs-14:14px; --fs-15:15px; --fs-16:16px; --fs-18:18px; --fs-22:22px; --fs-28:28px;
-  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px; --sp-10:40px;
-  --sidebar-w:228px; --top-h:56px;
-  --ease:cubic-bezier(.22,1,.36,1);
+  --bg:#f0f2f8; --bg-2:#e8ecf4; --bg-3:#dde2ef; --panel:#ffffff; --panel-2:#f7f9fc;
+  --border:#dfe4ee; --border-soft:#eaeff8; --border-focus:#4f7cff;
+  --ink:#1a1f36; --muted:#5e6b8a; --faint:#8c96b0; --faintest:#c0c8da;
+  --brand:#4f6cff; --brand-2:#7c5cff; --brand-3:#a855f7; --brand-ink:#fff;
+  --grad:linear-gradient(135deg,#4f6cff 0%,#7c5cff 50%,#a855f7 100%);
+  --grad-subtle:linear-gradient(135deg,rgba(79,108,255,.08),rgba(124,92,255,.06));
+  --grad-card:linear-gradient(145deg,#ffffff,#f7f9fc);
+  --ok:#10b981; --warn:#f59e0b; --err:#ef4444; --info:#3b82f6;
+  --radius-xs:6px; --radius-sm:10px; --radius:16px; --radius-lg:24px; --radius-xl:32px;
+  --shadow-xs:0 1px 3px rgba(26,31,54,.04);
+  --shadow-sm:0 4px 12px rgba(26,31,54,.06);
+  --shadow-md:0 8px 28px rgba(26,31,54,.10);
+  --shadow-lg:0 20px 56px rgba(26,31,54,.14);
+  --shadow-glow:0 0 30px rgba(79,108,255,.15);
+  --fs-xs:11px; --fs-sm:12px; --fs-base:13px; --fs-md:14px; --fs-lg:16px; --fs-xl:20px; --fs-2xl:28px;
+  --sp-xs:4px; --sp-sm:8px; --sp-md:12px; --sp-base:16px; --sp-lg:20px; --sp-xl:28px; --sp-2xl:40px;
+  --sidebar-w:236px; --top-h:60px; --ease-out:cubic-bezier(.16,1,.3,1); --ease-spring:cubic-bezier(.34,1.56,.64,1);
 }
 [data-theme="dark"]{
-  --bg:#171b29; --bg-2:#1e2435; --panel:#20283c; --panel-2:#283150;
-  --border:#2e3850; --border-soft:#262f45;
-  --ink:#eef2fb; --muted:#9aa6c4; --faint:#69748f;
-  --shadow-sm:0 1px 2px rgba(0,0,0,.25);
-  --shadow:0 8px 24px rgba(0,0,0,.30);
-  --shadow-lg:0 20px 50px rgba(0,0,0,.40);
+  --bg:#12141f; --bg-2:#1a1e2e; --bg-3:#23293c; --panel:#1a1e2e; --panel-2:#222840;
+  --border:#2a3048; --border-soft:#242a40; --border-focus:#638bff;
+  --ink:#eef1fa; --muted:#9099bc; --faint:#5e6a88; --faintest:#3d4764;
+  --shadow-xs:0 1px 3px rgba(0,0,0,.2);
+  --shadow-sm:0 4px 12px rgba(0,0,0,.25);
+  --shadow-md:0 8px 28px rgba(0,0,0,.35);
+  --shadow-lg:0 20px 56px rgba(0,0,0,.45);
+  --shadow-glow:0 0 40px rgba(99,139,255,.12);
+  --grad-subtle:linear-gradient(135deg,rgba(79,108,255,.1),rgba(124,92,255,.08));
+  --grad-card:linear-gradient(145deg,#1a1e2e,#222840);
 }
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%}
-body{font-family:"PingFang SC","Microsoft YaHei",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  background:var(--bg);color:var(--ink);font-size:var(--fs-14);line-height:1.5;
-  -webkit-font-smoothing:antialiased;overflow:hidden;transition:background .3s var(--ease),color .3s var(--ease)}
-button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
-input,textarea,select{font-family:inherit;font-size:var(--fs-14);color:var(--ink)}
-::-webkit-scrollbar{width:9px;height:9px}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:9px}
+
+/* ═══ Reset & Base ═══ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,"Segoe UI",Roboto,sans-serif;
+  background:var(--bg);color:var(--ink);font-size:var(--fs-md);line-height:1.6;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  transition:background .35s var(--ease-out),color .35s var(--ease-out)}
+button{font-family:inherit;font-size:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea,select{font-family:inherit;font-size:var(--fs-md);color:var(--ink);outline:none}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px}
 ::-webkit-scrollbar-thumb:hover{background:var(--faint)}
 
-/* ============ 登录闸门 ============ */
-#authScreen{position:fixed;inset:0;z-index:50;display:grid;place-items:center;
-  background:radial-gradient(1200px 600px at 50% -10%,rgba(79,124,255,.18),transparent),
-             linear-gradient(160deg,var(--bg),var(--bg-2))}
-.auth-card{width:380px;max-width:92vw;background:var(--panel);border:1px solid var(--border);
-  border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:var(--sp-8) var(--sp-6);
-  animation:pop .4s var(--ease)}
-@keyframes pop{from{opacity:0;transform:translateY(12px) scale(.97)}to{opacity:1;transform:none}}
-.auth-logo{width:46px;height:46px;border-radius:13px;background:var(--grad);display:grid;place-items:center;
-  color:#fff;font-size:24px;font-weight:800;box-shadow:0 6px 18px rgba(79,124,255,.5);margin:0 auto var(--sp-4)}
-.auth-title{text-align:center;font-size:var(--fs-22);font-weight:800;margin-bottom:6px}
-.auth-sub{text-align:center;color:var(--muted);font-size:var(--fs-13);margin-bottom:var(--sp-6)}
-.auth-form{display:flex;flex-direction:column;gap:var(--sp-3)}
-.auth-form input{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);
-  background:var(--panel-2);outline:none;transition:.2s}
-.auth-form input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(79,124,255,.15)}
-.auth-btn{width:100%;padding:12px;border-radius:var(--radius-sm);background:var(--grad);color:#fff;font-weight:700;
-  font-size:var(--fs-15);box-shadow:0 6px 18px rgba(122,92,255,.4);transition:.2s var(--ease)}
-.auth-btn:hover{transform:translateY(-1px);box-shadow:0 9px 24px rgba(122,92,255,.5)}
-.auth-hint{margin-top:var(--sp-4);font-size:var(--fs-12);color:var(--faint);text-align:center;line-height:1.6}
-.auth-err{color:var(--err);font-size:var(--fs-12);text-align:center;min-height:16px;margin-top:6px}
+/* ═══ Auth Gate ═══ */
+#authGate{position:fixed;inset:0;z-index:999;display:grid;place-items:center;
+  background:
+    radial-gradient(ellipse 900px 500px at 50% -5%,rgba(79,108,255,.14),transparent 70%),
+    radial-gradient(ellipse 600px 400px at 80% 100%,rgba(168,85,247,.08),transparent 60%),
+    linear-gradient(170deg,var(--bg),var(--bg-2));
+  backdrop-filter:saturate(1.2)}
+.auth-box{width:420px;max-width:94vw;background:var(--panel);border:1px solid var(--border);
+  border-radius:var(--radius-xl);padding:var(--sp-2xl) var(--sp-xl);
+  box-shadow:var(--shadow-lg),var(--shadow-glow);
+  animation:authIn .5s var(--ease-spring)}
+@keyframes authIn{from{opacity:0;transform:translateY(20px) scale(.97)}to{opacity:1;transform:none}}
+.auth-icon{width:56px;height:56px;border-radius:16px;background:var(--grad);
+  display:grid;place-items:center;color:#fff;font-size:26px;font-weight:800;
+  box-shadow:0 8px 24px rgba(79,108,255,.45);margin:0 auto var(--sp-lg)}
+.auth-title{text-align:center;font-size:var(--fs-xl);font-weight:800;letter-spacing:-.3px;margin-bottom:var(--sp-xs)}
+.auth-subtitle{text-align:center;color:var(--muted);font-size:var(--fs-base);margin-bottom:var(--sp-xl)}
+.auth-input{width:100%;padding:14px 18px;border:1.5px solid var(--border);border-radius:var(--radius);
+  background:var(--bg);font-size:var(--fs-md);transition:.25s var(--ease-out);
+  letter-spacing:.3px}
+.auth-input:focus{border-color:var(--brand);box-shadow:0 0 0 4px rgba(79,108,255,.10),var(--shadow-glow)}
+.auth-input::placeholder{color:var(--faint)}
+.auth-submit{width:100%;padding:14px;border-radius:var(--radius);background:var(--grad);color:#fff;
+  font-weight:700;font-size:var(--fs-md);letter-spacing:.3px;
+  box-shadow:0 6px 24px rgba(79,108,255,.35);
+  transition:all .25s var(--ease-out);position:relative;overflow:hidden}
+.auth-submit::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent,rgba(255,255,255,.15));opacity:0;transition:.25s}
+.auth-submit:hover{transform:translateY(-2px);box-shadow:0 10px 32px rgba(79,108,255,.42)}
+.auth-submit:hover::before{opacity:1}
+.auth-submit:active{transform:translateY(0)}
+.auth-error{color:var(--err);font-size:var(--fs-sm);text-align:center;min-height:18px;margin-top:var(--sp-md)}
+.auth-hint{margin-top:var(--sp-xl);font-size:var(--fs-sm);color:var(--faint);text-align:center;line-height:1.7}
 
-/* ============ 顶栏 ============ */
-.topbar{height:var(--top-h);display:flex;align-items:center;gap:var(--sp-4);
-  padding:0 var(--sp-4);background:color-mix(in srgb,var(--panel) 80%,transparent);
-  backdrop-filter:blur(18px);border-bottom:1px solid var(--border);position:relative;z-index:30}
-.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:var(--fs-15);letter-spacing:.3px}
-.brand .logo{width:30px;height:30px;border-radius:9px;background:var(--grad);display:grid;place-items:center;color:#fff;font-size:15px;box-shadow:0 4px 14px rgba(79,124,255,.45)}
-.topbar .spacer{flex:1}
-.icon-btn{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:16px;color:var(--muted);border:1px solid transparent;transition:.2s}
-.icon-btn:hover{background:var(--panel-2);border-color:var(--border)}
-.avatar{width:34px;height:34px;border-radius:50%;background:var(--grad);display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;cursor:pointer}
+/* ═══ Top Bar ═══ */
+.topbar{height:var(--top-h);display:flex;align-items:center;gap:var(--sp-base);
+  padding:0 var(--sp-lg);
+  background:color-mix(in srgb,var(--panel) 75%,transparent);
+  backdrop-filter:blur(24px) saturate(1.4);
+  border-bottom:1px solid var(--border-soft);position:relative;z-index:100}
+.topbar-brand{display:flex;align-items:center;gap:11px}
+.topbar-logo{width:34px;height:34px;border-radius:10px;background:var(--grad);
+  display:grid;place-items:center;color:#fff;font-weight:800;font-size:17px;
+  box-shadow:0 4px 14px rgba(79,108,255,.4)}
+.topbar-name{font-weight:800;font-size:var(--fs-md);letter-spacing:.3px}
+.topbar-badge{font-size:10px;padding:2px 7px;border-radius:99px;background:var(--grad-subtle);
+  color:var(--brand);font-weight:700;vertical-align:1px;margin-left:4px}
+.topbar-spacer{flex:1}
+.topbar-btn{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;
+  font-size:17px;color:var(--muted);border:1px solid transparent;transition:.2s var(--ease-out)}
+.topbar-btn:hover{background:var(--panel-2);border-color:var(--border);color:var(--ink)}
+.topbar-avatar{width:35px;height:35px;border-radius:50%;background:var(--grad);
+  display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;cursor:pointer;
+  box-shadow:0 3px 10px rgba(79,108,255,.3)}
 
-/* ============ 布局 ============ */
-.layout{display:flex;height:calc(100vh - var(--top-h))}
-.sidebar{width:var(--sidebar-w);flex:0 0 var(--sidebar-w);background:var(--panel);border-right:1px solid var(--border);
-  padding:var(--sp-4) var(--sp-3);display:flex;flex-direction:column;gap:4px;overflow-y:auto}
-.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);color:var(--muted);
-  font-weight:600;font-size:var(--fs-14);transition:.2s;cursor:pointer;border:1px solid transparent}
+/* ═══ Layout ═══ */
+.app-shell{display:flex;height:calc(100vh - var(--top-h))}
+.sidebar{width:var(--sidebar-w);flex-shrink:0;background:var(--panel);
+  border-right:1px solid var(--border-soft);
+  padding:var(--sp-lg) var(--sp-md);display:flex;flex-direction:column;gap:3px;
+  overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:11px;padding:11px 14px;border-radius:var(--radius-sm);
+  color:var(--muted);font-weight:600;font-size:var(--fs-base);transition:all .2s var(--ease-out);
+  cursor:pointer;border:1px solid transparent;position:relative}
 .nav-item:hover{background:var(--panel-2);color:var(--ink)}
-.nav-item.active{background:color-mix(in srgb,var(--brand) 12%,transparent);color:var(--brand);border-color:color-mix(in srgb,var(--brand) 25%,transparent)}
-.nav-item .ic{font-size:17px;width:20px;text-align:center}
-.sidebar .spacer{flex:1}
-.main{flex:1;overflow-y:auto;padding:var(--sp-6)}
+.nav-item.active{background:var(--grad-subtle);color:var(--brand);
+  border-color:color-mix(in srgb,var(--brand) 15%,transparent);
+  font-weight:700}
+.nav-item.active::before{content:'';position:absolute;left:-13px;top:50%;transform:translateY(-50%);
+  width:3px;height:20px;border-radius:3px;background:var(--grad)}
+.nav-icon{font-size:18px;width:22px;text-align:center;flex-shrink:0}
+.nav-spacer{flex:1}
+.main-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main-scroll{flex:1;overflow-y:auto;padding:var(--sp-xl);scroll-behavior:smooth}
 .view{display:none}
-.view.active{display:block;animation:fade .35s var(--ease)}
-@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.section-h{display:flex;align-items:center;justify-content:space-between;margin:0 0 var(--sp-4)}
-.section-h h3{font-size:var(--fs-18);font-weight:800}
-.btn{font-size:var(--fs-13);font-weight:700;padding:8px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);
-  background:var(--panel-2);color:var(--ink);transition:.2s}
-.btn:hover{border-color:var(--brand);color:var(--brand)}
-.btn.primary{background:var(--grad);color:#fff;border:none;box-shadow:0 4px 14px rgba(122,92,255,.35)}
-.btn.primary:hover{transform:translateY(-1px);box-shadow:0 7px 20px rgba(122,92,255,.45)}
-.btn.ghost{background:transparent}
+.view.active{display:block;animation:viewIn .35s var(--ease-out)}
+@keyframes viewIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
-/* ============ 模式切换（独白/双声） ============ */
-.mode-toggle{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--bg-2)}
-.mode-btn{padding:8px 16px;border:none;background:transparent;color:var(--muted);font-size:var(--fs-13);cursor:pointer;transition:.2s;flex:1;text-align:center}
-.mode-btn:hover{background:var(--bg);color:var(--ink)}
-.mode-btn.active{background:var(--grad);color:#fff;font-weight:600;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)}
+/* ═══ Section Header ═══ */
+.sec-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-lg)}
+.sec-title{font-size:var(--fs-xl);font-weight:800;letter-spacing:-.3px}
 
-.seg-hint{font-size:var(--fs-12);color:var(--muted);margin-bottom:6px}
-#scriptMerged{width:100%;border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-size:var(--fs-15);resize:vertical;background:var(--card);color:var(--text);box-sizing:border-box}
-#scriptMerged:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-x)}
+/* ═══ Buttons ═══ */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:9px 18px;border-radius:var(--radius-sm);border:1px solid var(--border);
+  background:var(--panel-2);color:var(--ink);font-weight:600;font-size:var(--fs-base);
+  transition:all .2s var(--ease-out);white-space:nowrap}
+.btn:hover{border-color:var(--brand);color:var(--brand);box-shadow:var(--shadow-xs)}
+.btn-primary{background:var(--grad);color:#fff;border:none;
+  box-shadow:0 4px 16px rgba(79,108,255,.3)}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 7px 24px rgba(79,108,255,.4);color:#fff}
+.btn-primary:active{transform:translateY(0)}
+.btn-ghost{background:transparent;border-color:transparent}
+.btn-ghost:hover{background:var(--panel-2);box-shadow:none;color:var(--ink)}
+.btn-sm{padding:6px 13px;font-size:var(--fs-sm);border-radius:var(--radius-xs)}
+.btn-danger{color:var(--err);border-color:rgba(239,68,68,.3)}
+.btn-danger:hover{background:rgba(239,68,68,.06);color:var(--err);border-color:rgba(239,68,68,.4)}
 
-/* ============ 卡片 ============ */
-.grid{display:grid;gap:var(--sp-4)}
-.grid.cols-2{grid-template-columns:repeat(2,1fr)}
-.grid.cols-3{grid-template-columns:repeat(3,1fr)}
-.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-4);
-  box-shadow:var(--shadow-sm);transition:.25s var(--ease)}
-.card:hover{box-shadow:var(--shadow);transform:translateY(-2px)}
-.stat{display:flex;flex-direction:column;gap:4px}
-.stat .n{font-size:var(--fs-28);font-weight:800;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
-.stat .l{color:var(--muted);font-size:var(--fs-13)}
+/* ═══ Step Wizard (创作台核心) ═══ */
+.step-wizard{display:flex;align-items:center;gap:4px;margin-bottom:var(--sp-xl);
+  padding:var(--sp-md) var(--sp-lg);background:var(--panel);border:1px solid var(--border-soft);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-xs)}
+.step-item{display:flex;align-items:center;gap:8px;cursor:pointer;transition:.25s var(--ease-out);
+  padding:8px 14px;border-radius:var(--radius-sm);position:relative}
+.step-item:hover{background:var(--bg-2)}
+.step-item.active{background:var(--grad-subtle)}
+.step-num{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+  font-size:12px;font-weight:800;border:2px solid var(--border);color:var(--muted);
+  transition:all .25s var(--ease-out);flex-shrink:0}
+.step-item.active .step-num{background:var(--grad);border-color:transparent;color:#fff;
+  box-shadow:0 3px 10px rgba(79,108,255,.35)}
+.step-item.done .step-num{background:var(--ok);border-color:var(--ok);color:#fff}
+.step-label{font-size:var(--fs-sm);font-weight:600;color:var(--muted);white-space:nowrap}
+.step-item.active .step-label{color:var(--brand);font-weight:700}
+.step-item.done .step-label{color:var(--ok)}
+.step-arrow{color:var(--border);font-size:14px;flex-shrink:0;margin:0 4px}
 
-/* ============ 表单 ============ */
-.field{display:flex;flex-direction:column;gap:6px;margin-bottom:var(--sp-4)}
-.field label{font-size:var(--fs-13);font-weight:700;color:var(--muted)}
-.field input,.field textarea,.field select{width:100%;padding:11px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);
-  background:var(--panel-2);outline:none;transition:.2s;resize:vertical}
-.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(79,124,255,.15)}
-.field textarea{min-height:90px}
-.row{display:flex;gap:var(--sp-3);flex-wrap:wrap}
-.row > *{flex:1;min-width:160px}
+/* ═══ Cards ═══ */
+.card{background:var(--panel);border:1px solid var(--border-soft);border-radius:var(--radius);
+  padding:var(--sp-lg);box-shadow:var(--shadow-xs);transition:all .3s var(--ease-out)}
+.card-hover:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);border-color:var(--border)}
+.card-accent{border-left:4px solid var(--brand)}
 
-/* ============ 列表/表 ============ */
-.list{display:flex;flex-direction:column;gap:var(--sp-2)}
-.item{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);border:1px solid var(--border);border-radius:var(--radius-sm);
-  background:var(--panel-2);transition:.2s}
-.item:hover{border-color:var(--brand)}
-.item .thumb{width:54px;height:54px;border-radius:8px;background:var(--grad);flex:0 0 54px;display:grid;place-items:center;color:#fff;font-size:20px}
-.item .meta{flex:1;min-width:0}
-.item .meta .t{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.item .meta .s{color:var(--muted);font-size:var(--fs-12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tag{font-size:var(--fs-12);padding:3px 9px;border-radius:999px;font-weight:700}
-.tag.ok{background:rgba(25,181,106,.14);color:var(--ok)}
-.tag.warn{background:rgba(240,160,32,.16);color:var(--warn)}
-.tag.err{background:rgba(239,77,94,.14);color:var(--err)}
-.tag.muted{background:var(--panel);color:var(--muted)}
+/* ═══ Topic Cards (选题结果) ═══ */
+.topic-grid{display:flex;flex-direction:column;gap:var(--sp-md);margin-top:var(--sp-lg)}
+.topic-card{display:flex;align-items:flex-start;gap:var(--sp-base);padding:var(--sp-lg);
+  background:var(--panel);border:1px solid var(--border-soft);border-radius:var(--radius);
+  transition:all .25s var(--ease-out);position:relative;overflow:hidden}
+.topic-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:var(--grad);opacity:0;transition:.25s}
+.topic-card:hover{box-shadow:var(--shadow-sm);border-color:var(--border)}
+.topic-card:hover::before{opacity:1}
+.topic-score{flex-shrink:0;width:48px;height:48px;border-radius:12px;
+  display:grid;place-items:center;font-size:var(--fs-lg);font-weight:800;
+  background:var(--grad-subtle);color:var(--brand)}
+.topic-body{flex:1;min-width:0}
+.topic-title{font-weight:700;font-size:var(--fs-md);line-height:1.4;
+  margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.topic-desc{font-size:var(--fs-sm);color:var(--muted);line-height:1.5;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.topic-actions{display:flex;flex-direction:column;gap:6px;flex-shrink:0}
 
-/* ============ 队列 ============ */
-.q-item{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-2)}
-.bar{height:7px;border-radius:7px;background:var(--border);overflow:hidden;flex:1}
-.bar i{display:block;height:100%;background:var(--grad);border-radius:7px;transition:width .4s var(--ease)}
+/* ═══ Rewrite Panel (二创面板) ═══ */
+.rewrite-panel{margin-top:var(--sp-lg);border-radius:var(--radius);
+  border:1px solid var(--border);background:var(--panel);
+  box-shadow:var(--shadow-sm),var(--shadow-glow);
+  animation:slideIn .35s var(--ease-spring);overflow:hidden}
+@keyframes slideIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+.rw-header{display:flex;align-items:center;justify-content:space-between;
+  padding:var(--sp-base) var(--sp-lg);background:var(--grad-subtle);
+  border-bottom:1px solid var(--border-soft)}
+.rw-header h4{font-size:var(--fs-md);font-weight:700;color:var(--brand)}
+.rw-body{padding:var(--sp-lg)}
+.rw-topic-info{background:var(--bg-2);border-radius:var(--radius-sm);
+  padding:var(--sp-md) var(--sp-base);font-size:var(--fs-base);line-height:1.7;margin-bottom:var(--sp-lg)}
+.rw-preview{margin-top:var(--sp-base);background:var(--bg-2);border-radius:var(--radius-sm);
+  padding:var(--sp-base);font-size:var(--fs-base);line-height:1.8;
+  white-space:pre-wrap;max-height:300px;overflow-y:auto;border:1px solid var(--border-soft)}
 
-/* ============ toast ============ */
-#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);z-index:60;
-  background:var(--ink);color:var(--panel);padding:11px 18px;border-radius:999px;font-size:var(--fs-13);font-weight:600;
-  box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:.3s var(--ease)}
-#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* ═══ Script Editor (脚本编辑器) ═══ */
+.script-editor{position:relative;border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--bg);overflow:hidden;transition:.25s var(--ease-out)}
+.script-editor:focus-within{border-color:var(--brand-focus);box-shadow:0 0 0 3px rgba(79,108,255,.08),var(--shadow-glow)}
+.script-textarea{width:100%;min-height:280px;padding:var(--sp-lg);border:none;
+  background:transparent;font-size:var(--fs-md);line-height:1.85;
+  resize:vertical;font-family:"JetBrains Mono","Fira Code","Cascadia Code","Consolas",monospace;
+  letter-spacing:.2px}
+.script-hint{padding:var(--sp-sm) var(--sp-base);font-size:var(--fs-sm);
+  color:var(--faint);border-top:1px solid var(--border-soft);
+  background:var(--panel-2);display:flex;align-items:center;gap:6px}
 
-/* ============ 加载态 ============ */
-.loading{padding:var(--sp-8);text-align:center;color:var(--muted)}
-.spin{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--brand);border-radius:50%;animation:sp 1s linear infinite;vertical-align:middle;margin-right:8px}
-@keyframes sp{to{transform:rotate(360deg)}}
+/* ═══ Mode Toggle (模式切换) ═══ */
+.mode-group{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius);
+  overflow:hidden;background:var(--bg-2)}
+.mode-opt{padding:9px 18px;border:none;background:transparent;color:var(--muted);
+  font-size:var(--fs-sm);font-weight:600;cursor:pointer;transition:all .2s;flex:1;text-align:center;
+  position:relative}
+.mode-opt:hover{background:var(--bg);color:var(--ink)}
+.mode-opt.on{background:var(--grad);color:#fff;font-weight:700;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
 
-/* ============ 响应式 ============ */
-@media (max-width:860px){
-  .sidebar{position:fixed;left:0;top:var(--top-h);bottom:0;z-index:40;transform:translateX(-100%);transition:.3s var(--ease)}
+/* ═══ Form Fields ═══ */
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:var(--sp-base)}
+.field label{font-size:var(--fs-sm);font-weight:700;color:var(--muted)}
+.field-row{display:flex;gap:var(--sp-md);flex-wrap:wrap}
+.field-row > *{flex:1;min-width:150px}
+.field input,.field textarea,.field select{
+  width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--panel-2);transition:.2s var(--ease-out)}
+.field input:focus,.field textarea:focus,.field select:focus{
+  border-color:var(--brand-focus);box-shadow:0 0 0 3px rgba(79,108,255,.08)}
+.field textarea{min-height:80px}
+
+/* ═══ Stats (概览数字) ═══ */
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-base);margin-bottom:var(--sp-xl)}
+.stat-card{background:var(--panel);border:1px solid var(--border-soft);border-radius:var(--radius);
+  padding:var(--sp-lg);text-align:center;transition:.25s var(--ease-out)}
+.stat-card:hover{box-shadow:var(--shadow-sm);transform:translateY(-2px)}
+.stat-num{font-size:var(--fs-2xl);font-weight:800;background:var(--grad);
+  -webkit-background-clip:text;background-clip:text;color:transparent;line-height:1.2}
+.stat-lbl{font-size:var(--fs-sm);color:var(--muted);font-weight:600;margin-top:4px}
+
+/* ═══ List Items ═══ */
+.list-view{display:flex;flex-direction:column;gap:var(--sp-sm)}
+.list-item{display:flex;align-items:center;gap:var(--sp-base);padding:var(--sp-md) var(--sp-lg);
+  border:1px solid var(--border-soft);border-radius:var(--radius-sm);
+  background:var(--panel-2);transition:.2s var(--ease-out)}
+.list-item:hover{border-color:var(--brand);background:var(--panel)}
+.list-thumb{width:52px;height:52px;border-radius:12px;background:var(--grad);
+  flex-shrink:0;display:grid;place-items:center;color:#fff;font-size:22px}
+.list-meta{flex:1;min-width:0}
+.list-t{font-weight:700;font-size:var(--fs-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-s{font-size:var(--fs-sm);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag-pill{font-size:var(--fs-xs);padding:3px 10px;border-radius:99px;font-weight:700;white-space:nowrap}
+.tag-ok{background:rgba(16,185,129,.12);color:var(--ok)}
+.tag-warn{background:rgba(245,158,11,.12);color:var(--warn)}
+.tag-err{background:rgba(239,68,68,.12);color:var(--err)}
+.tag-muted{background:var(--bg-2);color:var(--faint)}
+
+/* ═══ Queue Progress ═══ */
+.queue-item{display:flex;align-items:center;gap:var(--sp-base);padding:var(--sp-md) var(--sp-lg);
+  border:1px solid var(--border-soft);border-radius:var(--radius-sm);background:var(--panel-2)}
+.queue-thumb{width:42px;height:42px;border-radius:10px;flex-shrink:0;
+  display:grid;place-items:center;font-size:17px;background:var(--grad-subtle)}
+.progress-track{height:6px;border-radius:6px;background:var(--border);overflow:hidden;flex:1}
+.progress-fill{height:100%;background:var(--grad);border-radius:6px;
+  transition:width .5s var(--ease-out)}
+
+/* ═══ Toast ═══ */
+#toastEl{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(16px);z-index:9999;
+  background:var(--ink);color:var(--panel);padding:12px 22px;border-radius:99px;
+  font-size:var(--fs-base);font-weight:600;box-shadow:var(--shadow-lg);
+  opacity:0;pointer-events:none;transition:all .3s var(--ease-out);white-space:nowrap}
+#toastEl.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ═══ Loading States ═══ */
+.loading-state{padding:var(--sp-2xl);text-align:center;color:var(--muted)}
+.spinner{display:inline-block;width:20px;height:20px;border:2.5px solid var(--border);
+  border-top-color:var(--brand);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.skeleton{background:linear-gradient(90deg,var(--panel-2) 25%,var(--bg-2) 37%,var(--panel-2) 63%);
+  background-size:400% 100%;animation:shimmer 1.5s ease-in-out infinite;border-radius:var(--radius-sm)}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ═══ Responsive ═══ */
+@media(max-width:900px){
+  .sidebar{position:fixed;left:0;top:var(--top-h);bottom:0;z-index:90;
+    transform:translateX(-100%);transition:.3s var(--ease-out);box-shadow:var(--shadow-lg)}
   .sidebar.open{transform:none}
-  .grid.cols-2,.grid.cols-3{grid-template-columns:1fr}
-  .menu-toggle{display:grid !important}
+  .stats-row{grid-template-columns:repeat(3,1fr);gap:var(--sp-sm)}
+  .topic-card{flex-wrap:wrap}
+  .topic-actions{flex-direction:row;width:100%;margin-top:var(--sp-sm)}
 }
-.menu-toggle{display:none;width:36px;height:36px;border-radius:10px;place-items:center;font-size:18px;color:var(--muted);border:1px solid var(--border)}
+.menu-btn{display:none;width:38px;height:38px;border-radius:11px;
+  place-items:center;font-size:18px;color:var(--muted);border:1px solid var(--border)}
+@media(max-width:900px){.menu-btn{display:grid}}
+
+/* ═══ Render Config Sidebar (出片配置侧栏) ═══ */
+.render-sidebar{width:300px;flex-shrink:0;background:var(--panel);
+  border-left:1px solid var(--border-soft);padding:var(--sp-lg);overflow-y:auto;
+  display:none;flex-direction:column;gap:var(--sp-base)}
+.render-sidebar.show{display:flex}
+.rs-title{font-size:var(--fs-md);font-weight:800;margin-bottom:var(--sp-md)}
+.rs-divider{height:1px;background:var(--border-soft);margin:var(--sp-sm) 0}
 </style>
 </head>
 <body>
 
-<!-- 登录闸门 -->
-<div id="authScreen">
-  <div class="auth-card">
-    <div class="auth-logo">慧</div>
+<!-- ═══ 登录闸门 ═══ -->
+<div id="authGate">
+  <div class="auth-box">
+    <div class="auth-icon">慧</div>
     <div class="auth-title">数字人视频工作台</div>
-    <div class="auth-sub">慧根堂 · 企业内容生产平台</div>
-    <form class="auth-form" onsubmit="return doLogin(event)">
-      <input id="tokenInput" type="password" placeholder="访问口令（粘贴 hgt- 开头的令牌）" autocomplete="off">
-      <button class="auth-btn" type="submit">进入工作台</button>
-      <div class="auth-err" id="authErr"></div>
+    <div class="auth-subtitle">慧根堂 · 企业内容生产平台</div>
+    <form onsubmit="return doLogin(event)">
+      <input class="auth-input" id="tokenInput" type="password"
+        placeholder="访问口令（粘贴 hgt- 开头的令牌）" autocomplete="off">
+      <button class="auth-submit" type="submit">进入工作台</button>
+      <div class="auth-error" id="authErr"></div>
     </form>
-    <div class="auth-hint">口令由管理员通过 <code>.access_token</code> 文件提供<br>输入即本地保存，下次免输</div>
+    <div class="auth-hint">
+      口令由管理员通过 <code>.access_token</code> 文件提供<br>
+      输入即本地保存，下次免输
+    </div>
   </div>
 </div>
 
-<!-- 主界面 -->
+<!-- ═══ 顶栏 ═══ -->
 <div class="topbar" id="topbar" style="display:none">
-  <button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
-  <div class="brand"><span class="logo">慧</span>慧根堂工作台 <span style="font-size:10px;opacity:.5">v2026.07.30.2</span></div>
-  <div class="spacer"></div>
-  <button class="icon-btn" id="themeBtn" title="切换明暗">🌗</button>
-  <div class="avatar" id="avatarBtn" title="账号">张</div>
+  <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+  <div class="topbar-brand">
+    <div class="topbar-logo">慧</div>
+    <span class="topbar-name">慧根堂工作台</span>
+    <span class="topbar-badge">v2026.07.30.3</span>
+  </div>
+  <div class="topbar-spacer"></div>
+  <button class="topbar-btn" onclick="toggleTheme()" title="切换明暗">🌗</button>
+  <div class="topbar-avatar" title="张德富（管理员）">张</div>
 </div>
 
-<div class="layout" id="layout" style="display:none">
-  <aside class="sidebar" id="sidebar">
-    <div class="nav-item active" data-view="dashboard" onclick="goView('dashboard')"><span class="ic">📊</span>概览</div>
-    <div class="nav-item" data-view="studio" onclick="goView('studio')"><span class="ic">✍️</span>创作台</div>
-    <div class="nav-item" data-view="queue" onclick="goView('queue')"><span class="ic">⏳</span>渲染队列</div>
-    <div class="nav-item" data-view="videos" onclick="goView('videos')"><span class="ic">🎬</span>我的视频</div>
-    <div class="nav-item" data-view="avatars" onclick="goView('avatars')"><span class="ic">🧑</span>数字人</div>
-    <div class="nav-item" data-view="account" onclick="goView('account')"><span class="ic">⚙️</span>账号设置</div>
-    <div class="spacer"></div>
-    <div class="nav-item" onclick="logout()"><span class="ic">🚪</span>退出登录</div>
-  </aside>
+<!-- ═══ 主体 ═══ -->
+<div class="app-shell" id="appShell" style="display:none">
+  <!-- 侧边导航 -->
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-item active" data-v="dashboard" onclick="go('dashboard')">
+      <span class="nav-icon">📊</span>工作概览
+    </div>
+    <div class="nav-item" data-v="studio" onclick="go('studio')">
+      <span class="nav-icon">✍️</span>创作台
+    </div>
+    <div class="nav-item" data-v="queue" onclick="go('queue')">
+      <span class="nav-icon">⏳</span>渲染队列
+    </div>
+    <div class="nav-item" data-v="videos" onclick="go('videos')">
+      <span class="nav-icon">🎬</span>我的视频
+    </div>
+    <div class="nav-item" data-v="avatars" onclick="go('avatars')">
+      <span class="nav-icon">🧑</span>数字人
+    </div>
+    <div class="nav-item" data-v="account" onclick="go('account')">
+      <span class="nav-icon">⚙️</span>账号设置
+    </div>
+    <div class="nav-spacer"></div>
+    <div class="nav-item" onclick="doLogout()">
+      <span class="nav-icon">🚪</span>退出登录
+    </div>
+  </nav>
 
-  <main class="main">
-    <!-- 概览 -->
-    <section class="view active" id="view-dashboard">
-      <div class="section-h"><h3>工作概览</h3></div>
-      <div class="grid cols-3" id="dashStats" style="margin-bottom:var(--sp-4)"></div>
-      <div class="section-h"><h3>最近项目</h3><button class="btn" onclick="goView('studio')">＋ 新建创作</button></div>
-      <div class="list" id="dashRecent"></div>
-    </section>
+  <!-- 主内容区 -->
+  <main class="main-area">
+    <div class="main-scroll">
 
-    <!-- 创作台 -->
-    <section class="view" id="view-studio">
-      <div class="section-h"><h3>创作台</h3></div>
-
-      <!-- ═══ ① 联网选题 ═══ -->
-      <div class="card" style="margin-bottom:var(--sp-4)">
-        <div class="field">
-          <label>① 联网选题（自动联网搜热点 → 选题 → 二创 → 脚本）</label>
-          <div class="row">
-            <input id="topicCat" placeholder="领域关键词，如：建筑行业 税务">
-            <input id="topicDir" placeholder="方向，如：老板最怕的稽查">
-            <select id="topicLen">
-              <option value="30秒">30秒</option><option value="1分钟">1分钟</option>
-              <option value="2分钟" selected>2分钟</option><option value="3分钟">3分钟</option>
-              <option value="5分钟">5分钟</option>
-            </select>
-          </div>
-          <button class="btn primary" id="topicBtn" onclick="runTopic()" style="margin-top:8px">🔍 联网搜选题</button>
+      <!-- ═══ 概览 ═══ -->
+      <section class="view active" id="v-dashboard">
+        <div class="sec-header"><h2 class="sec-title">工作概览</h2></div>
+        <div class="stats-row" id="dashStats"></div>
+        <div class="sec-header"><h2 class="sec-title">最近项目</h2>
+          <button class="btn btn-primary btn-sm" onclick="go('studio')">＋ 新建创作</button>
         </div>
-        <div id="topicResult" class="loading" style="display:none"></div>
-      </div>
+        <div class="list-view" id="dashRecent"></div>
+      </section>
 
-      <!-- ═══ ② 二创编辑面板（选中选题后展开） ═══ -->
-      <div class="card" id="rewritePanel" style="margin-bottom:var(--sp-4);display:none;border-left:4px solid var(--brand)">
-        <div class="section-h" style="margin:0 0 12px"><h3 style="font-size:var(--fs-15);color:var(--brand)">✨ 二创编辑</h3>
-          <button class="btn ghost" style="font-size:12px;padding:2px 10px" onclick="closeRewritePanel()">收起</button></div>
-        <div id="rewriteTopicInfo" style="background:var(--bg-2);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:var(--fs-13)"></div>
-        <div class="row" style="margin-bottom:10px">
-          <div class="field" style="margin:0;flex:1"><label>二创篇幅</label>
-            <select id="rwLength">
-              <option value="30秒">30秒短视频</option><option value="1分钟">1分钟口播</option>
-              <option value="2分钟" selected>2分钟深度</option>
-              <option value="3分钟">3分钟讲解</option><option value="5分钟">5分钟长文</option>
-            </select>
+      <!-- ═══ 创作台（步骤向导模式） ═══ -->
+      <section class="view" id="v-studio">
+        <!-- 步骤条 -->
+        <div class="step-wizard" id="stepWizard">
+          <div class="step-item active" data-step="1" onclick="jumpStep(1)">
+            <div class="step-num">1</div><span class="step-label">联网选题</span>
           </div>
-          <div class="field" style="margin:0;flex:1"><label>内容风格</label>
-            <select id="rwStyle">
-              <option value="专业干货" selected>专业干货（老张人设）</option>
-              <option value="口语爆款">口语爆款（抖音味）</option>
-              <option value="故事案例">故事案例（钩子开头）</option>
-              <option value="问答互动">问答互动（评论区引导）</option>
-            </select>
+          <span class="step-arrow">→</span>
+          <div class="step-item" data-step="2" onclick="jumpStep(2)">
+            <div class="step-num">2</div><span class="step-label">AI 二创</span>
+          </div>
+          <span class="step-arrow">→</span>
+          <div class="step-item" data-step="3" onclick="jumpStep(3)">
+            <div class="step-num">3</div><span class="step-label">脚本编辑</span>
+          </div>
+          <span class="step-arrow">→</span>
+          <div class="step-item" data-step="4" onclick="jumpStep(4)">
+            <div class="step-num">4</div><span class="step-label">一键出片</span>
           </div>
         </div>
-        <div style="display:flex;gap:var(--sp-3);flex-wrap:wrap">
-          <button class="btn primary" id="rwCreateBtn" onclick="runTopicCreate()">✨ AI 二创生成</button>
-          <button class="btn" onclick="adoptToScript()">📋 采用到脚本区</button>
-        </div>
-        <div id="rwResult" style="margin-top:12px;display:none">
-          <label style="font-size:var(--fs-13);color:var(--muted)">二创结果预览：</label>
-          <div id="rwPreview" style="background:var(--bg-2);border-radius:8px;padding:12px;font-size:var(--fs-13);line-height:1.7;white-space:pre-wrap"></div>
-        </div>
-        <div id="rwMsg" class="auth-err" style="color:var(--muted);text-align:left;margin-top:6px"></div>
-      </div>
 
-      <!-- ═══ ③ 脚本编辑 ═══ -->
-      <div class="card" style="margin-bottom:var(--sp-4)">
-        <div class="field">
-          <label>③ 脚本编辑
-            <span id="modeLabel" style="font-weight:400;color:var(--muted);font-size:var(--fs-12);margin-left:8px">
-              当前：<b id="modeText">独白模式</b>（单声口播）
-            </span>
-          </label>
-          <!-- 模式切换：独白 / 双声对话 -->
-          <div class="row" style="margin-bottom:10px">
-            <div class="mode-toggle" id="scriptModeToggle">
-              <button class="mode-btn active" data-mode="solo" onclick="setScriptMode('solo')">🎙️ 独白模式</button>
-              <button class="mode-btn" data-mode="dialogue" onclick="setScriptMode('dialogue')">💬 双声对话</button>
+        <!-- 步骤 1：联网选题 -->
+        <div class="card card-hover" id="step1Card">
+          <div class="sec-header" style="margin-bottom:var(--sp-base)">
+            <h3 style="font-size:var(--fs-lg);font-weight:800">🔍 联网选题</h3>
+            <span style="font-size:var(--fs-sm);color:var(--faint)">自动检索热点 → 筛选选题 → 进入二创</span>
+          </div>
+          <div class="field-row" style="margin-bottom:var(--sp-md)">
+            <div class="field" style="margin:0">
+              <label>领域关键词</label>
+              <input id="topicCat" placeholder="如：建筑行业 税务稽查">
+            </div>
+            <div class="field" style="margin:0">
+              <label>方向偏好</label>
+              <input id="topicDir" placeholder="如：老板最怕的稽查">
+            </div>
+            <div class="field" style="margin:0;flex:0 0 140px">
+              <label>目标篇幅</label>
+              <select id="topicLen">
+                <option value="30秒">30 秒</option>
+                <option value="1分钟">1 分钟</option>
+                <option value="2分钟" selected>2 分钟</option>
+                <option value="3分钟">3 分钟</option>
+                <option value="5分钟">5 分钟</option>
+              </select>
             </div>
           </div>
-          <!-- 独白模式：合并三段式（一个框，内部用标记分段） -->
+          <button class="btn btn-primary" id="topicBtn" onclick="runTopic()">
+            🔍 联网搜选题
+          </button>
+          <div id="topicResult" style="display:none;margin-top:var(--sp-lg)"></div>
+        </div>
+
+        <!-- 步骤 2：二创面板（动态展开） -->
+        <div class="rewrite-panel" id="rewritePanel" style="display:none">
+          <div class="rw-header">
+            <h4>✨ AI 二创编辑</h4>
+            <button class="btn btn-ghost btn-sm" onclick="closeRewrite()">收起</button>
+          </div>
+          <div class="rw-body">
+            <div class="rw-topic-info" id="rwTopicInfo"></div>
+            <div class="field-row" style="margin-bottom:var(--sp-base)">
+              <div class="field" style="margin:0">
+                <label>二创篇幅</label>
+                <select id="rwLength">
+                  <option value="30秒">30秒短视频</option>
+                  <option value="1分钟">1分钟口播</option>
+                  <option value="2分钟" selected>2分钟深度</option>
+                  <option value="3分钟">3分钟讲解</option>
+                  <option value="5分钟">5分钟长文</option>
+                </select>
+              </div>
+              <div class="field" style="margin:0">
+                <label>内容风格</label>
+                <select id="rwStyle">
+                  <option value="专业干货" selected>专业干货（老张人设）</option>
+                  <option value="口语爆款">口语爆款（抖音味）</option>
+                  <option value="故事案例">故事案例（钩子开头）</option>
+                  <option value="问答互动">问答互动（评论区引导）</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex;gap:var(--sp-md);flex-wrap:wrap">
+              <button class="btn btn-primary" id="rwCreateBtn" onclick="runTopicCreate()">✨ AI 二创生成</button>
+              <button class="btn" onclick="adoptToScript()">📋 采用到脚本区</button>
+            </div>
+            <div id="rwResult" style="display:none;margin-top:var(--sp-base)">
+              <label style="font-size:var(--fs-sm);color:var(--muted)">二创结果预览：</label>
+              <div class="rw-preview" id="rwPreview"></div>
+            </div>
+            <div id="rwMsg" style="font-size:var(--fs-sm);color:var(--muted);margin-top:var(--sp-md)"></div>
+          </div>
+        </div>
+
+        <!-- 步骤 3：脚本编辑 -->
+        <div class="card card-hover" id="step3Card" style="margin-top:var(--sp-lg)">
+          <div class="sec-header" style="margin-bottom:var(--sp-base)">
+            <h3 style="font-size:var(--fs-lg);font-weight:800">📝 脚本编辑</h3>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span id="modeLabel" style="font-size:var(--fs-sm);color:var(--muted)">
+                当前：<b id="modeText">独白模式</b>
+              </span>
+            </div>
+          </div>
+          <!-- 模式切换 -->
+          <div style="margin-bottom:var(--sp-base)">
+            <div class="mode-group" id="scriptModeToggle">
+              <button class="mode-opt on" data-mode="solo" onclick="setScriptMode('solo')">🎙️ 独白模式</button>
+              <button class="mode-opt" data-mode="dialogue" onclick="setScriptMode('dialogue')">💬 双声对话</button>
+            </div>
+          </div>
+          <!-- 独白：合并三段式 -->
           <div id="soloFields">
-            <div class="seg-hint">独白模式 · 整段脚本，按【开头】【正文】【结尾】三段书写（机器人会自动识别分段）：</div>
-            <textarea id="scriptMerged" placeholder="【开头】钩子，3-5秒抓住老板注意力...&#10;&#10;【正文】核心干货，层层递进...&#10;&#10;【结尾】留资钩子，引导私信咨询..." style="min-height:230px;font-family:var(--font-cn);line-height:1.7"></textarea>
+            <div class="script-editor">
+              <textarea id="scriptMerged" class="script-textarea" spellcheck="false"
+                placeholder="【开头】钩子，3-5秒抓住老板注意力...&#10;&#10;【正文】核心干货，层层递进...&#10;&#10;【结尾】留资钩子，引导私信咨询..."></textarea>
+              <div class="script-hint">
+                <span>💡</span> 按【开头】【正文】【结尾】三段书写，系统自动识别分段
+              </div>
+            </div>
           </div>
-          <!-- 双声模式：对话稿 -->
+          <!-- 双声：对话稿 -->
           <div id="dialogueFields" style="display:none">
-            <textarea id="scriptDialogue" placeholder="男女对话稿格式：&#10;女：老板你好，今天聊个扎心的话题...&#10;男：什么话题这么扎心？&#10;女：就是建筑行业里90%的老板都在犯的错..." style="min-height:230px"></textarea>
-            <p style="font-size:var(--fs-12);color:var(--muted);margin-top:4px">提示：双声模式下系统将自动按「女：」「男：」标签分配江老师/张老师音色</p>
+            <div class="script-editor">
+              <textarea id="scriptDialogue" class="script-textarea" spellcheck="false"
+                placeholder="女：老板你好，今天聊个扎心的话题...&#10;男：什么话题这么扎心？&#10;女：就是建筑行业里90%的老板都在犯的错..."></textarea>
+              <div class="script-hint">
+                <span>💡</span> 双声模式下按「女：」「男：」标签自动分配音色
+              </div>
+            </div>
+          </div>
+          <!-- 辅助选项 -->
+          <div class="field-row" style="margin-top:var(--sp-base)">
+            <div class="field" style="margin:0">
+              <label>账号类型</label>
+              <select id="accountType">
+                <option>财税IP打造类</option><option>营销引流类</option><option>未分类</option>
+              </select>
+            </div>
+            <div class="field" style="margin:0">
+              <label>目标时长(秒)</label>
+              <input id="targetSec" type="number" value="120">
+            </div>
+          </div>
+          <div style="display:flex;gap:var(--sp-md);flex-wrap:wrap;margin-top:var(--sp-sm)">
+            <button class="btn" onclick="runRewrite()">📝 AI 改写润色</button>
+            <button class="btn" onclick="saveProject()">💾 保存草稿</button>
+            <button class="btn btn-ghost" onclick="go('videos')">📁 我的项目</button>
           </div>
         </div>
-        <div class="row">
-          <div class="field" style="margin:0"><label>账号类型</label>
-            <select id="accountType">
-              <option>财税IP打造类</option><option>营销引流类</option><option>未分类</option>
-            </select>
-          </div>
-          <div class="field" style="margin:0"><label>目标时长(秒)</label>
-            <input id="targetSec" type="number" value="120">
-          </div>
-        </div>
-        <div style="display:flex;gap:var(--sp-3);flex-wrap:wrap;margin-top:8px">
-          <button class="btn" onclick="runRewrite()">📝 AI 改写润色</button>
-          <button class="btn" onclick="saveProject()">💾 保存草稿</button>
-          <button class="btn" onclick="goView('videos')">📁 我的项目</button>
-        </div>
-      </div>
 
-      <!-- ═══ ④ 出片配置 ═══ -->
-      <div class="card">
-        <div class="section-h" style="margin:0 0 12px"><h3 style="font-size:var(--fs-15)">④ 出片配置</h3></div>
-        <div class="row">
-          <div class="field" style="margin:0;flex:1"><label>数字人模特</label><select id="modelSel"></select></div>
-          <div class="field" style="margin:0;flex:1"><label>背景</label>
-            <select id="bgSel"><option value="">默认海景</option></select>
+        <!-- 步骤 4：出片配置 -->
+        <div class="card card-hover" id="step4Card" style="margin-top:var(--sp-lg)">
+          <div class="sec-header" style="margin-bottom:var(--sp-base)">
+            <h3 style="font-size:var(--fs-lg);font-weight:800">🚀 一键出片</h3>
           </div>
-        </div>
-        <!-- 出片模式：独白 / 双声 -->
-        <div class="field" style="margin-top:10px">
-          <label>出片模式</label>
-          <div class="mode-toggle" id="renderModeToggle">
-            <button class="mode-btn active" data-mode="solo" onclick="setRenderMode('solo')">🎙️ 独白（单数字人口播）</button>
-            <button class="mode-btn" data-mode="dual" onclick="setRenderMode('dual')">🎭 双声（男女交替旁白）</button>
+          <div class="field-row">
+            <div class="field" style="margin:0"><label>数字人模特</label><select id="modelSel"></select></div>
+            <div class="field" style="margin:0"><label>背景风格</label>
+              <select id="bgSel"><option value="">默认海景滚动</option></select>
+            </div>
           </div>
-          <p id="renderModeHint" style="font-size:var(--fs-12);color:var(--muted);margin-top:4px">独白模式：单一数字人形象 + 张老师克隆音 | 双声模式：滚动字幕卡 + 男女双声交替</p>
-        </div>
-        <div class="field"><label>视频标题（滚动字幕卡用）</label><input id="videoTitle" placeholder="如：建筑老板必看的三大税务雷区"></div>
-        <div class="field"><label>副标题（可选）</label><input id="videoSubtitle" placeholder="如：老张讲财税"></div>
-        <div style="display:flex;gap:var(--sp-3);flex-wrap:wrap">
-          <button class="btn" onclick="runTTS()">🔊 生成音频</button>
-          <button class="btn primary" onclick="runRender()">🚀 一键出片</button>
-          <button class="btn ghost" onclick="goView('queue')">查看队列</button>
-        </div>
-        <div id="studioMsg" class="auth-err" style="color:var(--muted);text-align:left"></div>
-      </div>
-    </section>
-
-    <!-- 渲染队列 -->
-    <section class="view" id="view-queue">
-      <div class="section-h"><h3>渲染队列</h3><button class="btn" onclick="loadQueue()">🔄 刷新</button></div>
-      <div class="list" id="queueList"></div>
-    </section>
-
-    <!-- 我的视频 -->
-    <section class="view" id="view-videos">
-      <div class="section-h"><h3>我的视频</h3><button class="btn primary" onclick="goView('studio')">＋ 新建创作</button></div>
-      <div class="list" id="videoList"></div>
-    </section>
-
-    <!-- 数字人 -->
-    <section class="view" id="view-avatars">
-      <div class="section-h"><h3>数字人模特</h3></div>
-      <div class="grid cols-3" id="avatarList"></div>
-    </section>
-
-    <!-- 账号设置 -->
-    <section class="view" id="view-account">
-      <div class="section-h"><h3>账号设置</h3></div>
-      <div class="card" style="max-width:520px">
-        <div class="field"><label>账号</label><input value="张德富（管理员）" disabled></div>
-        <div class="field"><label>工作空间</label><input value="慧根堂主空间" disabled></div>
-        <div class="field"><label>访问口令</label>
-          <div class="row" style="align-items:flex-end">
-            <input id="tokenView" disabled>
-            <button class="btn" onclick="copyToken()">复制</button>
+          <div class="field" style="margin-top:var(--sp-sm)">
+            <label>出片模式</label>
+            <div class="mode-group" id="renderModeToggle">
+              <button class="mode-opt on" data-mode="solo" onclick="setRenderMode('solo')">🎙️ 独白数字人口播</button>
+              <button class="mode-opt" data-mode="dual" onclick="setRenderMode('dual')">🎭 双声字幕卡</button>
+            </div>
+            <p id="renderModeHint" style="font-size:var(--fs-sm);color:var(--muted);margin-top:6px">
+              独白：单一数字人形象 + 张老师克隆音 | 双声：滚动字幕卡 + 男女双声交替
+            </p>
           </div>
+          <div class="field"><label>视频标题（字幕卡用）</label>
+            <input id="videoTitle" placeholder="如：建筑老板必看的三大税务雷区"></div>
+          <div class="field"><label>副标题（可选）</label>
+            <input id="videoSubtitle" placeholder="如：老张讲财税"></div>
+          <div style="display:flex;gap:var(--sp-md);flex-wrap:wrap;margin-top:var(--sp-sm)">
+            <button class="btn" onclick="runTTS()">🔊 生成音频</button>
+            <button class="btn btn-primary" onclick="runRender()">🚀 一键出片</button>
+            <button class="btn btn-ghost" onclick="go('queue')">查看队列</button>
+          </div>
+          <div id="studioMsg" style="font-size:var(--fs-sm);color:var(--muted);margin-top:var(--sp-md)"></div>
         </div>
-        <div class="field"><label>主题</label>
-          <button class="btn" id="themeBtn2" onclick="toggleTheme()">切换明暗主题</button>
+      </section>
+
+      <!-- ═══ 渲染队列 ═══ -->
+      <section class="view" id="v-queue">
+        <div class="sec-header"><h2 class="sec-title">渲染队列</h2>
+          <button class="btn btn-sm" onclick="loadQueue()">🔄 刷新</button>
         </div>
-        <p class="auth-hint" style="text-align:left">当前为单机内测版，多用户注册与计费将于正式商用版上线。</p>
-      </div>
-    </section>
+        <div class="list-view" id="queueList"></div>
+      </section>
+
+      <!-- ═══ 我的视频 ═══ -->
+      <section class="view" id="v-videos">
+        <div class="sec-header"><h2 class="sec-title">我的视频</h2>
+          <button class="btn btn-primary btn-sm" onclick="go('studio')">＋ 新建创作</button>
+        </div>
+        <div class="list-view" id="videoList"></div>
+      </section>
+
+      <!-- ═══ 数字人 ═══ -->
+      <section class="view" id="v-avatars">
+        <div class="sec-header"><h2 class="sec-title">数字人模特库</h2></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--sp-base)" id="avatarList"></div>
+      </section>
+
+      <!-- ═══ 账号设置 ═══ -->
+      <section class="view" id="v-account">
+        <div class="sec-header"><h2 class="sec-title">账号设置</h2></div>
+        <div class="card" style="max-width:520px">
+          <div class="field"><label>账号名</label><input value="张德富（管理员）" disabled></div>
+          <div class="field"><label>工作空间</label><input value="慧根堂主空间" disabled></div>
+          <div class="field"><label>访问口令</label>
+            <div class="field-row" style="align-items:flex-end">
+              <input id="tokenView" disabled style="margin:0">
+              <button class="btn btn-sm" style="margin:0" onclick="copyToken()">复制</button>
+            </div>
+          </div>
+          <div class="field"><label>界面主题</label>
+            <button class="btn btn-sm" onclick="toggleTheme()">切换明暗主题</button>
+          </div>
+          <p style="font-size:var(--fs-sm);color:var(--faint);margin-top:var(--sp-lg);line-height:1.7">
+            当前为单机内测版 · 多用户注册与计费将于正式商用版上线
+          </p>
+        </div>
+      </section>
+
+    </div><!-- /main-scroll -->
   </main>
-</div>
+</div><!-- /app-shell -->
 
-<div id="toast"></div>
+<!-- Toast -->
+<div id="toastEl"></div>
 
 <script>
-/* ===== 全局错误兜底：任何 JS 报错/网络失败都显示到页面顶部，不再静默无反应 ===== */
+/* ═══════════════════ 全局错误兜底 ═══════════════════ */
 function showFatal(msg){
-  let bar = document.getElementById("fatalBar");
-  if(!bar){ bar = document.createElement("div"); bar.id="fatalBar";
-    bar.style.cssText="position:fixed;left:0;right:0;top:0;z-index:99999;background:#e5484d;color:#fff;padding:10px 16px;font-size:14px;line-height:1.4;box-shadow:0 2px 10px rgba(0,0,0,.25)";
-    document.body.appendChild(bar); }
-  bar.textContent = "⚠️ " + msg;
+  let el=document.getElementById("fatalBar");
+  if(!el){el=document.createElement("div");el.id="fatalBar";
+    el.style.cssText="position:fixed;left:0;right:0;top:0;z-index:99999;background:#dc2626;color:#fff;padding:12px 20px;font-size:14px;line-height:1.5;box-shadow:0 4px 20px rgba(0,0,0,.3);font-weight:600";
+    document.body.appendChild(el);}
+  el.textContent = "⚠️ " + msg;
 }
-window.onerror = function(m, src, line){ showFatal("页面脚本错误：" + m + "（行" + line + "）"); return false; };
+window.onerror=function(m,s,l){showFatal("页面错误："+m+"（第"+l+"行）");return false};
 
-/* ===== 统一 API 层（同域，自动带令牌 cookie，零改 fetch） ===== */
-const API = (path, opts = {}) => {
-  opts.headers = Object.assign({"Content-Type": "application/json"}, opts.headers || {});
-  return fetch(path, opts).then(r => {
-    if (r.status === 401) { // 令牌失效 → 回登录
-      document.getElementById("authScreen").style.display = "grid";
-      document.getElementById("topbar").style.display = "none";
-      document.getElementById("layout").style.display = "none";
-      throw new Error("unauthorized");
-    }
-    return r.json().catch(()=>({error:"response_not_json"}));
-  }).catch(err => {
-    if(err.message === "unauthorized") throw err;
-    showFatal("网络请求失败（" + err.message + "）：请确认通过 http://localhost:8385/app 访问、且服务已重启");
-    throw err;
+/* ═══════════════════ API 层 ═══════════════════ */
+const API=(path,o={})=>{
+  o.headers=Object.assign({"Content-Type":"application/json"},o.headers||{});
+  return fetch(path,o).then(r=>{
+    if(r.status===401){doLogout(true);throw new Error("unauthorized")}
+    return r.json().catch(()=>({error:"response_not_json"}))
+  }).catch(e=>{
+    if(e.message==="unauthorized") throw e;
+    showFatal("网络请求失败（"+e.message+"）：确认服务已启动且通过 localhost:8385/app 访问");
+    throw e;
   });
 };
-const POST = (p, body) => API(p, {method: "POST", body: JSON.stringify(body || {})});
+const POST=(p,b)=>API(p,{method:"POST",body:JSON.stringify(b||{})});
 
-/* ===== 令牌闸门 ===== */
+/* ═══════════════════ 登录/鉴权 ═══════════════════ */
 function doLogin(e){
   e.preventDefault();
-  const v = document.getElementById("tokenInput").value.trim();
-  if(!v){ document.getElementById("authErr").textContent = "请输入口令"; return false; }
-  // 写 cookie 给后端鉴权用
-  document.cookie = "hgtv2_token=" + v + "; path=/; max-age=2592000; samesite=lax";
-  // 验证一次
-  API("/api/projects").then(d => {
-    if(d.error === "unauthorized"){ document.getElementById("authErr").textContent = "口令错误"; return; }
+  const v=document.getElementById("tokenInput").value.trim();
+  if(!v){document.getElementById("authErr").textContent="请输入口令";return false}
+  document.cookie="hgtv2_token="+v+";path=/;max-age=2592000;samesite=lax";
+  API("/api/projects").then(d=>{
+    if(d.error==="unauthorized"){document.getElementById("authErr").textContent="口令错误";return}
     enterApp();
-  }).catch(err => { if(err.message !== "unauthorized") document.getElementById("authErr").textContent = "连接失败，确认服务已启动"; });
+  }).catch(e=>{if(e.message!=="unauthorized")document.getElementById("authErr").textContent="连接失败，确认服务已启动"});
   return false;
 }
 function enterApp(){
-  document.getElementById("authScreen").style.display = "none";
-  document.getElementById("topbar").style.display = "flex";
-  document.getElementById("layout").style.display = "flex";
-  document.getElementById("tokenView").value = (document.cookie.match(/hgtv2_token=([^;]+)/)||[])[1] || "";
+  document.getElementById("authGate").style.display="none";
+  document.getElementById("topbar").style.display="flex";
+  document.getElementById("appShell").style.display="flex";
+  document.getElementById("tokenView").value=(document.cookie.match(/hgtv2_token=([^;]+)/)||[])[1]||"";
   loadAll();
 }
-function logout(){
-  document.cookie = "hgtv2_token=; path=/; max-age=0";
-  document.getElementById("authScreen").style.display = "grid";
-  document.getElementById("topbar").style.display = "none";
-  document.getElementById("layout").style.display = "none";
+function doLogout(silent){
+  document.cookie="hgtv2_token=;path=/;max-age=0";
+  document.getElementById("authGate").style.display="grid";
+  document.getElementById("topbar").style.display="none";
+  document.getElementById("appShell").style.display="none";
+  if(!silent) location.reload();
 }
-function copyToken(){ const t=document.getElementById("tokenView").value; if(t){navigator.clipboard.writeText(t); toast("已复制口令");} }
 
-/* ===== 主题 ===== */
-const THEME_KEY = "hgt-theme";
-function applyTheme(t){ document.documentElement.setAttribute("data-theme", t); }
+/* ═══════════════════ 主题 ═══════════════════ */
+const TK="hgt-theme";
+function applyTheme(t){document.documentElement.setAttribute("data-theme",t)}
 function toggleTheme(){
-  const cur = document.documentElement.getAttribute("data-theme");
-  const next = cur === "dark" ? "light" : "dark";
-  applyTheme(next); localStorage.setItem(THEME_KEY, next);
+  const c=document.documentElement.getAttribute("data-theme");
+  const n=c==="dark"?"light":"dark";
+  applyTheme(n);localStorage.setItem(TK,n);
 }
-(function(){ const saved = localStorage.getItem(THEME_KEY) || "light"; applyTheme(saved); })();
-document.getElementById("themeBtn").onclick = toggleTheme;
+(function(){applyTheme(localStorage.getItem(TK)||"light")})();
 
-/* ===== 导航 ===== */
-function goView(v){
-  document.querySelectorAll(".nav-item[data-view]").forEach(n => n.classList.toggle("active", n.dataset.view === v));
-  document.querySelectorAll(".view").forEach(s => s.classList.remove("active"));
-  const el = document.getElementById("view-" + v);
-  if(el) el.classList.add("active");
-  document.querySelector(".sidebar").classList.remove("open");
-  if(v === "dashboard") loadDashboard();
-  if(v === "videos") loadVideos();
-  if(v === "avatars") loadAvatars();
-  if(v === "queue") loadQueue();
+/* ═══════════════════ 导航 ═══════════════════ */
+let currentView="dashboard";
+function go(v){
+  currentView=v;
+  document.querySelectorAll(".nav-item[data-v]").forEach(n=>n.classList.toggle("active",n.dataset.v===v));
+  document.querySelectorAll(".view").forEach(s=>s.classList.remove("active"));
+  const el=document.getElementById("v-"+v);
+  if(el)el.classList.add("active");
+  document.getElementById("sidebar").classList.remove("open");
+  // 触发数据加载
+  if(v==="dashboard")loadDashboard();
+  if(v==="videos")loadVideos();
+  if(v==="avatars")loadAvatars();
+  if(v==="queue")loadQueue();
+}
+function toggleSidebar(){document.getElementById("sidebar").classList.toggle("open")}
+function copyToken(){const t=document.getElementById("tokenView").value;if(t){navigator.clipboard.writeText(t);toast("✅ 已复制口令")}}
+
+/* ═══════════════════ Toast ═══════════════════ */
+let _tt;
+function toast(m){
+  const t=document.getElementById("toastEl");
+  t.textContent=m;t.classList.add("show");
+  clearTimeout(_tt);_tt=setTimeout(()=>t.classList.remove("show"),2600);
 }
 
-/* ===== toast ===== */
-let toastTimer;
-function toast(msg){
-  const t = document.getElementById("toast");
-  t.textContent = msg; t.classList.add("show");
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2400);
-}
+/* ═══════════════════ 工具函数 ═══════════════════ */
+function fmtTime(ts){if(!ts)return"";const d=new Date(ts*1000),p=n=>String(n).padStart(2,"0");
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes())}
+function esc(s){return String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 
-/* ===== 时间格式化 ===== */
-function fmtTime(ts){ if(!ts) return ""; const d = new Date(ts*1000); const p=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; }
-function esc(s){ return String(s||"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
-
-/* ===== 数据加载 ===== */
-function loadAll(){ loadDashboard(); loadModels(); loadBgs(); }
+/* ═══════════════════ 数据加载 ═══════════════════ */
+function loadAll(){loadDashboard();loadModels();loadBgs()}
 
 function loadDashboard(){
-  API("/api/projects").then(list => {
-    if(!Array.isArray(list)) return;
-    const total = list.length;
-    const withVideo = list.filter(p => p.video).length;
-    const withAudio = list.filter(p => p.audio).length;
-    document.getElementById("dashStats").innerHTML = `
-      <div class="card stat"><span class="n">${total}</span><span class="l">项目总数</span></div>
-      <div class="card stat"><span class="n">${withAudio}</span><span class="l">已生成音频</span></div>
-      <div class="card stat"><span class="n">${withVideo}</span><span class="l">已出片</span></div>`;
-    const recent = list.slice(0, 8);
-    document.getElementById("dashRecent").innerHTML = recent.length ? recent.map(p => `
-      <div class="item">
-        <div class="thumb">🎬</div>
-        <div class="meta"><div class="t">${esc(p.name)}</div>
-          <div class="s">${fmtTime(p.mtime)} · ${esc(p.account_type)}</div></div>
-        <span class="tag ${p.video?'ok':(p.audio?'warn':'muted')}">${p.video?'已出片':(p.audio?'已配音':'草稿')}</span>
-        <button class="btn" onclick="goView('studio')">打开</button>
-      </div>`).join("") : `<div class="loading">还没有项目，去创作台新建一个吧</div>`;
+  API("/api/projects").then(list=>{
+    if(!Array.isArray(list))return;
+    const total=list.length,wV=list.filter(p=>p.video).length,wA=list.filter(p=>p.audio).length;
+    document.getElementById("dashStats").innerHTML=
+      `<div class="stat-card"><div class="stat-num">${total}</div><div class="stat-lbl">项目总数</div></div>`+
+      `<div class="stat-card"><div class="stat-num">${wA}</div><div class="stat-lbl">已配音</div></div>`+
+      `<div class="stat-card"><div class="stat-num">${wV}</div><div class="stat-lbl">已出片</div></div>`;
+    const recent=list.slice(0,8);
+    document.getElementById("dashRecent").innerHTML=recent.length?recent.map(p=>
+      `<div class="list-item">
+        <div class="list-thumb">🎬</div>
+        <div class="list-meta"><div class="list-t">${esc(p.name)}</div>
+          <div class="list-s">${fmtTime(p.mtime)} · ${esc(p.account_type)}</div></div>
+        <span class="tag-pill ${p.video?'tag-ok':(p.audio?'tag-warn':'tag-muted')}">${p.video?'已出片':(p.audio?'已配音':'草稿')}</span>
+      </div>`).join(""):`<div class="loading-state">还没有项目，去创作台新建一个吧 🚀</div>`;
   }).catch(()=>{});
 }
 
 function loadVideos(){
-  API("/api/projects").then(list => {
-    if(!Array.isArray(list)) return;
-    const el = document.getElementById("videoList");
-    if(!list.length){ el.innerHTML = `<div class="loading">暂无视频，去创作台出片</div>`; return; }
-    el.innerHTML = list.map(p => `
-      <div class="item">
-        <div class="thumb">🎬</div>
-        <div class="meta"><div class="t">${esc(p.name)}</div>
-          <div class="s">${fmtTime(p.mtime)} · ${esc(p.account_type)} · 违规高${p.high}/中${p.med}</div></div>
-        ${p.video ? `<button class="btn primary" onclick="window.open('/api/video/${encodeURIComponent(p.name)}.mp4','_blank')">▶ 播放</button>` : (p.audio ? `<span class="tag warn">待出片</span>` : `<span class="tag muted">草稿</span>`)}
-      </div>`).join("");
+  API("/api/projects").then(list=>{
+    if(!Array.isArray(list))return;
+    const el=document.getElementById("videoList");
+    if(!list.length){el.innerHTML=`<div class="loading-state">暂无视频，去创作台出片</div>`;return}
+    el.innerHTML=list.map(p=>`<div class="list-item">
+      <div class="list-thumb">🎬</div>
+      <div class="list-meta"><div class="list-t">${esc(p.name)}</div>
+        <div class="list-s">${fmtTime(p.mtime)} · ${esc(p.account_type)}</div></div>
+      ${p.video?`<button class="btn btn-primary btn-sm" onclick="window.open('/api/video/${encodeURIComponent(p.name)}.mp4','_blank')">▶ 播放</button>`
+      :(p.audio?`<span class="tag-pill tag-warn">待出片</span>`:`<span class="tag-pill tag-muted">草稿</span>`)}
+    </div>`).join("");
   }).catch(()=>{});
 }
 
 function loadAvatars(){
-  API("/api/models").then(list => {
-    if(!Array.isArray(list)) return;
-    document.getElementById("avatarList").innerHTML = list.map(m => `
-      <div class="card">
-        <div class="thumb" style="width:100%;height:120px;border-radius:var(--radius-sm);margin-bottom:10px;font-size:40px">🧑</div>
-        <div class="t" style="font-weight:700">${esc(m.label)}</div>
-        <div class="s" style="color:var(--muted);font-size:var(--fs-12)">${m.size_mb} MB</div>
-      </div>`).join("");
+  API("/api/models").then(list=>{
+    if(!Array.isArray(list))return;
+    document.getElementById("avatarList").innerHTML=list.map(m=>`<div class="card card-hover" style="text-align:center;padding:var(--sp-lg)">
+      <div style="width:100%;height:120px;border-radius:var(--radius-sm);background:var(--grad-subtle);display:grid;place-items:center;font-size:40px;margin-bottom:var(--sp-md)">🧑</div>
+      <div style="font-weight:700;font-size:var(--fs-md)">${esc(m.label)}</div>
+      <div style="font-size:var(--fs-sm);color:var(--muted);margin-top:4px">${m.size_mb} MB</div>
+    </div>`).join("");
   }).catch(()=>{});
 }
 
 function loadModels(){
-  API("/api/models").then(list => {
-    if(!Array.isArray(list)) return;
-    const sel = document.getElementById("modelSel");
-    sel.innerHTML = list.map(m => `<option value="${esc(m.id)}">${esc(m.label)}</option>`).join("");
+  API("/api/models").then(list=>{
+    if(!Array.isArray(list))return;
+    document.getElementById("modelSel").innerHTML=list.map(m=>`<option value="${esc(m.id)}">${esc(m.label)}</option>`).join("");
   }).catch(()=>{});
 }
 function loadBgs(){
-  API("/api/bg_list").then(d => {
-    if(!d || !Array.isArray(d.items)) return;
-    const sel = document.getElementById("bgSel");
-    sel.innerHTML = `<option value="">默认海景</option>` + d.items.map(b => `<option value="${esc(b.id||b.name||'')}">${esc(b.name||b.id||'背景')}</option>`).join("");
+  API("/api/bg_list").then(d=>{
+    if(!d||!Array.isArray(d.items))return;
+    document.getElementById("bgSel").innerHTML=`<option value="">默认海景滚动</option>`+
+      d.items.map(b=>`<option value="${esc(b.id||b.name||'')}">${esc(b.name||b.id||'背景')}</option>`).join("");
   }).catch(()=>{});
 }
 
-/* ===== 创作台动作 ===== */
-let _cachedTopics = null;   // 当前选题列表缓存
-let _selectedTopic = null;  // 当前选中待二创的选题
-let _rwResult = null;       // 二创结果缓存（供"采用到脚本区"用）
-let _scriptMode = "solo";   // 脚本模式：solo / dialogue
-let _renderMode = "solo";   // 出片模式：solo / dual
+/* ═══════════════════ 步骤向导 ═══════════════════ */
+let currentStep=1;
+function jumpStep(s){
+  currentStep=s;
+  document.querySelectorAll("#stepWizard .step-item").forEach(el=>{
+    const n=+el.dataset.step;
+    el.classList.toggle("active",n===s);
+    el.classList.toggle("done",n<s);
+  });
+  // 滚动到对应卡片
+  const cards=[null,"step1Card","rewritePanel","step3Card","step4Card"];
+  const target=document.getElementById(cards[s]);
+  if(target&&s!==2){target.scrollIntoView({behavior:"smooth",block:"start"})}
+  else if(s===2){const p=document.getElementById("rewritePanel");
+    if(p&&p.style.display!=="none")p.scrollIntoView({behavior:"smooth",block:"start"})}
+}
+function markStepDone(s){
+  const el=document.querySelector(`#stepWizard .step-item[data-step="${s}"]`);
+  if(el)el.classList.add("done");
+}
+
+/* ═══════════════════ 创作台动作 ═══════════════════ */
+let _topics=null,_selTopic=null,_rwResult=null;
+let _scriptMode="solo",_renderMode="solo";
 
 /* ── ① 联网选题 ── */
 function runTopic(){
-  const btn = document.getElementById("topicBtn");
-  btn.disabled = true; btn.textContent = "🔍 搜索中...";
-  const box = document.getElementById("topicResult");
-  box.style.display = "block"; box.innerHTML = `<span class="spin"></span>联网检索选题中...`;
-  POST("/api/topic_search", {
-    category: document.getElementById("topicCat").value,
-    direction: document.getElementById("topicDir").value,
-    length: document.getElementById("topicLen").value,
-    target_seconds: 0,
-    mode: "list"
-  }).then(d => {
-    btn.disabled = false; btn.textContent = "🔍 联网搜选题";
-    if(!d || d.error){ box.innerHTML = `<span style="color:var(--err)">${esc(d&&d.error||'检索失败')}</span>`; return; }
-    const topics = (d.topics || []).slice(0, 8);
-    _cachedTopics = topics;
-    if(!topics.length){ box.innerHTML = `<span class="auth-err" style="color:var(--muted)">未找到相关选题，换个关键词试试</span>`; return; }
-    box.innerHTML = `<div style="font-weight:700;margin-bottom:10px">为你找到 ${topics.length} 个选题，点击「AI二创」进入二次创作：</div>` + topics.map((t,i)=>`
-      <div class="item" style="cursor:default">
-        <div class="thumb">${esc(t.relevance||0)}</div>
-        <div class="meta" style="flex:1"><div class="t">${esc(t.title)}</div>
-          <div class="s" style="font-size:var(--fs-12);margin-top:2px">${esc(t.summary||t.why_hot||'')}</div></div>
-        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
-          <button class="btn primary" style="padding:4px 12px;font-size:12px" onclick="startRewrite(${i})">✨ AI二创</button>
-          <button class="btn ghost" style="padding:4px 12px;font-size:12px" onclick="pickTopic(${i})">📋 直接采用</button>
+  const btn=document.getElementById("topicBtn"),box=document.getElementById("topicResult");
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>搜索中...';
+  box.style.display="block";box.innerHTML='<div class="loading-state"><span class="spinner"></span>正在联网检索最新财税热点...</div>';
+  POST("/api/topic_search",{category:document.getElementById("topicCat").value,
+    direction:document.getElementById("topicDir").value,length:document.getElementById("topicLen").value,
+    target_seconds:0,mode:"list"}).then(d=>{
+    btn.disabled=false;btn.textContent="🔍 联网搜选题";
+    if(!d||d.error){box.innerHTML=`<div style="color:var(--err);padding:var(--sp-md)}">${esc(d&&d.error||'检索失败')}</div>`;return}
+    const topics=(d.topics||[]).slice(0,8);
+    _topics=topics;
+    if(!topics.length){box.innerHTML=`<div class="loading-state">未找到相关选题，换个关键词试试 🤔</div>`;return}
+    markStepDone(1);
+    box.innerHTML=`<div style="font-weight:700;margin-bottom:var(--sp-md);color:var(--ink)">
+        🔥 为你找到 ${topics.length} 个爆款选题候选</div><div class="topic-grid">`+
+      topics.map((t,i)=>`<div class="topic-card">
+        <div class="topic-score">${esc(t.relevance||'?')}</div>
+        <div class="topic-body">
+          <div class="topic-title">${esc(t.title)}</div>
+          <div class="topic-desc">${esc(t.summary||t.why_hot||'')}</div>
         </div>
-      </div>`).join("");
-  }).catch(()=>{ btn.disabled=false; btn.textContent="🔍 联网搜选题"; box.innerHTML=`<span style="color:var(--err)">连接失败</span>`; });
+        <div class="topic-actions">
+          <button class="btn btn-primary btn-sm" onclick="startRewrite(${i})">✨ AI二创</button>
+          <button class="btn btn-ghost btn-sm" onclick="pickTopic(${i})">采用</button>
+        </div>
+      </div>`).join("")+"</div>";
+  }).catch(()=>{btn.disabled=false;btn.textContent="🔍 联网搜选题";box.innerHTML=`<div style="color:var(--err);padding:var(--sp-md)">连接失败</div>`});
 }
 
-/* ── 选题：直接采用（跳过二创，填入脚本区）── */
 function pickTopic(i){
-  const t = _cachedTopics[i];
-  if(!t) return;
-  _selectedTopic = t;
-  // 直接采用：标题作开头、摘要作正文，写入合并框
-  const merged = segsToMerged(t.title || "", (t.summary || t.why_hot || ""), "");
-  document.getElementById("scriptMerged").value = merged;
-  toast("已采用选题到脚本区，可继续编辑或点「AI改写润色」");
+  const t=_topics[i];if(!t)return;
+  _selTopic=t;
+  document.getElementById("scriptMerged").value=segsToMerged(t.title||"",(t.summary||t.why_hot||""),"");
+  markStepDone(1);markStepDone(2);
+  jumpStep(3);
+  toast("✅ 已采用选题到脚本区，可继续编辑或改写润色");
 }
 
-/* ── ② 打开二创面板 ── */
+/* ── ② 二创 ── */
 function startRewrite(i){
-  const t = _cachedTopics[i];
-  if(!t) return;
-  _selectedTopic = t;
-  _rwResult = null;
-  const panel = document.getElementById("rewritePanel");
-  const info = document.getElementById("rewriteTopicInfo");
-  info.innerHTML = `<b>📌 选题：</b>${esc(t.title)}<br><b>📊 相关度：</b>${t.relevance||'-'}<br><b>💡 要点：</b>${esc(t.risk_point||t.audience||t.summary||'')}`;
-  document.getElementById("rwResult").style.display = "none";
-  document.getElementById("rwMsg").textContent = "";
-  panel.style.display = "block";
-  panel.scrollIntoView({behavior:"smooth",block:"start"});
+  const t=_topics[i];if(!t)return;
+  _selTopic=t;_rwResult=null;
+  const panel=document.getElementById("rewritePanel");
+  document.getElementById("rwTopicInfo").innerHTML=
+    `<b>📌 选题：</b>${esc(t.title)}<br>`+
+    `<b>📊 相关度：</b>${t.relevance||'-'}<br>`+
+    `<b>💡 要点：</b>${esc(t.risk_point||t.audience||t.summary||'')}`;
+  document.getElementById("rwResult").style.display="none";
+  document.getElementById("rwMsg").textContent="";
+  panel.style.display="block";
+  markStepDone(1);
+  jumpStep(2);
   toast("已打开二创面板，调整参数后点「AI二创生成」");
 }
-function closeRewritePanel(){
-  document.getElementById("rewritePanel").style.display = "none";
-}
+function closeRewrite(){document.getElementById("rewritePanel").style.display="none"}
 
-/* ── AI 二创生成（调后端 mode=create）── */
 function runTopicCreate(){
-  if(!_selectedTopic){ showFatal("请先选择一个选题"); return; }
-  const btn = document.getElementById("rwCreateBtn");
-  const msg = document.getElementById("rwMsg");
-  btn.disabled = true; btn.textContent = "✨ 二创生成中...";
-  msg.textContent = "正在联网分析并二次创作，预计 15-30 秒...";
-  POST("/api/topic_search", {
-    category: _selectedTopic.title,
-    direction: document.getElementById("topicDir").value || (_selectedTopic.risk_point || ""),
-    length: document.getElementById("rwLength").value,
-    target_seconds: 0,
-    mode: "create",
-    keep_core: document.getElementById("rwStyle").value,
-    topic_index: 0,
-    topics_cache: JSON.stringify([_selectedTopic])
-  }).then(d => {
-    btn.disabled = false; btn.textContent = "✨ AI 二创生成";
-    if(!d || d.error){ msg.textContent = "二创失败：" + esc(d&&d.error||"未知错误"); return; }
-    _rwResult = d;
-    // 展示结果预览
-    const preview = document.getElementById("rwPreview");
-    let text = "";
-    if(d.result){
-      if(d.result.opening) text += "【开头】\n" + d.result.opening + "\n\n";
-      if(d.result.body) text += "【正文】\n" + d.result.body + "\n\n";
-      if(d.result.ending) text += "【结尾】\n" + d.result.ending + "\n\n";
-      if(d.result.dialogue) text += "【对话稿】\n" + d.result.dialogue + "\n";
-    } else if(d.opening || d.body || d.ending){
-      if(d.opening) text += "【开头】\n" + d.opening + "\n\n";
-      if(d.body) text += "【正文】\n" + d.body + "\n\n";
-      if(d.ending) text += "【结尾】\n" + d.ending + "\n\n";
-      if(d.dialogue) text += "【对话稿】\n" + d.dialogue + "\n";
-    } else {
-      text = JSON.stringify(d, null, 2);
-    }
-    preview.textContent = text || "(无内容)";
-    document.getElementById("rwResult").style.display = "block";
-    msg.textContent = "二创完成 ✅  可预览上方结果，确认后点「采用到脚本区」";
-    toast("二创生成完成！");
-  }).catch(err => {
-    btn.disabled = false; btn.textContent = "✨ AI 二创生成";
-    msg.textContent = "连接失败：" + (err.message||"");
+  if(!_selTopic){showFatal("请先选择一个选题");return}
+  const btn=document.getElementById("rwCreateBtn"),msg=document.getElementById("rwMsg");
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>生成中...';
+  msg.textContent="正在联网分析并二次创作，预计 15-30 秒...";
+  POST("/api/topic_search",{category:_selTopic.title,
+    direction:document.getElementById("topicDir").value||(_selTopic.risk_point||""),
+    length:document.getElementById("rwLength").value,target_seconds:0,mode:"create",
+    keep_core:document.getElementById("rwStyle").value,topic_index:0,
+    topics_cache:[_selTopic]}).then(d=>{
+    btn.disabled=false;btn.textContent="✨ AI 二创生成";
+    if(!d||d.error){msg.textContent="❌ 二创失败："+esc(d&&d.error||"未知错误");return}
+    _rwResult=d;
+    let text="";
+    const r=d.result||d;
+    if(r.opening)text+="【开头】\n"+r.opening+"\n\n";
+    if(r.body)text+="【正文】\n"+r.body+"\n\n";
+    if(r.ending)text+="【结尾】\n"+r.ending+"\n\n";
+    if(r.dialogue)text+="【对话稿】\n"+r.dialogue+"\n";
+    if(!text)text=JSON.stringify(d,null,2);
+    document.getElementById("rwPreview").textContent=text||"(无内容)";
+    document.getElementById("rwResult").style.display="block";
+    msg.textContent="✅ 二创完成！可预览上方结果，确认后点「采用到脚本区」";
+    toast("✨ 二创生成完成！");
+    markStepDone(2);
+  }).catch(e=>{
+    btn.disabled=false;btn.textContent="✨ AI 二创生成";
+    msg.textContent="❌ 连接失败："+(e.message||"");
   });
 }
 
-/* ── 采用二创结果到脚本区 ── */
 function adoptToScript(){
-  if(!_rwResult){
-    toast("还没有二创结果，请先生成"); return;
-  }
-  const r = _rwResult.result || _rwResult;
-  setScriptSegs({opening: r.opening||"", body: r.body||"", ending: r.ending||"", dialogue: r.dialogue||""});
-  toast("已采用到脚本区 ✅");
-  closeRewritePanel();
-  // 滚动到脚本区
-  document.getElementById("soloFields").scrollIntoView({behavior:"smooth",block:"center"});
+  if(!_rwResult){toast("⚠️ 还没有二创结果，请先生成");return}
+  const r=_rwResult.result||_rwResult;
+  setScriptSegs({opening:r.opening||"",body:r.body||"",ending:r.ending||"",dialogue:r.dialogue||""});
+  toast("✅ 已采用到脚本区");
+  closeRewrite();
+  markStepDone(2);
+  jumpStep(3);
 }
 
-/* ── 独白合并框 ↔ 三段互转 ── */
-/* 后端契约不变：do_save 收 opening/body/ending，serialize_three 用 === 开头 ===/=== 正文 ===/=== 结尾（钩子） === 格式 */
+/* ── ③ 脚本编辑器互转 ── */
 function mergedToSegs(text){
-  const segs = {opening:"", body:"", ending:""};
-  const re = /^\s*(?:#\s*)?【?\s*(开头|正文|结尾|钩子)\s*】?\s*$/m;
-  // 按行扫描，遇到标记行切换当前段
-  const lines = (text || "").split(/\r?\n/);
-  let cur = "opening"; // 默认落入开头段
-  const buf = {opening:[], body:[], ending:[]};
+  const segs={opening:"",body:"",ending:""};
+  const lines=(text||"").split(/\r?\n/);
+  let cur="opening",buf={opening:[],body:[],ending:[]};
   for(const ln of lines){
-    // 标记行：行首(可带#)紧跟【开头】/【正文】/【结尾】/【钩子】，标记后内容归入该段
-    const m = ln.match(/^\s*(?:#\s*)?【\s*(开头|正文|结尾|钩子)\s*】\s*(.*)$/);
-    if(m){
-      const k = (m[1]==="开头") ? "opening" : (m[1]==="正文" ? "body" : "ending");
-      cur = k;
-      if(m[2].trim()) buf[cur].push(m[2]);
-      continue;
-    }
+    const m=ln.match(/^\s*(?:#\s*)?【\s*(开头|正文|结尾|钩子)\s*】\s*(.*)$/);
+    if(m){cur=m[1]==="开头"?"opening":(m[1]==="正文"?"body":"ending");if(m[2].trim())buf[cur].push(m[2]);continue}
     buf[cur].push(ln);
   }
-  segs.opening = buf.opening.join("\n").trim();
-  segs.body    = buf.body.join("\n").trim();
-  segs.ending  = buf.ending.join("\n").trim();
+  segs.opening=buf.opening.join("\n").trim();
+  segs.body=buf.body.join("\n").trim();
+  segs.ending=buf.ending.join("\n").trim();
   return segs;
 }
 function segsToMerged(o,b,e){
-  const parts = [];
-  if((o||"").trim())    parts.push("【开头】\n" + o.trim());
-  if((b||"").trim())    parts.push("【正文】\n" + b.trim());
-  if((e||"").trim())    parts.push("【结尾】\n" + e.trim());
+  const parts=[];
+  if((o||"").trim())parts.push("【开头】\n"+o.trim());
+  if((b||"").trim())parts.push("【正文】\n"+b.trim());
+  if((e||"").trim())parts.push("【结尾】\n"+e.trim());
   return parts.join("\n\n");
 }
 function getScriptSegs(){
-  if(_scriptMode === "dialogue"){
-    return {opening:"", body:"", ending:"", dialogue: document.getElementById("scriptDialogue").value};
-  }
-  return Object.assign({dialogue:""}, mergedToSegs(document.getElementById("scriptMerged").value));
+  if(_scriptMode==="dialogue")
+    return{opening:"",body:"",ending:"",dialogue:document.getElementById("scriptDialogue").value};
+  return Object.assign({dialogue:""},mergedToSegs(document.getElementById("scriptMerged").value));
 }
-function setScriptSegs(segs){
-  if(!segs) return;
-  document.getElementById("scriptMerged").value = segsToMerged(segs.opening||"", segs.body||"", segs.ending||"");
-  if(segs.dialogue) document.getElementById("scriptDialogue").value = segs.dialogue;
+function setScriptSegs(s){
+  if(!s)return;
+  document.getElementById("scriptMerged").value=segsToMerged(s.opening||"",s.body||"",s.ending||"");
+  if(s.dialogue)document.getElementById("scriptDialogue").value=s.dialogue;
 }
 
-/* ── 脚本模式切换（独白/双声）── */
 function setScriptMode(mode){
-  _scriptMode = mode;
-  document.querySelectorAll("#scriptModeToggle .mode-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
-  const soloEl = document.getElementById("soloFields");
-  const dlgEl  = document.getElementById("dialogueFields");
-  const label  = document.getElementById("modeText");
-  if(mode === "dialogue"){
-    soloEl.style.display = "none"; dlgEl.style.display = "block";
-    label.textContent = "双声对话模式（男女交替）";
-  } else {
-    soloEl.style.display = "block"; dlgEl.style.display = "none";
-    label.textContent = "独白模式（单声口播）";
-  }
+  _scriptMode=mode;
+  document.querySelectorAll("#scriptModeToggle .mode-opt").forEach(b=>b.classList.toggle("on",b.dataset.mode===mode));
+  document.getElementById("soloFields").style.display=mode==="dialogue"?"none":"block";
+  document.getElementById("dialogueFields").style.display=mode==="dialogue"?"block":"none";
+  document.getElementById("modeText").textContent=mode==="dialogue"?"双声对话模式（男女交替）":"独白模式（单声口播）";
 }
 
-/* ── 出片模式切换（独白/双声）── */
 function setRenderMode(mode){
-  _renderMode = mode;
-  document.querySelectorAll("#renderModeToggle .mode-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
-  const hint = document.getElementById("renderModeHint");
-  if(mode === "dual"){
-    hint.textContent = "双声模式：滚动字幕卡 + 江老师(女)/张老师(男)克隆音交替旁白，无需数字人模特";
-  } else {
-    hint.textContent = "独白模式：单一数字人形象 + 张老师克隆音口播";
-  }
+  _renderMode=mode;
+  document.querySelectorAll("#renderModeToggle .mode-opt").forEach(b=>b.classList.toggle("on",b.dataset.mode===mode));
+  document.getElementById("renderModeHint").textContent=
+    mode==="dual"?
+    "双声模式：滚动字幕卡 + 江老师(女)/张老师(男)克隆音交替旁白，无需数字人模特":
+    "独白模式：单一数字人形象 + 张老师克隆音口播";
 }
 
-/* ── AI 改写润色（对已有脚本再加工）── */
+/* ── 改写/保存/TTS/出片 ── */
 function runRewrite(){
-  const msg = document.getElementById("studioMsg");
-  msg.textContent = "AI 改写中...";
-  const s = getScriptSegs();
-  POST("/api/rewrite", {
-    opening: s.opening,
-    body: s.body,
-    ending: s.ending,
-    topic: s.opening,
-    target_seconds: parseFloat(document.getElementById("targetSec").value || 120),
-    account_type: document.getElementById("accountType").value
-  }).then(d => {
-    if(d && d.ok && d.result){
-      const r = d.result;
-      setScriptSegs({opening: r.opening||"", body: r.body||"", ending: r.ending||"", dialogue: r.dialogue||""});
-      msg.textContent = "改写完成 ✅";
-    } else {
-      msg.textContent = "改写失败：" + esc(d && d.error || "未知错误");
-    }
-  }).catch(()=>{ msg.textContent="连接失败"; });
+  const msg=document.getElementById("studioMsg");msg.textContent="AI 改写中...";
+  const s=getScriptSegs();
+  POST("/api/rewrite",{opening:s.opening,body:s.body,ending:s.ending,topic:s.opening,
+    target_seconds:parseFloat(document.getElementById("targetSec").value||120),
+    account_type:document.getElementById("accountType").value}).then(d=>{
+    if(d&&d.ok&&d.result){const r=d.result;
+      setScriptSegs({opening:r.opening||"",body:r.body||"",ending:r.ending||"",dialogue:r.dialogue||""});
+      msg.textContent="✅ 改写完成";
+    }else{msg.textContent="❌ 改写失败："+esc(d&&d.error||"")}
+  }).catch(()=>{msg.textContent="❌ 连接失败"});
 }
 
-let currentName = "";
+let currentName="";
 function saveProject(){
-  const msg = document.getElementById("studioMsg");
-  const s = getScriptSegs();
-  const title = (s.opening || s.dialogue || "草稿").slice(0,30);
-  // 用标题做项目名（简化：时间戳防重）
-  currentName = "p_" + Date.now();
-  POST("/api/project/" + encodeURIComponent(currentName) + "/save", {
-    opening: s.opening,
-    body: s.body,
-    ending: s.ending,
-    dialogue: s.dialogue
-  }).then(d => {
-    msg.textContent = d && d.ok ? ("已保存：" + currentName) : ("保存失败：" + esc(d&&d.error||""));
+  const msg=document.getElementById("studioMsg"),s=getScriptSegs();
+  currentName="p_"+Date.now();
+  POST("/api/project/"+encodeURIComponent(currentName)+"/save",
+    {opening:s.opening,body:s.body,ending:s.ending,dialogue:s.dialogue}).then(d=>{
+    msg.textContent=d&&d.ok?("✅ 已保存："+currentName):("❌ 保存失败："+esc(d&&d.error||""));
     loadDashboard();
-  }).catch(()=>{ msg.textContent="连接失败"; });
+  }).catch(()=>{msg.textContent="❌ 连接失败"});
 }
 
 function runTTS(){
-  const msg = document.getElementById("studioMsg");
-  if(!currentName){ saveProject(); }
-  msg.textContent = "生成音频中...";
-  const s = getScriptSegs();
-  const dlg = (s.dialogue || "").trim();
-  const ep = "/api/project/" + encodeURIComponent(currentName) + (dlg ? "/tts_dialogue" : "/tts");
-  const body = dlg ? {dialogue: dlg} : {
-    opening: s.opening,
-    body: s.body,
-    ending: s.ending
-  };
-  POST(ep, body).then(d => {
-    msg.textContent = d && d.ok ? "音频已生成 ✅（可在我的视频查看）" : ("音频失败：" + esc(d&&d.error||""));
+  const msg=document.getElementById("studioMsg");
+  if(!currentName)saveProject();
+  msg.textContent="生成音频中...";
+  const s=getScriptSegs(),dlg=(s.dialogue||"").trim();
+  const ep="/api/project/"+encodeURIComponent(currentName)+(dlg?"/tts_dialogue":"/tts");
+  const body=dlg?{dialogue:dlg}:{opening:s.opening,body:s.body,ending:s.ending};
+  POST(ep,body).then(d=>{
+    msg.textContent=d&&d.ok?"✅ 音频已生成（可在我的视频查看）":"❌ 音频失败："+esc(d&&d.error||"");
     loadDashboard();
-  }).catch(()=>{ msg.textContent="连接失败"; });
+  }).catch(()=>{msg.textContent="❌ 连接失败"});
 }
 
 function runRender(){
-  const msg = document.getElementById("studioMsg");
-  if(!currentName){ saveProject(); }
-  msg.textContent = "提交出片任务...";
-  const voice_mode = _renderMode === "dual" ? "dual" : "official";
-  POST("/api/project/" + encodeURIComponent(currentName) + "/render", {
-    model: document.getElementById("modelSel").value,
-    provider: _renderMode === "dual" ? "scroll" : "heygem",
-    bg: document.getElementById("bgSel").value || null,
-    title: document.getElementById("videoTitle").value || null,
-    subtitle: document.getElementById("videoSubtitle").value || null,
-    voice_mode: voice_mode
-  }).then(d => {
-    if(d && d.ok){ msg.textContent = "已加入渲染队列 🚀（"+(_renderMode==="dual"?"双声字幕卡":"独白数字人")+"）"; toast("出片任务已提交"); loadQueue(); }
-    else msg.textContent = "出片失败：" + esc(d&&d.error||"");
-  }).catch(()=>{ msg.textContent="连接失败"; });
+  const msg=document.getElementById("studioMsg");
+  if(!currentName)saveProject();
+  msg.textContent="提交出片任务...";
+  const vm=_renderMode==="dual"?"dual":"official";
+  POST("/api/project/"+encodeURIComponent(currentName)+"/render",
+    {model:document.getElementById("modelSel").value,
+     provider:_renderMode==="dual"?"scroll":"heygem",
+     bg:document.getElementById("bgSel").value||null,title:document.getElementById("videoTitle").value||null,
+     subtitle:document.getElementById("videoSubtitle").value||null,voice_mode:vm}).then(d=>{
+    if(d&&d.ok){msg.textContent="🚀 已加入渲染队列（"+(_renderMode==="dual"?"双声字幕卡":"独白数字人")+"）";toast("🚀 出片任务已提交！");loadQueue();markStepDone(4)}
+    else msg.textContent="❌ 出片失败："+esc(d&&d.error||"");
+  }).catch(()=>{msg.textContent="❌ 连接失败"});
 }
 
-/* ===== 队列 ===== */
+/* ═══════════════════ 队列 ═══════════════════ */
 function loadQueue(){
-  API("/api/queue").then(d => {
-    const el = document.getElementById("queueList");
-    const items = (d && d.queue) || [];
-    if(!items.length){ el.innerHTML = `<div class="loading">队列为空</div>`; return; }
-    el.innerHTML = items.map(q => {
-      const pct = q.progress != null ? Math.round(q.progress*100) : (q.status==="done"?100:5);
-      const label = {pending:"排队中",running:"渲染中",done:"完成",error:"失败"}[q.status]||q.status;
-      return `<div class="q-item">
-        <div class="thumb" style="width:40px;height:40px;flex:0 0 40px;font-size:16px">🎬</div>
-        <div class="meta" style="flex:1"><div class="t" style="font-weight:700">${esc(q.name||q.id)}</div>
-          <div class="s" style="color:var(--muted);font-size:var(--fs-12)">${label}</div></div>
-        <div class="bar"><i style="width:${pct}%"></i></div>
-        <span class="tag ${q.status==='done'?'ok':(q.status==='error'?'err':'warn')}">${pct}%</span>
+  API("/api/queue").then(d=>{
+    const el=document.getElementById("queueList"),items=(d&&d.queue)||[];
+    if(!items.length){el.innerHTML=`<div class="loading-state">队列为空 ✨</div>`;return}
+    el.innerHTML=items.map(q=>{
+      const pct=q.progress!=null?Math.round(q.progress*100):(q.status==="done"?100:5);
+      const lbl={pending:"排队中",running:"渲染中",done:"完成",error:"失败"}[q.status]||q.status;
+      return`<div class="queue-item">
+        <div class="queue-thumb">🎬</div>
+        <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:var(--fs-md)">${esc(q.name||q.id)}</div>
+          <div style="font-size:var(--fs-sm);color:var(--muted)">${lbl}</div></div>
+        <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <span class="tag-pill ${q.status==='done'?'tag-ok':(q.status==='err'?'tag-err':'tag-warn')}">${pct}%</span>
       </div>`;
     }).join("");
   }).catch(()=>{});
 }
 
-/* ===== 启动：若已有令牌 cookie 直接进 ===== */
+/* ═══════════════════ 启动检测 ═══════════════════ */
 (function(){
-  const has = /hgtv2_token=([^;]+)/.test(document.cookie);
-  if(has){ API("/api/projects").then(d => { if(!(d&&d.error==="unauthorized")) enterApp(); }).catch(()=>{}); }
+  const has=/hgtv2_token=([^;]+)/.test(document.cookie);
+  if(has)API("/api/projects").then(d=>{if(!(d&&d.error==="unauthorized"))enterApp()}).catch(()=>{});
 })();
 </script>
 </body>
