@@ -1303,7 +1303,8 @@ class Handler(BaseHTTPRequestHandler):
                                       float(body.get("target_seconds", 0) or 0),
                                       body.get("mode", "list"),
                                       int(body.get("topic_index", -1)),
-                                      _tc or None)
+                                      _tc or None,
+                                      output_mode=body.get("output_mode", "solo"))
             except Exception as e:  # noqa
                 import traceback as _tb
                 return self._send_json({"ok": False,
@@ -1759,7 +1760,8 @@ def search_and_create(category: str, period: str, direction: str = "",
                       length: str = "约60秒", keep_core: str = "",
                       target_seconds: float = 0.0,
                       mode: str = "list", topic_index: int = -1,
-                      topics_cache: list = None, max_topics: int = 10) -> dict:
+                      topics_cache: list = None, max_topics: int = 10,
+                      output_mode: str = "solo") -> dict:
     """智能选题两阶段：
       mode="list"  → 仅联网检索+提炼最多 max_topics 个候选选题（不二创），用户挑选后再走 create
       mode="create" → 基于 topics_cache[topic_index] 那一条做二创，返回三段稿
@@ -1888,17 +1890,28 @@ def search_and_create(category: str, period: str, direction: str = "",
             "- **开头设计（重要）**：① 严禁自我介绍式开头：不写「张德富/老张今天跟您聊」「我张德富」「老张我」等以人名/人称起头；② 优先用疑问句或痛点场景切入制造悬念，例如「老板们，虚开发票这事，您真觉得查不到您头上？」；③ 每次开场根据内容重新设计，拒绝固定套路，不要寒暄铺垫，直接戳痛点/抛钩子。\n\n"
             f"{fb}\n\n"
             f"风格：\n{STYLE_GUIDE}\n\n"
-            "【输出格式（严格按此，不要多余解释）】\n"
-            "=== 开头 ===\n（抓眼球 / 痛点引入，1-2句）\n"
-            "=== 正文 ===\n（核心讲解，3-5句，一句一意、节奏清晰）\n"
-            "=== 结尾（钩子） ===\n（留资引导 / 关注，自然不生硬，1-2句，严禁加微信/扫码等导流词）\n\n"
-            "=== 男女对话稿 ===\n"
-            f"（{dlg_hint}，改写成女问男答的对话：每行以 女： 或 男： 开头；"
-            "女为提问/引发好奇，男为张老师解答；称呼男为「张老师」，女用「我/您」自然对话；"
-            "整体口语化、节奏与三段稿一致，覆盖同样的核心风险点）\n\n"
-            f"{TTS_NATURAL_RULE}"
-            "直接输出（含 === 标记），不要额外解释。"
         )
+        # 根据输出模式动态组装格式要求
+        if output_mode == "dialogue":
+            _fmt_block = (
+                "【输出格式（严格按此，不要多余解释）】\n"
+                "=== 开头 ===\n（抓眼球 / 痛点引入，1-2句）\n"
+                "=== 正文 ===\n（核心讲解，3-5句，一句一意、节奏清晰）\n"
+                "=== 结尾（钩子） ===\n（留资引导 / 关注，自然不生硬，1-2句，严禁加微信/扫码等导流词）\n\n"
+                "=== 男女对话稿 ===\n"
+                f"（{dlg_hint}，改写成女问男答的对话：每行以 女： 或 男： 开头；"
+                "女为提问/引发好奇，男为张老师解答；称呼男为「张老师」，女用「我/您」自然对话；"
+                "整体口语化、节奏与三段稿一致，覆盖同样的核心风险点）"
+            )
+        else:
+            _fmt_block = (
+                "【输出格式（严格按此，不要多余解释）】\n"
+                "=== 开头 ===\n（抓眼球 / 痛点引入，1-2句）\n"
+                "=== 正文 ===\n（核心讲解，3-5句，一句一意、节奏清晰）\n"
+                "=== 结尾（钩子）===\n（留资引导 / 关注，自然不生硬，1-2句，严禁加微信/扫码等导流词）\n\n"
+                "【注意】只需输出上述三段式逐字稿即可，不要输出对话稿或男女问答格式。"
+            )
+        p = p + f"{_fmt_block}\n\n{TTS_NATURAL_RULE}\n直接输出（含 === 标记），不要额外解释。"
         try:
             raw = deepseek_chat(p, model="deepseek-v4-flash", key=key, timeout=120)
         except Exception as e:  # noqa

@@ -464,6 +464,17 @@ input,textarea,select{font-family:inherit;font-size:var(--fs-md);color:var(--ink
                 </select>
               </div>
             </div>
+            <!-- 输出模式选择 -->
+            <div style="margin-bottom:var(--sp-base)">
+              <label style="font-size:var(--fs-sm);color:var(--muted);display:block;margin-bottom:6px">输出格式</label>
+              <div class="mode-group" id="rwOutputMode">
+                <button class="mode-opt on" data-mode="solo" onclick="setRwOutputMode('solo')">🎙️ 独白逐字稿</button>
+                <button class="mode-opt" data-mode="dialogue" onclick="setRwOutputMode('dialogue')">💬 男女对话稿</button>
+              </div>
+              <div id="rwModeHint" style="font-size:var(--fs-xs);color:var(--faint);margin-top:4px">
+                独白：单一口播稿（开头→正文→结尾），适合数字人出片 | 对话：女问男答双声，适合滚动字幕卡
+              </div>
+            </div>
             <div style="display:flex;gap:var(--sp-md);flex-wrap:wrap">
               <button class="btn btn-primary" id="rwCreateBtn" onclick="runTopicCreate()">✨ AI 二创生成</button>
               <button class="btn" onclick="adoptToScript()">📋 采用到脚本区</button>
@@ -795,7 +806,7 @@ function markStepDone(s){
 
 /* ═══════════════════ 创作台动作 ═══════════════════ */
 let _topics=null,_selTopic=null,_rwResult=null;
-let _scriptMode="solo",_renderMode="solo";
+let _scriptMode="solo",_renderMode="solo",_rwOutputMode="solo";
 
 /* ── ① 联网选题 ── */
 function runTopic(){
@@ -821,7 +832,7 @@ function runTopic(){
         </div>
         <div class="topic-actions">
           <button class="btn btn-primary btn-sm" onclick="startRewrite(${i})">✨ AI二创</button>
-          <button class="btn btn-ghost btn-sm" onclick="pickTopic(${i})">采用</button>
+          <button class="btn btn-ghost btn-sm" onclick="pickTopic(${i})" title="将选题标题直接引用为脚本初稿（不经过AI重写）">📎 引用</button>
         </div>
       </div>`).join("")+"</div>";
   }).catch(()=>{btn.disabled=false;btn.textContent="🔍 联网搜选题";box.innerHTML=`<div style="color:var(--err);padding:var(--sp-md)">连接失败</div>`});
@@ -864,7 +875,9 @@ function runTopicCreate(){
     length:document.getElementById("rwLength").value,
     target_seconds:(function(){var v=document.getElementById("rwLength").value;m={"30秒":30,"1分钟":60,"2分钟":120,"3分钟":180,"5分钟":300};return m[v]||0})(),
     mode:"create",
-    keep_core:document.getElementById("rwStyle").value,topic_index:0,
+    keep_core:document.getElementById("rwStyle").value,
+    output_mode:_rwOutputMode||"solo",
+    topic_index:0,
     topics_cache:[_selTopic]}).then(d=>{
     btn.disabled=false;btn.textContent="✨ AI 二创生成";
     if(!d||d.error){msg.textContent="❌ 二创失败："+esc(d&&d.error||"未知错误");return}
@@ -901,7 +914,10 @@ function adoptToScript(){
   if(!_rwResult){toast("⚠️ 还没有二创结果，请先生成");return}
   const r=_rwResult.result||_rwResult;
   setScriptSegs({opening:r.opening||"",body:r.body||"",ending:r.ending||"",dialogue:r.dialogue||""});
-  toast("✅ 已采用到脚本区");
+  // 根据二创时选择的输出模式，自动切换脚本编辑器到对应模式
+  const targetMode=(_rwOutputMode||"solo")==="dialogue"?"dialogue":"solo";
+  setScriptMode(targetMode);
+  toast("✅ 已采用到脚本区"+(targetMode==="dialogue"?"（双声对话模式）":"（独白模式）"));
   closeRewrite();
   markStepDone(2);
   jumpStep(3);
@@ -946,6 +962,16 @@ function setScriptMode(mode){
   document.getElementById("soloFields").style.display=mode==="dialogue"?"none":"block";
   document.getElementById("dialogueFields").style.display=mode==="dialogue"?"block":"none";
   document.getElementById("modeText").textContent=mode==="dialogue"?"双声对话模式（男女交替）":"独白模式（单声口播）";
+}
+function setRwOutputMode(mode){
+  _rwOutputMode=mode;
+  document.querySelectorAll("#rwOutputMode .mode-opt").forEach(b=>b.classList.toggle("on",b.dataset.mode===mode));
+  const hint=document.getElementById("rwModeHint");
+  if(mode==="dialogue"){
+    hint.textContent="对话：女问男答双声稿，适合滚动字幕卡出片（男女双克隆音）";
+  }else{
+    hint.textContent="独白：单一口播稿（开头→正文→结尾），适合数字人出片（张老师克隆音）";
+  }
 }
 
 function setRenderMode(mode){
