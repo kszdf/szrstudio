@@ -215,6 +215,18 @@ input,textarea,select{font-family:inherit;font-size:var(--fs-md);color:var(--ink
 .picked-summary{margin-top:var(--sp-md);padding:var(--sp-base) var(--sp-lg);background:var(--grad-subtle);
   border:1px solid var(--border-soft);border-radius:var(--radius-sm);font-size:var(--fs-sm);color:var(--ink);line-height:1.7}
 
+/* ═══ Batch Results (批量二创结果) ═══ */
+.batch-results{margin-top:var(--sp-md);display:flex;flex-direction:column;gap:var(--sp-sm)}
+.batch-item{padding:var(--sp-base) var(--sp-lg);background:var(--panel);border:1px solid var(--border-soft);
+  border-radius:var(--radius);transition:all .2s}
+.batch-item:hover{border-color:var(--brand);box-shadow:var(--shadow-xs)}
+.batch-item-header{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-base);margin-bottom:6px}
+.batch-item-preview{font-size:var(--fs-sm);color:var(--muted);line-height:1.6;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.batch-fail{border-color:var(--err);opacity:.7}
+.spinner-sm{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--brand);
+  border-radius:50%;animation:spin .6s linear infinite;vertical-align:-2px;margin-right:4px}
+
 /* ═══ Rewrite Panel (二创面板) ═══ */
 .rewrite-panel{margin-top:var(--sp-lg);border-radius:var(--radius);
   border:1px solid var(--border);background:var(--panel);
@@ -864,7 +876,6 @@ function runTopic(){
         </div>
         <div class="topic-actions">
           <button class="btn btn-primary btn-sm" onclick="startRewrite(${i})">✨ AI二创</button>
-          <button class="btn btn-ghost btn-sm" onclick="pickTopic(${i})" title="将选题标题直接引用为脚本初稿（不经过AI重写）">📎 引用</button>
         </div>
       </div>`;}).join("")+"</div>"+pickBarHTML();
     updatePickBar();
@@ -889,7 +900,7 @@ function pickBarHTML(){
     </div>
     <div class="pick-actions">
       <button class="btn btn-ghost btn-sm" onclick="clearPicks()">清空</button>
-      <button class="btn btn-primary btn-sm" id="pickConfirm" onclick="confirmPicks()" disabled>✅ 确认提交</button>
+      <button class="btn btn-primary btn-sm" id="pickConfirm" onclick="confirmPicks()" disabled>🚀 批量二创</button>
     </div>
   </div>`;
 }
@@ -929,12 +940,93 @@ function clearPicks(){
 }
 function confirmPicks(){
   if(!_pickedTopics.length){ toast("请先勾选选题"); return; }
-  try{ localStorage.setItem("hgt_picked_topics_v1", JSON.stringify(_pickedTopics)); }catch(e){}
-  toast(`✅ 已保存 ${_pickedTopics.length} 个精选选题`);
+  const btn=document.getElementById("pickConfirm");
+  const cnt=document.getElementById("pickCount");
+  const total=_pickedTopics.length;
+  let done=0, results=[];
+
+  // 按钮进入 loading 状态
+  btn.disabled=true; btn.innerHTML='<span class="spinner-sm"></span> 二创中 0/'+total;
+
+  // 结果容器
   const box=document.getElementById("topicResult");
-  let el=document.getElementById("pickedSummary");
-  if(!el){ el=document.createElement("div"); el.id="pickedSummary"; el.className="picked-summary"; box.appendChild(el); }
-  el.innerHTML="<b>📋 已保存精选 "+_pickedTopics.length+" 个：</b>"+_pickedTopics.map(p=>esc(p.title)).join(" · ");
+  let el=document.getElementById("batchResults");
+  if(!el){ el=document.createElement("div"); el.id="batchResults"; el.className="batch-results"; box.appendChild(el); }
+  el.innerHTML='<div style="color:var(--muted);padding:var(--sp-md)"><span class="spinner"></span> 正在批量生成，请稍候...</div>';
+
+  // 逐条调用 AI 二创
+  (async ()=>{
+    for(let idx=0;idx<total;idx++){
+      const t=_pickedTopics[idx];
+      btn.innerHTML=`<span class="spinner-sm"></span> 二创中 ${idx+1}/${total}`;
+      if(cnt) cnt.textContent=`二创中 ${idx+1}/${total} ...`;
+
+      try {
+        const d=await POST("/api/topic_search",{
+          category:t.title,
+          direction:document.getElementById("topicDir").value||(t.risk_point||""),
+          length:document.getElementById("rwLength").value,
+          target_seconds:(function(){var v=document.getElementById("rwLength").value;m={"30秒":30,"1分钟":60,"2分钟":120,"3分钟":180,"5分钟":300};return m[v]||0})(),
+          mode:"create",
+          keep_core:document.getElementById("rwStyle").value,
+          output_mode:document.getElementById("rwOutputMode")?.classList.contains("on")?"dialogue":"solo",
+          topic_index:0,
+          topics_cache:[t]
+        });
+        done++;
+        results.push({ok:true, topic:t, data:d});
+        // 实时更新结果区
+        renderBatchResults(results);
+      } catch(e){
+        done++;
+        results.push({ok:false, topic:t, error:e.message});
+        renderBatchResults(results);
+      }
+    }
+
+    // 全部完成
+    btn.disabled=false;
+    btn.innerHTML="🚀 批量二创";
+    if(cnt) cnt.textContent=`✅ 完成 ${total}/${total}`;
+    toast(`🎉 批量二创完成！成功 ${results.filter(r=>r.ok).length}/${total} 条`);
+    markStepDone(2);
+
+    // 同时保存精选集到 localStorage（保留原有行为）
+    try{ localStorage.setItem("hgt_picked_topics_v1", JSON.stringify(_pickedTopics)); }catch(e){}
+  })();
+}
+
+function renderBatchResults(results){
+  const el=document.getElementById("batchResults");
+  if(!el) return;
+  el.innerHTML='<div style="font-weight:700;margin-bottom:var(--sp-md);color:var(--ink)">📋 批量二创结果（'+results.filter(r=>r.ok).length+'/'+results.length+' 成功）</div>'+
+    results.map((r,i)=>{
+      if(!r.ok) return `<div class="batch-item batch-fail"><b>❌ ${esc(r.topic.title)}</b><span style="color:var(--err)">失败：${esc(r.error)}</span></div>`;
+      const d=r.data.result||r.data;
+      const preview=(d.opening||"").slice(0,60)+(d.body||"").slice(0,60)+(d.ending||"").slice(0,40);
+      return `<div class="batch-item">
+        <div class="batch-item-header">
+          <b>${esc(r.topic.title)}</b>
+          <button class="btn btn-primary btn-xs" onclick="adoptBatchResult(${i})">采用 → 脚本</button>
+        </div>
+        <div class="batch-item-preview">${esc(preview)}...</div>
+      </div>`;
+    }).join("");
+  // 存结果供 adoptBatchResult 取用
+  window._batchResults=results;
+}
+
+function adoptBatchResult(idx){
+  const r=(window._batchResults||[])[idx];
+  if(!r||!r.ok){toast("⚠️ 该条结果不可用");return}
+  const d=r.data.result||r.data;
+  setScriptSegs({opening:d.opening||"",body:d.body||"",ending:d.ending||"",dialogue:d.dialogue||""});
+  // 根据当前输出模式自动切
+  const isDialogue=!!d.dialogue && document.getElementById("rwOutputMode")?.classList.contains("on");
+  setScriptMode(isDialogue?"dialogue":"solo");
+  toast("✅ 已采用到脚本区"+(isDialogue?"（双声模式）":"（独白模式）"));
+  closeRewrite();
+  jumpStep(3);
 }
 
 /* ── ② 二创 ── */
