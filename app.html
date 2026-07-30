@@ -428,16 +428,6 @@ input,textarea,select{font-family:inherit;font-size:var(--fs-md);color:var(--ink
               <label>方向偏好</label>
               <input id="topicDir" placeholder="如：老板最怕的稽查">
             </div>
-            <div class="field" style="margin:0;flex:0 0 140px">
-              <label>目标篇幅</label>
-              <select id="topicLen">
-                <option value="30秒">30 秒</option>
-                <option value="1分钟">1 分钟</option>
-                <option value="2分钟" selected>2 分钟</option>
-                <option value="3分钟">3 分钟</option>
-                <option value="5分钟">5 分钟</option>
-              </select>
-            </div>
           </div>
           <button class="btn btn-primary" id="topicBtn" onclick="runTopic()">
             🔍 联网搜选题
@@ -813,7 +803,7 @@ function runTopic(){
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span>搜索中...';
   box.style.display="block";box.innerHTML='<div class="loading-state"><span class="spinner"></span>正在联网检索最新财税热点...</div>';
   POST("/api/topic_search",{category:document.getElementById("topicCat").value,
-    direction:document.getElementById("topicDir").value,length:document.getElementById("topicLen").value,
+    direction:document.getElementById("topicDir").value,length:document.getElementById("rwLength").value,
     target_seconds:0,mode:"list"}).then(d=>{
     btn.disabled=false;btn.textContent="🔍 联网搜选题";
     if(!d||d.error){box.innerHTML=`<div style="color:var(--err);padding:var(--sp-md)}">${esc(d&&d.error||'检索失败')}</div>`;return}
@@ -871,7 +861,9 @@ function runTopicCreate(){
   msg.textContent="正在联网分析并二次创作，预计 15-30 秒...";
   POST("/api/topic_search",{category:_selTopic.title,
     direction:document.getElementById("topicDir").value||(_selTopic.risk_point||""),
-    length:document.getElementById("rwLength").value,target_seconds:0,mode:"create",
+    length:document.getElementById("rwLength").value,
+    target_seconds:(function(){var v=document.getElementById("rwLength").value;m={"30秒":30,"1分钟":60,"2分钟":120,"3分钟":180,"5分钟":300};return m[v]||0})(),
+    mode:"create",
     keep_core:document.getElementById("rwStyle").value,topic_index:0,
     topics_cache:[_selTopic]}).then(d=>{
     btn.disabled=false;btn.textContent="✨ AI 二创生成";
@@ -879,10 +871,20 @@ function runTopicCreate(){
     _rwResult=d;
     let text="";
     const r=d.result||d;
-    if(r.opening)text+="【开头】\n"+r.opening+"\n\n";
-    if(r.body)text+="【正文】\n"+r.body+"\n\n";
-    if(r.ending)text+="【结尾】\n"+r.ending+"\n\n";
-    if(r.dialogue)text+="【对话稿】\n"+r.dialogue+"\n";
+    // 三段式逐字稿（主输出）始终置顶
+    if(r.opening||r.body||r.ending){
+      text+="╔══ 【逐字稿（三段式）】 ══╗\n";
+      if(r.opening)text+="【开头】\n"+r.opening+"\n\n";
+      if(r.body)text+="【正文】\n"+r.body+"\n\n";
+      if(r.ending)text+="【结尾】\n"+r.ending+"\n";
+      text+="╚════════════════════╝\n\n";
+    }
+    // 对话稿（双声备用）次之
+    if(r.dialogue){
+      text+="┌─ 【对话稿（双声模式备用）】 ─┐\n";
+      text+=r.dialogue+"\n";
+      text+="└──────────────────────────────┘";
+    }
     if(!text)text=JSON.stringify(d,null,2);
     document.getElementById("rwPreview").textContent=text||"(无内容)";
     document.getElementById("rwResult").style.display="block";
