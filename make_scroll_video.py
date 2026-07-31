@@ -59,16 +59,16 @@ ROW_H = (PANEL_BOTTOM - PANEL_TOP) / N_ROWS  # 200
 MAX_W = W - 120  # 文字最大宽度（留出描边余量，避免长句贴边/溢出）
 LEFT_X = 80      # 字幕统一左对齐起始 x（右侧留 40px 余量，安全不溢出）
 
-# 字号（再放大 1.5 倍，提升可读性）
-HL_SIZE = 105      # 当前句（卡拉OK）
-HIST_SIZE = 82     # 历史句
-STROKE_W = 6       # 黑边加粗，黄色字更醒目（已加粗）
-STROKE_FILL = (0, 0, 0)   # 黑边，确保黄字对比度
+# 字号（竖屏1080宽下，当前句约11-12字/行，符合视频号每行12-15字规范；醒目不溢出）
+HL_SIZE = 92       # 当前句（卡拉OK）：白字黑边，最醒目
+HIST_SIZE = 70     # 历史句
+STROKE_W = 5       # 白字黑描边，保证浅/深背景都清晰可读（全网规范首推白字黑边）
+STROKE_FILL = (0, 0, 0)   # 黑边
 
-# 颜色：全部黄色系（视频号常用亮黄 #FFEB00），重点词红色，黑边保证可读性
-SUB_DONE = (255, 235, 0)     # 当前句已读：亮黄（卡拉OK 高亮扫过）
-SUB_TODO = (195, 180, 30)    # 当前句未读：金黄略暗（与亮黄形成逐字高亮对比，仍保持黄色感）
-HIST_RGB = (228, 208, 55)    # 历史句基础：淡黄（配合 alpha 逐渐淡出）
+# 颜色：还原 8385 经典「白字黑边」清晰风格（全网规范首推：任何背景都清晰），关键词红色高亮
+SUB_DONE = (255, 255, 255)   # 当前句已读：纯白（卡拉OK 高亮扫过，最清晰）
+SUB_TODO = (205, 212, 226)   # 当前句未读：浅蓝灰，提示"待读"，与纯白形成逐字高亮对比
+HIST_RGB = (190, 198, 214)   # 历史句基础：淡蓝灰（配合 alpha 逐渐淡出）
 BRAND_RGB = (255, 255, 255)  # 品牌条
 
 # 顶部固定标题（≤10字，自动生成，不随滚动；参照视频号常规大小，不喧宾夺主）
@@ -105,11 +105,11 @@ CURRENT_Y = 880                  # 当前（正在朗读）行的垂直中心，
 ROW_GAP = 172                    # 相邻物理行固定垂直间距（统一节奏，行与行分开）
 MAX_HIST = 2                     # 当前行上方最多显示的历史行数（已读、向上淡出）
 MAX_NEXT = 2                     # 当前行下方最多显示的未读行数（暗黄、待讲）
-NEXT_SIZE = 74                   # 未读行字号（比当前行小，明显"待讲"态）
+NEXT_SIZE = 62                   # 未读行字号（比当前行小，明显"待讲"态）
 HIST_ALPHA_BASE = 230            # 最新历史行不透明度
 HIST_ALPHA_STEP = 70             # 每往上一行透明度下降，最老行逐渐隐去
 NEXT_ALPHA = 200                 # 未读行不透明度（暗黄、弱存在感）
-NEXT_RGB = (150, 140, 55)        # 未读行暗黄，明显比当前行暗，提示"还没讲到"
+NEXT_RGB = (135, 142, 158)        # 未读行暗黄，明显比当前行暗，提示"还没讲到"
 
 
 # ---------------------------------------------------------------- 工具
@@ -337,9 +337,11 @@ def parse_dialogue_text(text):
     return segs
 
 
-def synth_dialogue_audio(dialogue_text, out_wav, dry=False, gap=0.18,
+def synth_dialogue_audio(dialogue_text, out_wav, dry=False, gap=0.28,
                          female_voice=FEMALE_VOICE, female_model=FEMALE_MODEL,
-                         male_voice=MALE_VOICE, male_model=MALE_MODEL):
+                         male_voice=MALE_VOICE, male_model=MALE_MODEL,
+                         male_rate=0.90, female_rate=0.98, male_pitch=0.95,
+                         female_pitch=1.02, male_vol=53, female_vol=49):
     """独立合成男女双声对话音频（平台「出音频」对话试听用）。"""
     segs = parse_dialogue_text(dialogue_text)
     if not segs:
@@ -349,7 +351,9 @@ def synth_dialogue_audio(dialogue_text, out_wav, dry=False, gap=0.18,
         seg_wavs, t = [], 0.0
         for i, (role, text) in enumerate(segs):
             wav = os.path.join(tmpdir, f"a_{i:03d}.wav")
-            d = tts_one(text, role, wav, dry, female_voice, female_model, male_voice, male_model)
+            d = tts_one(text, role, wav, dry, female_voice, female_model, male_voice, male_model,
+                         male_rate=male_rate, female_rate=female_rate, male_pitch=male_pitch,
+                         female_pitch=female_pitch, male_vol=male_vol, female_vol=female_vol)
             seg_wavs.append(wav)
             t += d + (0 if i == len(segs) - 1 else gap)
         if len(seg_wavs) == 1:
@@ -375,9 +379,16 @@ def _wav_duration(path):
             return wf.getnframes() / wf.getframerate()
 
 
-def tts_one(text, role, out_wav, dry, female_voice, female_model, male_voice, male_model):
+def tts_one(text, role, out_wav, dry, female_voice, female_model, male_voice, male_model,
+            male_rate=0.96, female_rate=0.96, male_pitch=1.0, female_pitch=1.0,
+            male_vol=52, female_vol=52):
+    """逐句合成。支持分声线独立调感情/快慢：男声沉稳慢、女声略活泼。
+    speech_rate 越低越慢；pitch_rate 越高越亮/尖；volume 为音量(0-100)。"""
     voice = female_voice if role == "F" else male_voice
     model = female_model if role == "F" else male_model
+    speech_rate = female_rate if role == "F" else male_rate
+    pitch_rate = female_pitch if role == "F" else male_pitch
+    volume = female_vol if role == "F" else male_vol
     if dry or _qwen_synth is None:
         # 静音占位（2.4s），仅验证渲染/编码链路
         subprocess.run(
@@ -386,7 +397,9 @@ def tts_one(text, role, out_wav, dry, female_voice, female_model, male_voice, ma
             check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return 2.4
     try:
-        _qwen_synth(_clean_markers(text), voice, out_wav, model=model, speech_rate=0.95, pitch_rate=1.0, volume=50)
+        # 分声线参数：男声 speech_rate 0.94 更沉稳权威；女声 1.0 略快亲和；pitch 微调冷暖
+        _qwen_synth(_clean_markers(text), voice, out_wav, model=model,
+                    speech_rate=speech_rate, pitch_rate=pitch_rate, volume=volume)
     except SystemExit:
         raise
     return _wav_duration(out_wav)
@@ -684,10 +697,12 @@ def _draw_title(draw, title, subtitle=""):
 
 # ---------------------------------------------------------------- 主流程
 def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
-               gap=0.18, no_intro=False, bgm=None, title=None, subtitle=None,
+               gap=0.28, no_intro=False, bgm=None, title=None, subtitle=None,
                bg_fit="fill",
                female_voice=FEMALE_VOICE, female_model=FEMALE_MODEL,
-               male_voice=MALE_VOICE, male_model=MALE_MODEL):
+               male_voice=MALE_VOICE, male_model=MALE_MODEL,
+               male_rate=0.90, female_rate=0.98, male_pitch=0.95,
+               female_pitch=1.02, male_vol=53, female_vol=49):
     segs = parse_dialogue(dialogue)
     if not segs:
         raise SystemExit("对话文件为空或解析失败")
@@ -700,7 +715,9 @@ def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
     t = 0.0
     for i, (role, text) in enumerate(segs):
         wav = os.path.join(tmpdir, f"a_{i:03d}.wav")
-        d = tts_one(text, role, wav, dry, female_voice, female_model, male_voice, male_model)
+        d = tts_one(text, role, wav, dry, female_voice, female_model, male_voice, male_model,
+                    male_rate=male_rate, female_rate=female_rate, male_pitch=male_pitch,
+                    female_pitch=female_pitch, male_vol=male_vol, female_vol=female_vol)
         seg_wavs.append(wav)
         starts.append(t)
         durs.append(d)
@@ -764,18 +781,18 @@ def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=flog, stderr=subprocess.STDOUT)
         n_frames = int(out_duration * FPS) + 2
         frame_bytes = W * H * 3
+        bg_func = gen_black_gold if bg_style == "blackgold" else gen_seaside
         try:
             for fi in range(n_frames):
                 tt = fi / FPS
                 if tt < intro_dur:
-                    bg = gen_seaside(tt) if (bg_static is None and bg_frames is None) else None
+                    bg = (bg_func(tt) if (bg_static is None and bg_frames is None) else None)
                     frame = render_frame(bg, flat, 0.0, tt,
                                          bg_static=bg_static, bg_frames=bg_frames, bg_fps=bg_fps, intro=True, title=title, subtitle=subtitle or "")
                 else:
                     tc = tt - intro_dur
-                    # 背景只保留滚动海浪一种（seaside）；自定义图/GIF 用 --bg 覆盖
                     if bg_static is None and bg_frames is None:
-                        bg = gen_seaside(tc)
+                        bg = bg_func(tc)
                     else:
                         bg = None
                     frame = render_frame(bg, flat, tc, tc,
@@ -819,17 +836,63 @@ def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
     return out_path
 
 
+def naturalize_dialogue(text):
+    """用 DeepSeek 把书面双声稿改写为自然口语（加语气词、去 AI 播音腔）。
+    严格保留 女：/男： 角色标记与行结构；任何失败都回退原稿，绝不阻塞出片。"""
+    try:
+        from model_providers import get_text_config, deepseek_chat
+    except Exception as e:
+        print(f"[WARN] 无法导入 model_providers，跳过自然化: {e}")
+        return text
+    try:
+        cfg = get_text_config()
+    except Exception as e:
+        print(f"[WARN] 获取文本模型配置失败，跳过自然化: {e}")
+        return text
+    prompt = (
+        "你是一位资深财税短视频脚本编辑。下面的双声对话稿由两位财税专家（老张=实战派税务顾问，女声=江老师=专业财税顾问）出镜讲解。\n"
+        "任务：把生硬的书面稿，改写为「专家在咨询室里给客户娓娓道来」的自然口吻——专业、务实、可信赖，去除 AI 播音腔，但绝不是街边闲聊。\n"
+        "严格要求：\n"
+        "1. 必须严格保留每一行开头的角色标记「女：」或「男：」，不得增删角色、不得合并行、不得改变标记写法；\n"
+        "2. 语气词要极度克制：只在关键转折处用极少量自然连接（如「咱们」「其实」「说白了」「你听我讲」「比方说」「对吧」），严禁使用「啊、嘛、呢、哎哟、好家伙、对喽」这类过于随意或夸张的口语；不要每句都加，保持专家professional感；\n"
+        "3. 适度软化书面腔（如「应当」改「一般得」、「然而」改「不过」、「例如」改「比方说」、「进行核查」改「核对一下」），但必须保持财税专业准确性与术语规范，不编造数据、不改动原意、不丢专业权威感；\n"
+        "4. 用逗号、句号制造自然停顿，像真人慢慢讲，不要一口气念完；长短句结合，有讲解节奏；\n"
+        "5. 不得删除、合并或省略原稿任何一句，必须逐句对应改写，保持原句数量与顺序，仅做语气软化与极少量自然连接；\n"
+        "6. 不要输出任何解释、不要加标题，只输出改写后的对话稿本身。\n\n"
+        "原稿：\n" + text
+    )
+    try:
+        out = deepseek_chat(prompt, cfg["model"], cfg["key"],
+                            cfg.get("base_url", "https://api.deepseek.com"), timeout=90)
+        out = out.strip()
+        # 去掉可能的 ``` 代码块包裹
+        if out.startswith("```"):
+            parts = out.split("```")
+            out = parts[1] if len(parts) > 1 else out
+            if out[:4] in ("text", "txt", "对话", "原稿"):
+                out = out.split("\n", 1)[1] if "\n" in out else out
+        out = out.strip()
+        # 校验：改写后若完全丢失角色标记，判定失败回退原稿
+        if not any(m in out for m in ("女：", "男：", "女:", "男:")):
+            print("[WARN] 自然化输出丢失角色标记，回退原稿")
+            return text
+        return out
+    except Exception as e:
+        print(f"[WARN] 自然化调用失败，使用原稿: {e}")
+        return text
+
+
 def main():
     ap = argparse.ArgumentParser(description="滚动字幕卡短视频生成（不出镜·双声·卡拉OK）")
     ap.add_argument("--dialogue", required=True, help="对话稿 txt（每行 女：/男： 开头）")
     ap.add_argument("--out", required=True, help="输出 mp4 路径")
-    ap.add_argument("--bg-style", default="seaside", choices=["seaside"],
+    ap.add_argument("--bg-style", default="seaside", choices=["seaside", "blackgold"],
                     help="背景风格，固定为滚动海浪(seaside)，不再提供黑金等其他底色")
     ap.add_argument("--bg", default=None, help="自定义背景图片路径（覆盖 --bg-style）")
     ap.add_argument("--bg-fit", default="fill", choices=["fill", "contain", "stretch"],
                     help="背景缩放模式：fill=填充/覆盖(默认) contain=适应/留边 stretch=拉伸/变形")
     ap.add_argument("--dry-tts", action="store_true", help="跳过真实TTS，用静音占位快速验画面")
-    ap.add_argument("--gap", type=float, default=0.18, help="句间静音秒数")
+    ap.add_argument("--gap", type=float, default=0.28, help="句间静音秒数（0.28 给配音呼吸/停顿感，更像专家讲解）")
     ap.add_argument("--no-intro", action="store_true", help="不生成开头标题页")
     ap.add_argument("--bgm", default=None, help="背景音乐 mp3（可选，与配音混音）")
     ap.add_argument("--title", default=None, help="顶部固定标题（覆盖自动生成，≤10字最佳）")
@@ -838,14 +901,41 @@ def main():
     ap.add_argument("--female-model", default=FEMALE_MODEL)
     ap.add_argument("--male-voice", default=MALE_VOICE)
     ap.add_argument("--male-model", default=MALE_MODEL)
+    # 分声线感情/快慢（speech_rate 越低越慢；pitch_rate 越高越亮；volume 0-100）
+    ap.add_argument("--male-rate", type=float, default=0.90, help="男声语速（默认0.90更慢、权威沉稳）")
+    ap.add_argument("--female-rate", type=float, default=0.98, help="女声语速（默认0.98自然略快、亲和）")
+    ap.add_argument("--male-pitch", type=float, default=0.95, help="男声音调（默认0.95更低沉老练）")
+    ap.add_argument("--female-pitch", type=float, default=1.02, help="女声音调（默认1.02略亮、清晰）")
+    ap.add_argument("--male-vol", type=int, default=53, help="男声音量(0-100，略高显权威)")
+    ap.add_argument("--female-vol", type=int, default=49, help="女声音量(0-100)")
+    ap.add_argument("--natural", action="store_true",
+                    help="调用 DeepSeek 把书面稿自动改写为自然口语（加语气词、去AI感、像真人在叙事）")
     args = ap.parse_args()
 
-    make_video(args.dialogue, args.out, bg_style=args.bg_style, bg_image=args.bg,
+    dialogue_arg = args.dialogue
+    if args.natural:
+        try:
+            with open(args.dialogue, encoding="utf-8-sig") as _f:
+                _raw = _f.read()
+            _natural = naturalize_dialogue(_raw)
+            _tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt",
+                                               delete=False, encoding="utf-8")
+            _tmp.write(_natural)
+            _tmp.close()
+            dialogue_arg = _tmp.name
+            print(f"[INFO] 已自然化改写对话稿（{len(_raw)}→{len(_natural)}字），临时文件: {dialogue_arg}")
+        except Exception as e:
+            print(f"[WARN] 自然化预处理失败，使用原稿: {e}")
+
+    make_video(dialogue_arg, args.out, bg_style=args.bg_style, bg_image=args.bg,
                dry=args.dry_tts, gap=args.gap, no_intro=args.no_intro, bgm=args.bgm,
                bg_fit=args.bg_fit,
                title=args.title, subtitle=args.subtitle,
                female_voice=args.female_voice, female_model=args.female_model,
-               male_voice=args.male_voice, male_model=args.male_model)
+               male_voice=args.male_voice, male_model=args.male_model,
+               male_rate=args.male_rate, female_rate=args.female_rate,
+               male_pitch=args.male_pitch, female_pitch=args.female_pitch,
+               male_vol=args.male_vol, female_vol=args.female_vol)
 
 
 if __name__ == "__main__":

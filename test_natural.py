@@ -1,0 +1,14 @@
+import sys
+sys.path.insert(0, r"D:/heygem_data/gpt_sovits")
+import make_scroll_video as m
+
+raw = """男：暂估成本是指存货已入库但发票未到时按估计金额入账的成本。
+女：那暂估成本有什么税务风险吗？
+男：如果暂估成本没有真实业务支撑，可能被认定为虚增成本，从而导致偷税风险。
+女：老板平时应该怎么防范这种风险？
+男：关键是估要有依据，发票要及时追回，跨年必须冲回，这三点是底线。"""
+
+print("=== 原稿 ===")
+print(raw)
+print("\n=== 自然化输出 ===")
+print(m.naturalize_dialogue(raw))
