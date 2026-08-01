@@ -27,6 +27,8 @@ import subprocess
 import wave
 import shutil
 import tempfile
+import hashlib
+import json
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -45,6 +47,75 @@ MALE_VOICE = "cosyvoice-v3-plus-zhangc2-28a7c3541e1c45518a03046c11baeb1d"
 MALE_MODEL = "cosyvoice-v3-plus"
 FEMALE_VOICE = "cosyvoice-v3-plus-jiangnv3-991b204c1d564ac7a60f0cb9a8fd78bd"
 FEMALE_MODEL = "cosyvoice-v3-plus"
+
+# 情绪→韵律映射表（D 基调：专家味 + 自然起伏，男女声分设相对倍率 + 句后停顿）
+# rel = (语速倍率, 音高倍率, 音量倍率)，作用在 CLI 传入的男女声基准之上；pause = 句后静音秒数
+EMOTION_PROSODY = {
+    "narrate":  {"rel": (1.00, 1.00, 1.00), "pause": 0.18},  # 平铺叙述、交代背景
+    "emphasis": {"rel": (1.14, 1.04, 1.10), "pause": 0.42},  # 重点强调、核心结论（提速加大音量）
+    "warn":     {"rel": (1.06, 0.97, 1.04), "pause": 0.40},  # 风险警示、提醒（略快、压低音高）
+    "query":    {"rel": (1.09, 1.03, 1.02), "pause": 0.38},  # 反问、抛问、悬念（略快、略升）
+    "light":    {"rel": (1.10, 1.05, 0.94), "pause": 0.20},  # 轻松调侃、缓和（略快、略升、略轻）
+    "ending":   {"rel": (1.02, 1.00, 0.98), "pause": 0.15},  # 收尾落点、总结（回归平稳）
+}
+_EMOTION_CACHE = {}
+
+
+def _parse_emotion_list(text, n):
+    """容错解析 DeepSeek 返回的情绪 key 数组，补齐/截断到 n 个。"""
+    try:
+        s = text.strip()
+        if s.startswith("```"):
+            s = s.split("```")[1]
+        arr = json.loads(s)
+        if isinstance(arr, list) and all(isinstance(x, str) for x in arr):
+            arr = [a for a in arr if a in EMOTION_PROSODY] or ["narrate"]
+            if len(arr) < n:
+                arr += ["narrate"] * (n - len(arr))
+            return arr[:n]
+    except Exception:
+        pass
+    # 退化：从文本里挑枚举词
+    found = [w for w in EMOTION_PROSODY if w in text]
+    if found:
+        return (found + ["narrate"] * n)[:n]
+    return ["narrate"] * n
+
+
+def annotate_emotions(segs):
+    """一次性让 DeepSeek 标注整段对话每句的语义情绪，返回与 segs 等长的情绪 key 列表。
+    情绪枚举见 EMOTION_PROSODY。按对话内容哈希缓存，避免重合成重复调用。任何失败回退 narrate。"""
+    if not segs:
+        return []
+    raw = "|".join(f"{r}:{t}" for r, t in segs)
+    key = hashlib.md5(raw.encode("utf-8")).hexdigest()
+    if key in _EMOTION_CACHE:
+        return _EMOTION_CACHE[key]
+    try:
+        from model_providers import get_text_config, deepseek_chat
+        cfg = get_text_config()
+        lines = "\n".join(f"{i+1}. [{'女' if r == 'F' else '男'}] {t}" for i, (r, t) in enumerate(segs))
+        prompt = (
+            "你是一名短视频配音导演。下面是一段男女对白（或独白），请为每一句话标注最适合的"
+            "情绪基调，用于驱动 TTS 的语速/音高/音量/停顿，让配音有自然的快慢轻重起伏、像专家在讲解而不是念稿。\n"
+            "情绪只能从以下 6 类选一：\n"
+            "narrate = 平铺叙述、交代背景\n"
+            "emphasis = 重点强调、核心结论（应提速、加大音量）\n"
+            "warn = 风险警示、提醒注意（语速略快、音高压低）\n"
+            "query = 反问、抛问、制造悬念（语速略快、音调略升）\n"
+            "light = 轻松调侃、缓和气氛（语速略快、音调略升）\n"
+            "ending = 收尾落点、总结（回归平稳）\n"
+            "只输出一个 JSON 数组，元素为对应句子的情绪 key 字符串，不要解释、不要 markdown、不要代码块。\n"
+            "示例输出: [\"narrate\",\"emphasis\",\"warn\",\"query\",\"ending\"]\n\n"
+            f"对白：\n{lines}"
+        )
+        resp = deepseek_chat(prompt, cfg["model"], cfg["key"], cfg.get("base_url"), timeout=60)
+        arr = _parse_emotion_list(resp, len(segs))
+    except Exception as e:  # noqa: BLE001
+        print(f"[WARN] 情绪标注失败，回退 narrate: {e}")
+        arr = ["narrate"] * len(segs)
+    _EMOTION_CACHE[key] = arr
+    return arr
 
 # 画布
 W, H = 1080, 1920
@@ -340,7 +411,7 @@ def parse_dialogue_text(text):
 def synth_dialogue_audio(dialogue_text, out_wav, dry=False, gap=0.28,
                          female_voice=FEMALE_VOICE, female_model=FEMALE_MODEL,
                          male_voice=MALE_VOICE, male_model=MALE_MODEL,
-                         male_rate=0.90, female_rate=0.98, male_pitch=0.95,
+                         male_rate=0.98, female_rate=0.98, male_pitch=0.95,
                          female_pitch=1.02, male_vol=53, female_vol=49):
     """独立合成男女双声对话音频（平台「出音频」对话试听用）。"""
     segs = parse_dialogue_text(dialogue_text)
@@ -380,15 +451,26 @@ def _wav_duration(path):
 
 
 def tts_one(text, role, out_wav, dry, female_voice, female_model, male_voice, male_model,
-            male_rate=0.96, female_rate=0.96, male_pitch=1.0, female_pitch=1.0,
-            male_vol=52, female_vol=52):
-    """逐句合成。支持分声线独立调感情/快慢：男声沉稳慢、女声略活泼。
-    speech_rate 越低越慢；pitch_rate 越高越亮/尖；volume 为音量(0-100)。"""
+            male_rate=0.98, female_rate=0.98, male_pitch=0.95, female_pitch=1.02,
+            male_vol=53, female_vol=49, emotion="narrate"):
+    """逐句合成。支持分声线独立调感情/快慢，并按情绪映射表施加韵律起伏。
+    speech_rate 越低越慢；pitch_rate 越高越亮/尖；volume 为音量(0-100)。
+    emotion 取值见 EMOTION_PROSODY：emphasis/warn/query/light/ending/narrate。"""
     voice = female_voice if role == "F" else male_voice
     model = female_model if role == "F" else male_model
-    speech_rate = female_rate if role == "F" else male_rate
-    pitch_rate = female_pitch if role == "F" else male_pitch
-    volume = female_vol if role == "F" else male_vol
+    prof = EMOTION_PROSODY.get(emotion, EMOTION_PROSODY["narrate"])
+    role_key = "F" if role == "F" else "M"
+    rel_sr, rel_pr, rel_vol = prof["rel"]
+    # 情绪相对倍率叠加在 CLI 基准之上（基准=男女声默认音色，情绪=起伏曲线）
+    speech_rate = round((female_rate if role == "F" else male_rate) * rel_sr, 3)
+    pitch_rate = round((female_pitch if role == "F" else male_pitch) * rel_pr, 3)
+    volume = int(round((female_vol if role == "F" else male_vol) * rel_vol))
+    # 轻微长短句微调（在情绪基准上再叠加，不喧宾夺主）
+    _n = len(text.strip())
+    if _n <= 10:
+        speech_rate = round(speech_rate * 1.03, 3)
+    elif _n >= 36:
+        speech_rate = round(speech_rate * 0.95, 3)
     if dry or _qwen_synth is None:
         # 静音占位（2.4s），仅验证渲染/编码链路
         subprocess.run(
@@ -397,7 +479,7 @@ def tts_one(text, role, out_wav, dry, female_voice, female_model, male_voice, ma
             check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return 2.4
     try:
-        # 分声线参数：男声 speech_rate 0.94 更沉稳权威；女声 1.0 略快亲和；pitch 微调冷暖
+        # 分声线参数：男声基准 speech_rate 稍快、叠加长短句快慢节奏；女声略快亲和；pitch 微调冷暖
         _qwen_synth(_clean_markers(text), voice, out_wav, model=model,
                     speech_rate=speech_rate, pitch_rate=pitch_rate, volume=volume)
     except SystemExit:
@@ -701,7 +783,7 @@ def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
                bg_fit="fill",
                female_voice=FEMALE_VOICE, female_model=FEMALE_MODEL,
                male_voice=MALE_VOICE, male_model=MALE_MODEL,
-               male_rate=0.90, female_rate=0.98, male_pitch=0.95,
+               male_rate=0.98, female_rate=0.98, male_pitch=0.95,
                female_pitch=1.02, male_vol=53, female_vol=49):
     segs = parse_dialogue(dialogue)
     if not segs:
@@ -710,18 +792,24 @@ def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     tmpdir = tempfile.mkdtemp(prefix="scroll_")
 
-    # 1) TTS 逐句
+    # 0) 情绪标注（一次 DeepSeek 调用标注整段对话，带内容哈希缓存；失败回退 narrate）
+    emotions = annotate_emotions(segs)
+    print(f"[INFO] 情绪标注: {emotions}")
+    # 1) TTS 逐句（按情绪映射表施加语速/音高/音量/停顿，自然起伏去机械感）
     seg_wavs, starts, durs = [], [], []
     t = 0.0
     for i, (role, text) in enumerate(segs):
+        emo = emotions[i] if i < len(emotions) else "narrate"
         wav = os.path.join(tmpdir, f"a_{i:03d}.wav")
         d = tts_one(text, role, wav, dry, female_voice, female_model, male_voice, male_model,
                     male_rate=male_rate, female_rate=female_rate, male_pitch=male_pitch,
-                    female_pitch=female_pitch, male_vol=male_vol, female_vol=female_vol)
+                    female_pitch=female_pitch, male_vol=male_vol, female_vol=female_vol,
+                    emotion=emo)
         seg_wavs.append(wav)
         starts.append(t)
         durs.append(d)
-        t += d + (0 if i == len(segs) - 1 else gap)
+        pause_i = EMOTION_PROSODY.get(emo, EMOTION_PROSODY["narrate"])["pause"]
+        t += d + (0 if i == len(segs) - 1 else max(gap, pause_i))
     total = t if seg_wavs else 0
     # 预计算物理行时间轴（提词器式逐行滚动用）
     _tmp_draw = ImageDraw.Draw(Image.new("RGBA", (W, H)))
@@ -850,15 +938,19 @@ def naturalize_dialogue(text):
         print(f"[WARN] 获取文本模型配置失败，跳过自然化: {e}")
         return text
     prompt = (
-        "你是一位资深财税短视频脚本编辑。下面的双声对话稿由两位财税专家（老张=实战派税务顾问，女声=江老师=专业财税顾问）出镜讲解。\n"
-        "任务：把生硬的书面稿，改写为「专家在咨询室里给客户娓娓道来」的自然口吻——专业、务实、可信赖，去除 AI 播音腔，但绝不是街边闲聊。\n"
+        "你是一位资深财税短视频脚本编辑。下面的双声对话稿由两位财税专家出镜讲解：\n"
+        "女声=江老师（专业财税顾问，负责替企业主抛出常见的疑问与真实场景）；\n"
+        "男声=张老师（实战派税务顾问，负责耐心、通俗地逐一解答）。\n"
+        "任务：把生硬的书面稿，改写成「真实财税咨询室里，江老师替客户发问、张老师娓娓道来解答」的自然对话——专业可信、有来有回、像真人在交谈，彻底去除 AI 播音腔与机械朗读感。\n"
         "严格要求：\n"
-        "1. 必须严格保留每一行开头的角色标记「女：」或「男：」，不得增删角色、不得合并行、不得改变标记写法；\n"
-        "2. 语气词要极度克制：只在关键转折处用极少量自然连接（如「咱们」「其实」「说白了」「你听我讲」「比方说」「对吧」），严禁使用「啊、嘛、呢、哎哟、好家伙、对喽」这类过于随意或夸张的口语；不要每句都加，保持专家professional感；\n"
-        "3. 适度软化书面腔（如「应当」改「一般得」、「然而」改「不过」、「例如」改「比方说」、「进行核查」改「核对一下」），但必须保持财税专业准确性与术语规范，不编造数据、不改动原意、不丢专业权威感；\n"
-        "4. 用逗号、句号制造自然停顿，像真人慢慢讲，不要一口气念完；长短句结合，有讲解节奏；\n"
-        "5. 不得删除、合并或省略原稿任何一句，必须逐句对应改写，保持原句数量与顺序，仅做语气软化与极少量自然连接；\n"
-        "6. 不要输出任何解释、不要加标题，只输出改写后的对话稿本身。\n\n"
+        "1. 角色分工固定：女声台词以「提问 / 抛出场景 / 表疑问」为主（如「那这种情况税务局会怎么认定？」「老板用个人卡收货款，真的有风险吗？」）；男声台词以「耐心解答 / 通俗讲解」为主，二者你来我往、自然互动；\n"
+        "2. 称呼规范：女声称呼男声专家时用「张老师」（如「张老师，那这种情况…？」），严禁使用「张哥」之类过于随意的叫法；但也不要强行在每句、每个视频都加称呼——视对话内容是否需要点名而定，符合日常交谈习惯即可；\n"
+        "3. 语气词要极克制：除非上下文自然需要，否则不加任何填充式语气词；严禁使用「啊、嘛、呢、哎哟、好家伙、对喽、嗯、哦、对的、是的呢、说白了、对吧」等口头禅或承接词；对话感来自'女问男答、你来我往'的内容互动，不是靠语气词堆砌；老张是实战派，说话干脆、直给、不拖长音、不哼嗯接话；"
+        "4. 节奏与韵律：用逗号、句号制造自然停顿，像真人慢慢讲；长短句结合；男声讲解时该慢的地方慢（重点、结论）、该快的地方快（承接、过渡），避免一字一顿的匀速机械感；\n"
+        "5. 适度软化书面腔（如「应当」改「一般得」、「然而」改「不过」、「例如」改「比方说」、「进行核查」改「核对一下」），但必须保持财税专业准确性与术语规范，不编造数据、不改动原意、不丢专业权威感；\n"
+        "6. 必须严格保留每一行开头的角色标记「女：」或「男：」，不得增删角色、不得合并行、不得改变标记写法；不得删除或省略原稿任何一句，必须逐句对应改写，保持原句数量与顺序；仅做语气软化、加少量自然承接；\n"
+        "7. 在结尾处，用女声追加一句自然的咨询引导钩子（仅此一次，不超过 2 句），自然引导观众「留言或私信咨询相关问题」，例如：「要是您也碰到了上面说的这些问题，欢迎在评论区留言，或者私信我们详细聊聊～」；\n"
+        "8. 不要输出任何解释、不要加标题，只输出改写后的对话稿本身。\n\n"
         "原稿：\n" + text
     )
     try:
@@ -902,7 +994,7 @@ def main():
     ap.add_argument("--male-voice", default=MALE_VOICE)
     ap.add_argument("--male-model", default=MALE_MODEL)
     # 分声线感情/快慢（speech_rate 越低越慢；pitch_rate 越高越亮；volume 0-100）
-    ap.add_argument("--male-rate", type=float, default=0.90, help="男声语速（默认0.90更慢、权威沉稳）")
+    ap.add_argument("--male-rate", type=float, default=0.98, help="男声语速（默认0.98稍快、叠加长短句快慢节奏、去机械感）")
     ap.add_argument("--female-rate", type=float, default=0.98, help="女声语速（默认0.98自然略快、亲和）")
     ap.add_argument("--male-pitch", type=float, default=0.95, help="男声音调（默认0.95更低沉老练）")
     ap.add_argument("--female-pitch", type=float, default=1.02, help="女声音调（默认1.02略亮、清晰）")
