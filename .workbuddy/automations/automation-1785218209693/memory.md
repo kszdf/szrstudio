@@ -1,5 +1,10 @@
 # 周更成片-晚上(20:00) 执行记录
 
+## 2026-08-01 (周六, 周号 2026-W31)
+- 执行 `weekly_pipeline.py render --slot evening`（python 3.13.12）
+- 结果：**跳过**。「未找到 2026-W31 队列」，EXIT=0。output/weekly 下仍仅有 `_samples/`，无正式 `2026-W31/queue.json`，未触发 TTS/ffmpeg，无 mp4/sidecar 产出，README 未改。无异常、无报错。
+- 根因同前：上游 gen-topics(周日23:30) / select+create-scripts(周一08:00) 本周仍未生成正式队列。连续 6 次跳过（07-28 下午、07-29 上下午晚、07-30 晚、07-31 晚、08-01 晚）。
+
 ## 2026-07-31 (周五, 周号 2026-W31)
 - 执行 `weekly_pipeline.py render --slot evening`（python 3.13.12）
 - 结果：**跳过**。「未找到 2026-W31 队列」，EXIT=0。`output/weekly/2026-W31/` 目录仍不存在（仅有 `_samples/`），未触发 TTS/ffmpeg，无 mp4/sidecar 产出，README 未改。无异常、无报错。
