@@ -177,6 +177,17 @@ ROW_GAP = 172                    # 相邻物理行固定垂直间距（统一节
 MAX_HIST = 2                     # 当前行上方最多显示的历史行数（已读、向上淡出）
 MAX_NEXT = 2                     # 当前行下方最多显示的未读行数（暗黄、待讲）
 NEXT_SIZE = 62                   # 未读行字号（比当前行小，明显"待讲"态）
+
+# 字幕可调参数（CLI --subtitle-* 覆盖；main() 中按字号比例派生 hist/next/行距/锚点）。
+# 默认与上方恒定值一致，未传参时渲染结果完全不变。
+SUB_SIZE = HL_SIZE               # 当前行字号（默认 92）
+SUB_MAX_LINES = 3                # 单条字幕最大折行数（默认 3）
+SUB_STROKE = STROKE_W            # 当前行描边宽度（默认 5）
+SUB_POSITION = "bottom"          # 字幕块垂直位置：bottom / center
+SUB_HIST = HIST_SIZE             # 历史行字号（按比例派生）
+SUB_NEXT = NEXT_SIZE             # 未读行字号（按比例派生）
+SUB_GAP = ROW_GAP                # 行间距（按比例派生）
+SUB_CURRENT_Y = CURRENT_Y       # 当前行 Y 锚点（按位置派生）
 HIST_ALPHA_BASE = 230            # 最新历史行不透明度
 HIST_ALPHA_STEP = 70             # 每往上一行透明度下降，最老行逐渐隐去
 NEXT_ALPHA = 200                 # 未读行不透明度（暗黄、弱存在感）
@@ -519,7 +530,7 @@ def _build_flat_lines(segs, starts, durs, draw):
     flat = []
     for i, (role, text) in enumerate(segs):
         raw = _clean_markers(text)
-        lines, fs = _layout_chars(draw, raw, HL_SIZE, MAX_W, max_lines=3, min_size=58)
+        lines, fs = _layout_chars(draw, raw, SUB_SIZE, MAX_W, max_lines=SUB_MAX_LINES, min_size=58)
         # 兜底：长句在最小字号仍折行时，若最后一行只剩 ≤3 个字符，把它合并回上一行，
         # 避免画面出现孤零零的小尾巴（如"了。"）。轻微溢出由 MAX_W 的屏幕边距消化。
         if len(lines) >= 2 and len(lines[-1]) <= 3:
@@ -631,31 +642,31 @@ def render_frame(bg_rgb, flat, tc, t,
     hi = cur_idx - 1
     depth = 1
     while hi >= 0 and depth <= MAX_HIST:
-        items.append((CURRENT_Y - depth * ROW_GAP, "hist", flat[hi], depth))
+        items.append((SUB_CURRENT_Y - depth * SUB_GAP, "hist", flat[hi], depth))
         depth += 1
         hi -= 1
-    items.append((CURRENT_Y, "cur", fl, 0))
+    items.append((SUB_CURRENT_Y, "cur", fl, 0))
     ui = cur_idx + 1
     depth = 1
     while ui < len(flat) and depth <= MAX_NEXT:
-        items.append((CURRENT_Y + depth * ROW_GAP, "next", flat[ui], depth))
+        items.append((SUB_CURRENT_Y + depth * SUB_GAP, "next", flat[ui], depth))
         depth += 1
         ui += 1
 
     # 自上而下绘制（上方先画，下方后画；无重叠，纯为层次稳定）
     for y, kind, fll, depth in sorted(items, key=lambda it: it[0]):
         # 必须使用该行实际换行字号；长句被缩字号后若硬用大号会溢出屏幕
-        base_size = fll.get("size", HL_SIZE)
+        base_size = fll.get("size", SUB_SIZE)
         if kind == "cur":
             font = ImageFont.truetype(FONT_PATH, base_size)
             _draw_karaoke_line(draw, fll["chars"], y, font,
                                fll["char_off"], fll["char_off"] + local_done)
         elif kind == "hist":
-            font = ImageFont.truetype(FONT_PATH, min(HIST_SIZE, base_size))
+            font = ImageFont.truetype(FONT_PATH, min(SUB_HIST, base_size))
             alpha = max(40, HIST_ALPHA_BASE - (depth - 1) * HIST_ALPHA_STEP)
             _draw_history_line(draw, fll["chars"], y, font, alpha)
         else:  # next（未读）
-            font = ImageFont.truetype(FONT_PATH, min(NEXT_SIZE, base_size))
+            font = ImageFont.truetype(FONT_PATH, min(SUB_NEXT, base_size))
             _draw_next_line(draw, fll["chars"], y, font, NEXT_ALPHA)
 
     _draw_brand(draw)
@@ -674,7 +685,7 @@ def _draw_karaoke_line(draw, line, y, font, done_start, done_end):
             col = EMPH_DONE if emph else SUB_DONE
         else:
             col = EMPH_TODO if emph else SUB_TODO
-        _draw_text_with_stroke(draw, (x, y), ch, font, col, stroke_w=STROKE_W)
+        _draw_text_with_stroke(draw, (x, y), ch, font, col, stroke_w=SUB_STROKE)
         x += draw.textlength(ch, font=font)
 
 
@@ -784,7 +795,21 @@ def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
                female_voice=FEMALE_VOICE, female_model=FEMALE_MODEL,
                male_voice=MALE_VOICE, male_model=MALE_MODEL,
                male_rate=0.98, female_rate=0.98, male_pitch=0.95,
-               female_pitch=1.02, male_vol=53, female_vol=49):
+               female_pitch=1.02, male_vol=53, female_vol=49,
+               subtitle_size=HL_SIZE, subtitle_lines=3, subtitle_outline=STROKE_W,
+               subtitle_position="bottom"):
+    # 字幕可调参数 → 派生模块全局（历史/未读/行距/锚点随当前行字号同比例，避免重叠或溢出）
+    ratio = max(0.4, min(1.6, subtitle_size / HL_SIZE))
+    globals().update(dict(
+        SUB_SIZE=subtitle_size,
+        SUB_MAX_LINES=subtitle_lines,
+        SUB_STROKE=subtitle_outline,
+        SUB_POSITION=subtitle_position,
+        SUB_HIST=max(20, int(round(HIST_SIZE * ratio))),
+        SUB_NEXT=max(20, int(round(NEXT_SIZE * ratio))),
+        SUB_GAP=max(60, int(round(ROW_GAP * ratio))),
+        SUB_CURRENT_Y=(H // 2) if subtitle_position == "center" else CURRENT_Y,
+    ))
     segs = parse_dialogue(dialogue)
     if not segs:
         raise SystemExit("对话文件为空或解析失败")
@@ -1000,6 +1025,11 @@ def main():
     ap.add_argument("--female-pitch", type=float, default=1.02, help="女声音调（默认1.02略亮、清晰）")
     ap.add_argument("--male-vol", type=int, default=53, help="男声音量(0-100，略高显权威)")
     ap.add_argument("--female-vol", type=int, default=49, help="女声音量(0-100)")
+    ap.add_argument("--subtitle-size", type=int, default=HL_SIZE, help="字幕当前行字号（默认92，范围48-140）")
+    ap.add_argument("--subtitle-lines", type=int, default=3, choices=[1, 2, 3], help="单条字幕最大折行数（默认3）")
+    ap.add_argument("--subtitle-outline", type=int, default=STROKE_W, help="字幕描边宽度（默认5，0=无描边）")
+    ap.add_argument("--subtitle-position", default="bottom", choices=["bottom", "center"],
+                    help="字幕块垂直位置：bottom=底部(默认) / center=居中")
     ap.add_argument("--natural", action="store_true",
                     help="调用 DeepSeek 把书面稿自动改写为自然口语（加语气词、去AI感、像真人在叙事）")
     args = ap.parse_args()
@@ -1021,7 +1051,9 @@ def main():
 
     make_video(dialogue_arg, args.out, bg_style=args.bg_style, bg_image=args.bg,
                dry=args.dry_tts, gap=args.gap, no_intro=args.no_intro, bgm=args.bgm,
-               bg_fit=args.bg_fit,
+               bg_fit=args.bg_fit, subtitle_size=args.subtitle_size,
+               subtitle_lines=args.subtitle_lines, subtitle_outline=args.subtitle_outline,
+               subtitle_position=args.subtitle_position,
                title=args.title, subtitle=args.subtitle,
                female_voice=args.female_voice, female_model=args.female_model,
                male_voice=args.male_voice, male_model=args.male_model,
