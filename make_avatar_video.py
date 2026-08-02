@@ -42,6 +42,18 @@ VIDEO_API = "http://localhost:8383"
 GATEWAY = BASE / "gpt_sovits"          # finalize_v2_pil.py 所在
 FINALIZE = GATEWAY / "finalize_v2_pil.py"
 
+# 数字人出镜场景 -> HEYGEM 容器内模特视频路径（容器 /code/data 映射到宿主 face2face/）
+# office_a 复用现有稳定模特；office_b 为待用户投放的第二张办公桌前场景视频。
+SCENE_MODELS = {
+    "office_a": "/code/data/BGZSP20260721_t18_silent.mp4",
+    "office_b": "/code/data/office_b_silent.mp4",
+}
+
+
+def model_host_path(container_path: str) -> Path:
+    """容器 /code/data/X.mp4 -> 宿主 D:/heygem_data/face2face/X.mp4（用于存在性检查）。"""
+    return FACE / Path(container_path).name
+
 
 def run(cmd):
     r = subprocess.run(cmd, capture_output=True, text=True)
@@ -73,7 +85,25 @@ def main():
                     help="模特视频在容器内的路径 /code/data/xxx.mp4")
     ap.add_argument("--out", required=True, help="成品 mp4 路径")
     ap.add_argument("--name", default="test", help="标识，用于临时文件命名")
+    ap.add_argument("--scene", default=None,
+                    help="出镜场景：office_a(办公桌前·正面) / office_b(办公桌前·侧面)；"
+                         "未显式指定 --model 时由场景决定模特视频")
     args = ap.parse_args()
+
+    # —— 场景解析（安全接线：素材未就位时回退默认模特，绝不因未知参数崩溃）——
+    if args.scene:
+        if args.scene not in SCENE_MODELS:
+            print(f"  [WARN] 未知场景 '{args.scene}'，忽略场景参数")
+        elif args.model == ap.get_default("model"):
+            target = SCENE_MODELS[args.scene]
+            if model_host_path(target).exists():
+                args.model = target
+                print(f"  [scene] 已选用场景 {args.scene} -> {target}")
+            else:
+                print(f"  [WARN] 场景视频未就位（{model_host_path(target)}），"
+                      f"回退默认模特 {args.model}；投放素材后将自动生效")
+        else:
+            print(f"  [scene] 已显式指定 --model，场景参数 {args.scene} 被忽略")
 
     audio = Path(args.audio)
     ass = Path(args.ass)
