@@ -57,7 +57,6 @@ EMOTION_PROSODY = {
     "query":    {"rel": (1.09, 1.03, 1.02), "pause": 0.38},  # 反问、抛问、悬念（略快、略升）
     "light":    {"rel": (1.10, 1.05, 0.94), "pause": 0.20},  # 轻松调侃、缓和（略快、略升、略轻）
     "ending":   {"rel": (1.02, 1.00, 0.98), "pause": 0.15},  # 收尾落点、总结（回归平稳）
-    "solemn":   {"rel": (0.90, 0.96, 1.06), "pause": 0.50},  # 法规条文/重大风险定性/严肃结论：放慢郑重地说（该慢则慢）
 }
 _EMOTION_CACHE = {}
 
@@ -99,14 +98,12 @@ def annotate_emotions(segs):
         prompt = (
             "你是一名短视频配音导演。下面是一段男女对白（或独白），请为每一句话标注最适合的"
             "情绪基调，用于驱动 TTS 的语速/音高/音量/停顿，让配音有自然的快慢轻重起伏、像专家在讲解而不是念稿。\n"
-            "判定原则：涉及法律条文引用、'认定为偷税/违法'、'移送司法机关'、重大后果定性等严肃句子，优先标 solemn（放慢郑重地说）；\n"
-            "情绪只能从以下 7 类选一：\n"
+            "情绪只能从以下 6 类选一：\n"
             "narrate = 平铺叙述、交代背景\n"
             "emphasis = 重点强调、核心结论（应提速、加大音量）\n"
             "warn = 风险警示、提醒注意（语速略快、音高压低）\n"
             "query = 反问、抛问、制造悬念（语速略快、音调略升）\n"
             "light = 轻松调侃、缓和气氛（语速略快、音调略升）\n"
-            "solemn = 法规条文、重大风险定性、严肃结论（明显放慢、压低音量、加重停顿，郑重）\n"
             "ending = 收尾落点、总结（回归平稳）\n"
             "只输出一个 JSON 数组，元素为对应句子的情绪 key 字符串，不要解释、不要 markdown、不要代码块。\n"
             "示例输出: [\"narrate\",\"emphasis\",\"warn\",\"query\",\"ending\"]\n\n"
@@ -458,7 +455,7 @@ def tts_one(text, role, out_wav, dry, female_voice, female_model, male_voice, ma
             male_vol=53, female_vol=49, emotion="narrate"):
     """逐句合成。支持分声线独立调感情/快慢，并按情绪映射表施加韵律起伏。
     speech_rate 越低越慢；pitch_rate 越高越亮/尖；volume 为音量(0-100)。
-    emotion 取值见 EMOTION_PROSODY：narrate/emphasis/warn/query/light/solemn/ending。"""
+    emotion 取值见 EMOTION_PROSODY：narrate/emphasis/warn/query/light/ending。"""
     voice = female_voice if role == "F" else male_voice
     model = female_model if role == "F" else male_model
     prof = EMOTION_PROSODY.get(emotion, EMOTION_PROSODY["narrate"])
