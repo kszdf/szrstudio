@@ -1,5 +1,12 @@
 # 周更成片-下午(15:00) 执行记录
 
+## 2026-08-03 (周一, 周号 2026-W32)
+- 执行 `weekly_pipeline.py render --slot afternoon`
+- 结果：**成功渲染 1 条**（非跳过）。本周 `output/weekly/2026-W32/queue.json` 已生成（14 选题，全部 selected/scripted）。当前周一(day=0)下午档命中 seq1。
+- 产出：`videos/2026-W32-01-公转私这样转才安全.mp4`（约 17.5MB，1080x1920 竖屏动态背景大字高亮）；同名 sidecar `2026-W32-01-公转私这样转才安全.txt`（含发布文案+口播稿）。
+- 队列 seq1 status 已置为 `done`、video_path 回填；README.md 已刷新（seq1 显示 done+成片路径）。脚本自动确保 ffmpeg 与模型 key 就绪，无异常，EXIT=0。
+- 剩余下午档待渲染：seq3/5/7/9/11/13（day 1-6）。
+
 ## 2026-08-01 (周六, 周号 2026-W31)
 - 执行 `weekly_pipeline.py render --slot afternoon`
 - 结果：**跳过**。本周 `output/weekly/2026-W31/queue.json` 仍不存在（目录仅 `_samples/`，gen-topics 队列从未生成/落盘），脚本打印「未找到 2026-W31 队列」后退出，EXIT=0，未触发 TTS/ffmpeg。
