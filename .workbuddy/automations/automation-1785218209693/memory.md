@@ -1,5 +1,13 @@
 # 周更成片-晚上(20:00) 执行记录
 
+## 2026-08-04 (周二, 周号 2026-W32)
+- 执行 `weekly_pipeline.py render --slot evening`（python 3.13.12）
+- 结果：**成功渲染 1 条**。脚本按队列顺序挑出首个 `selected + status≠done + period=evening` 选题 = **seq 2 虚开发票罪量刑标准变了**（视频号/monologue/55s）。
+- 产出：`output/weekly/2026-W32/videos/2026-W32-02-虚开发票罪量刑标准变了.mp4`（约 32MB，1080×1920 竖屏滚动字幕卡点视频，make_scroll_video.py）+ 同名 sidecar `.txt`（发布文案 + 口播稿开头/正文/结尾）。
+- 队列更新：seq2 status→`done`、video_path 已填；README.md 已刷新（seq2 行 done+成片路径）。
+- 渲染耗时约 3m27s（TTS + ffmpeg 编码），ffmpeg/模型 key 就绪，无异常无报错。
+- 剩余晚间待渲染：seq4/6/8/10/12/14（均为 evening，status=scripted）；下次晚上场继续推进下一晚档。
+
 ## 2026-08-03 (周一, 周号 2026-W32)
 - 执行 `weekly_pipeline.py render --slot evening`（python 3.13.12）
 - 结果：**跳过**。「未找到 2026-W32 队列」，EXIT=0。output/weekly 下仍仅有 `_samples/`，无正式 `2026-W32/queue.json`，未触发 TTS/ffmpeg，无 mp4/sidecar 产出，README 未改。无异常、无报错。

@@ -1,0 +1,13 @@
+{
+  "input": "_sample.mp4",
+  "output": "_out_vlog.mp4",
+  "edit_style": "vlog",
+  "name_tag": "追梦 · 数字人",
+  "rc": 0,
+  "dry_run": true,
+  "log": [
+    "PIL: round_mask -> C:\\Users\\lenovo\\AppData\\Local\\Temp\\auto_edit_vpqugwkb\\mask.png",
+    "PIL: name_tag(追梦 · 数字人) -> C:\\Users\\lenovo\\AppData\\Local\\Temp\\auto_edit_vpqugwkb\\tag.png",
+    "ffmpeg -y -i _sample.mp4 -i C:\\Users\\lenovo\\AppData\\Local\\Temp\\auto_edit_vpqugwkb\\mask.png -i C:\\Users\\lenovo\\AppData\\Local\\Temp\\auto_edit_vpqugwkb\\tag.png -filter_complex [0:v]format=rgba[vm];[1:v]format=rgba[mask];[vm][mask]alphamerge[r];color=c=0x06B6D4:s=1108x1948[bg];[bg][r]overlay=14:14[ov];[ov][2:v]overlay=40:(H-170)[out] -map [out] -c:v libx264 -crf 23 -pix_fmt yuv420p -c:a copy _out_vlog.mp4"
+  ]
+}

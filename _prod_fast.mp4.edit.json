@@ -1,0 +1,9 @@
+{
+  "input": "D:/heygem_data/hgt-commercial/python-pipeline/jobs/a7f36f3df6c647d0971c1f0317eb4e0d/out.mp4",
+  "output": "_prod_fast.mp4",
+  "edit_style": "fast",
+  "name_tag": "追梦 · 数字人",
+  "rc": 0,
+  "dry_run": false,
+  "log": []
+}

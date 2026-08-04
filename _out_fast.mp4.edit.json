@@ -1,0 +1,9 @@
+{
+  "input": "_sample.mp4",
+  "output": "_out_fast.mp4",
+  "edit_style": "fast",
+  "name_tag": "追梦 · 数字人",
+  "rc": 0,
+  "dry_run": false,
+  "log": []
+}

@@ -1,0 +1,12 @@
+{
+  "input": "D:/heygem_data/hgt-commercial/python-pipeline/jobs/a7f36f3df6c647d0971c1f0317eb4e0d/out.mp4",
+  "output": "D:/heygem_data/gpt_sovits/_test_fast_v6.mp4",
+  "edit_style": "fast",
+  "name_tag": "追梦 · 数字人",
+  "title": "老板最容易踩的3个坑",
+  "subtitle": "个人卡收货款的风险",
+  "transition": "simple",
+  "rc": 0,
+  "dry_run": false,
+  "log": []
+}

@@ -8,7 +8,7 @@
   - 真实音频时长驱动时间轴，画面当前句逐字与声音同步渐亮（灰→金黄）
   - 屏幕固定 5 行文字窗口：当前句在底部，其余 4 句（已读）向上滚动，读毕滚出顶部消失
   - 不显示"张老师/女声主播"任何角色标签，仅以音色区分男女声
-  - 底部品牌条「慧根堂·老张讲财税」
+  - 底部品牌条「追梦 · 老张讲财税」
   - 默认背景：浅色海景沙滩拍滚动画（numpy 程序化生成，海水轻轻在沙滩拍滚）
     --bg-style blackgold 切黑金流动；--bg <图片> 用任意静态图作底
 
@@ -193,6 +193,8 @@ HIST_ALPHA_STEP = 70             # 每往上一行透明度下降，最老行逐
 NEXT_ALPHA = 200                 # 未读行不透明度（暗黄、弱存在感）
 NEXT_RGB = (135, 142, 158)        # 未读行暗黄，明显比当前行暗，提示"还没讲到"
 
+# 字幕整体风格（CLI --subtitle-style 覆盖）：dynamic=卡拉OK高亮(默认) / minimal=纯净白字 / bubble=气泡底衬
+SUBTITLE_STYLE = "dynamic"
 
 # ---------------------------------------------------------------- 工具
 def _cjk_wrap(draw, text, font, max_w):
@@ -654,19 +656,30 @@ def render_frame(bg_rgb, flat, tc, t,
         ui += 1
 
     # 自上而下绘制（上方先画，下方后画；无重叠，纯为层次稳定）
+    style = SUBTITLE_STYLE
     for y, kind, fll, depth in sorted(items, key=lambda it: it[0]):
         # 必须使用该行实际换行字号；长句被缩字号后若硬用大号会溢出屏幕
         base_size = fll.get("size", SUB_SIZE)
         if kind == "cur":
             font = ImageFont.truetype(FONT_PATH, base_size)
-            _draw_karaoke_line(draw, fll["chars"], y, font,
-                               fll["char_off"], fll["char_off"] + local_done)
+            if style == "bubble":
+                _draw_bubble(draw, fll["chars"], y, font, 210)
+            if style == "minimal":
+                # 纯净白字：当前行全部按"已读"着色，去掉卡拉OK逐字渐变
+                _draw_karaoke_line(draw, fll["chars"], y, font, 0, len(fll["chars"]))
+            else:
+                _draw_karaoke_line(draw, fll["chars"], y, font,
+                                   fll["char_off"], fll["char_off"] + local_done)
         elif kind == "hist":
             font = ImageFont.truetype(FONT_PATH, min(SUB_HIST, base_size))
             alpha = max(40, HIST_ALPHA_BASE - (depth - 1) * HIST_ALPHA_STEP)
+            if style == "bubble":
+                _draw_bubble(draw, fll["chars"], y, font, max(70, alpha))
             _draw_history_line(draw, fll["chars"], y, font, alpha)
         else:  # next（未读）
             font = ImageFont.truetype(FONT_PATH, min(SUB_NEXT, base_size))
+            if style == "bubble":
+                _draw_bubble(draw, fll["chars"], y, font, NEXT_ALPHA)
             _draw_next_line(draw, fll["chars"], y, font, NEXT_ALPHA)
 
     _draw_brand(draw)
@@ -717,10 +730,28 @@ def _draw_next_line(draw, line, y, font, alpha=255):
         x += draw.textlength(ch, font=font)
 
 
+def _line_width(draw, chars, font):
+    """计算一行字符（list[(ch,emph)]）的总像素宽度。"""
+    return sum(draw.textlength(ch, font=font) for ch, _ in chars)
+
+
+def _draw_bubble(draw, chars, y, font, alpha=200):
+    """在当前行文字下方绘制半透明圆角气泡底衬（bubble 字幕风格用）。"""
+    w = _line_width(draw, chars, font)
+    pad_x, pad_y = 20, 12
+    x0 = LEFT_X - pad_x
+    x1 = LEFT_X + w + pad_x
+    y0 = y - pad_y
+    y1 = y + font.size + pad_y
+    draw.rounded_rectangle([x0, y0, x1, y1], radius=20,
+                           fill=(12, 18, 34, alpha),
+                           outline=(255, 255, 255, int(alpha * 0.55)))
+
+
 def _draw_brand(draw):
     from PIL import ImageFont
     f = ImageFont.truetype(FONT_PATH, 38)
-    txt = "慧根堂 · 老张讲财税"
+    txt = "追梦 · 老张讲财税"
     x = (W - draw.textlength(txt, font=f)) / 2
     _draw_text_with_stroke(draw, (x, H - 96), txt, f, BRAND_RGB, stroke_w=2)
 
@@ -742,7 +773,7 @@ def _auto_title(segs):
         t = t.strip().rstrip("呢吗吧啊呀哦呃")
         if t:
             return t[:TITLE_MAX_CHARS]
-    return "慧根堂财税"
+    return "追梦短视频"
 
 
 def _draw_title(draw, title, subtitle=""):
@@ -797,7 +828,8 @@ def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
                male_rate=0.98, female_rate=0.98, male_pitch=0.95,
                female_pitch=1.02, male_vol=53, female_vol=49,
                subtitle_size=HL_SIZE, subtitle_lines=3, subtitle_outline=STROKE_W,
-               subtitle_position="bottom"):
+               subtitle_position="bottom",
+               subtitle_style="dynamic", export_ass=False, no_burn_sub=False):
     # 字幕可调参数 → 派生模块全局（历史/未读/行距/锚点随当前行字号同比例，避免重叠或溢出）
     ratio = max(0.4, min(1.6, subtitle_size / HL_SIZE))
     globals().update(dict(
@@ -809,6 +841,7 @@ def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
         SUB_NEXT=max(20, int(round(NEXT_SIZE * ratio))),
         SUB_GAP=max(60, int(round(ROW_GAP * ratio))),
         SUB_CURRENT_Y=(H // 2) if subtitle_position == "center" else CURRENT_Y,
+        SUBTITLE_STYLE=subtitle_style,
     ))
     segs = parse_dialogue(dialogue)
     if not segs:
@@ -839,6 +872,10 @@ def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
     # 预计算物理行时间轴（提词器式逐行滚动用）
     _tmp_draw = ImageDraw.Draw(Image.new("RGBA", (W, H)))
     flat = _build_flat_lines(segs, starts, durs, _tmp_draw)
+    # 不烧字幕模式：仅背景+品牌+标题，字幕交由后续 auto_edit 重烧
+    render_flat = [] if no_burn_sub else flat
+    if export_ass:
+        _export_ass(flat, out_path)
     intro_dur = 0.0 if no_intro else 1.4
 
     audio_wav = os.path.join(tmpdir, "audio_total.wav")
@@ -900,7 +937,7 @@ def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
                 tt = fi / FPS
                 if tt < intro_dur:
                     bg = (bg_func(tt) if (bg_static is None and bg_frames is None) else None)
-                    frame = render_frame(bg, flat, 0.0, tt,
+                    frame = render_frame(bg, render_flat, 0.0, tt,
                                          bg_static=bg_static, bg_frames=bg_frames, bg_fps=bg_fps, intro=True, title=title, subtitle=subtitle or "")
                 else:
                     tc = tt - intro_dur
@@ -908,7 +945,7 @@ def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
                         bg = bg_func(tc)
                     else:
                         bg = None
-                    frame = render_frame(bg, flat, tc, tc,
+                    frame = render_frame(bg, render_flat, tc, tc,
                                          bg_static=bg_static, bg_frames=bg_frames, bg_fps=bg_fps, title=title, subtitle=subtitle or "")
                 # 分块写入管道，避免单帧 6.2MB 直写触发 Windows 管道 EINVAL
                 data = np.asarray(frame, dtype=np.uint8).tobytes()
@@ -947,6 +984,43 @@ def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
           f"   {W}x{H} 竖屏 | {bg_label} | "
           f"大字逐字高亮 | 段落分明 | 声画同步 | 不出镜")
     return out_path
+
+
+def _sec_to_ass(ts):
+    """秒 → ASS 时间格式 h:mm:ss.cc。"""
+    h = int(ts // 3600)
+    m = int((ts % 3600) // 60)
+    s = ts % 60
+    return f"{h:01d}:{m:02d}:{s:05.2f}"
+
+
+def _export_ass(flat, out_path):
+    """导出 ASS 字幕文件（与成品 mp4 同名 .ass），含逐物理行时间与纯文本，便于二次剪辑/换风格重烧。"""
+    ass_path = os.path.splitext(out_path)[0] + ".ass"
+    lines = [
+        "[Script Info]",
+        "ScriptType: v4.00+",
+        "PlayResX: 1080",
+        "PlayResY: 1920",
+        "",
+        "[V4+ Styles]",
+        "Format: Name, Fontname, Fontsize, PrimaryColour, Outline, Shadow, Alignment, MarginL, MarginR, MarginV",
+        "Style: Default,SimHei,92,&H00FFFFFF,&H00000000,0,2,80,40,880",
+        "",
+        "[Events]",
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ]
+    for fl in flat:
+        text = "".join(ch for ch, _ in fl["chars"])
+        text = text.replace(",", "，")  # ASS 字段逗号需转义，简易替换为全角
+        lines.append(
+            f"Dialogue: 0,{_sec_to_ass(fl['start'])},{_sec_to_ass(fl['end'])},"
+            f"Default,,0,0,0,,{text}"
+        )
+    with open(ass_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    print(f"[INFO] 已导出 ASS 字幕: {ass_path}")
+    return ass_path
 
 
 def naturalize_dialogue(text):
@@ -1030,6 +1104,13 @@ def main():
     ap.add_argument("--subtitle-outline", type=int, default=STROKE_W, help="字幕描边宽度（默认5，0=无描边）")
     ap.add_argument("--subtitle-position", default="bottom", choices=["bottom", "center"],
                     help="字幕块垂直位置：bottom=底部(默认) / center=居中")
+    ap.add_argument("--subtitle-style", default="dynamic",
+                    choices=["dynamic", "minimal", "bubble"],
+                    help="字幕整体风格：dynamic=卡拉OK高亮(默认) / minimal=纯净白字 / bubble=气泡底衬")
+    ap.add_argument("--export-ass", action="store_true",
+                    help="同时导出 ASS 字幕文件（与成品同名 .ass），便于二次剪辑/换风格重烧")
+    ap.add_argument("--no-burn-sub", action="store_true",
+                    help="成品视频不烧录字幕（仅背景+品牌+标题），字幕交由后续 auto_edit 重烧")
     ap.add_argument("--natural", action="store_true",
                     help="调用 DeepSeek 把书面稿自动改写为自然口语（加语气词、去AI感、像真人在叙事）")
     args = ap.parse_args()
@@ -1054,6 +1135,8 @@ def main():
                bg_fit=args.bg_fit, subtitle_size=args.subtitle_size,
                subtitle_lines=args.subtitle_lines, subtitle_outline=args.subtitle_outline,
                subtitle_position=args.subtitle_position,
+               subtitle_style=args.subtitle_style,
+               export_ass=args.export_ass, no_burn_sub=args.no_burn_sub,
                title=args.title, subtitle=args.subtitle,
                female_voice=args.female_voice, female_model=args.female_model,
                male_voice=args.male_voice, male_model=args.male_model,
