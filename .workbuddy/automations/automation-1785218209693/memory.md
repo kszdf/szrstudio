@@ -8,6 +8,14 @@
 - 渲染耗时约 3m27s（TTS + ffmpeg 编码），ffmpeg/模型 key 就绪，无异常无报错。
 - 剩余晚间待渲染：seq4/6/8/10/12/14（均为 evening，status=scripted）；下次晚上场继续推进下一晚档。
 
+## 2026-08-05 (周三, 周号 2026-W32)
+- 执行 `weekly_pipeline.py render --slot evening`（python 3.13.12）
+- 结果：**成功渲染 1 条**。脚本按队列顺序挑出下一个 `selected + status≠done + period=evening` 选题 = **seq 4 暂估成本被查怎么补救**（抖音/monologue/50s）。
+- 产出：`output/weekly/2026-W32/videos/2026-W32-04-暂估成本被查怎么补救.mp4`（约 44.6MB，1080×1920 竖屏 GIF动态背景＋大字逐字高亮滚动字幕视频，make_scroll_video 路径）+ 同名 sidecar `.txt`（发布文案 + 口播稿开头/正文/结尾三段）。
+- 队列更新：seq4 status→`done`、video_path 已填；README.md 已刷新（seq4 行 done+成片路径）。
+- ffmpeg/模型 key 就绪，脚本打印 `[render] 完成` 正常退出，无异常无报错。
+- 剩余晚间待渲染：seq6/8/10/12/14（均为 evening，status=scripted）；下次晚上场继续推进 seq6。
+
 ## 2026-08-03 (周一, 周号 2026-W32)
 - 执行 `weekly_pipeline.py render --slot evening`（python 3.13.12）
 - 结果：**跳过**。「未找到 2026-W32 队列」，EXIT=0。output/weekly 下仍仅有 `_samples/`，无正式 `2026-W32/queue.json`，未触发 TTS/ffmpeg，无 mp4/sidecar 产出，README 未改。无异常、无报错。

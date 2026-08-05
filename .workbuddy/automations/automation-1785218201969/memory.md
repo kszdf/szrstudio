@@ -1,5 +1,12 @@
 # 周更成片-下午(15:00) 执行记录
 
+## 2026-08-05 (周三, 周号 2026-W32)
+- 执行 `weekly_pipeline.py render --slot afternoon`
+- 结果：**成功渲染 1 条**（非跳过）。本周 `output/weekly/2026-W32/queue.json` 存在；当前周三(day=2)下午档命中 seq5。
+- 产出：`videos/2026-W32-05-金税四期最怕老板什么.mp4`（约 15.1MB，1080x1920 竖屏 GIF动态背景大字逐字高亮）；同名 sidecar `2026-W32-05-金税四期最怕老板什么.txt`（含发布文案+口播稿）。
+- 队列 seq5 status 已置为 `done`、video_path 回填；README.md 已刷新（seq5 显示 done+成片路径）。脚本自动确保 ffmpeg 与模型 key 就绪，无异常，EXIT=0。
+- 下午档已渲染完成计数=3（seq1/3/5）；剩余下午档待渲染：seq7/9/11/13（day 3-6）。
+
 ## 2026-08-04 (周二, 周号 2026-W32)
 - 执行 `weekly_pipeline.py render --slot afternoon`
 - 结果：**成功渲染 1 条**（非跳过）。本周 `output/weekly/2026-W32/queue.json` 存在（14 选题，seq1 已 done）。今日周二(day=1)下午档命中 seq3。
