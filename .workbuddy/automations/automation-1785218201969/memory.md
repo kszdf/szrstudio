@@ -1,5 +1,12 @@
 # 周更成片-下午(15:00) 执行记录
 
+## 2026-08-06 (周四, 周号 2026-W32)
+- 执行 `weekly_pipeline.py render --slot afternoon`
+- 结果：**成功渲染 1 条**（非跳过）。本周 `output/weekly/2026-W32/queue.json` 存在；当前周四(day=3)下午档命中 seq7（股东借款年底不还的后果，dialogue 双声）。
+- 产出：`videos/2026-W32-07-股东借款年底不还的后果.mp4`（约 12.3MB，1080x1920 竖屏 GIF动态背景大字逐字高亮）；同名 sidecar `2026-W32-07-股东借款年底不还的后果.txt`（含发布文案+口播稿）。
+- 队列 seq7 status 已置为 `done`、video_path 回填；README.md 已刷新（seq7 显示 done+成片路径）。脚本自动确保 ffmpeg 与模型 key 就绪，无异常，EXIT=0。
+- 下午档已渲染完成计数=4（seq1/3/5/7）；剩余下午档待渲染：seq9/11/13（day 4-6）。
+
 ## 2026-08-05 (周三, 周号 2026-W32)
 - 执行 `weekly_pipeline.py render --slot afternoon`
 - 结果：**成功渲染 1 条**（非跳过）。本周 `output/weekly/2026-W32/queue.json` 存在；当前周三(day=2)下午档命中 seq5。
