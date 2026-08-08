@@ -48,8 +48,8 @@ MAKE_AVATAR = BASE / "make_avatar_video.py"
 MAKE_SCROLL = BASE / "make_scroll_video.py"          # 不出镜·滚动字幕卡（男女对话）
 PY313 = r"C:/Users/lenovo/.workbuddy/binaries/python/versions/3.13.12/python.exe"  # 滚动字幕卡用 3.13（自带 dashscope+Pillow+numpy）
 SCROLL_DEFAULT_GIF = r"C:/Users/lenovo/WorkBuddy/2026-07-27-09-14-15/videos/ocean_rolling_9x16_deepblue.gif"   # 用户默认 GIF 海景背景（已清理旧 20260721TP.gif 引用）
-SCROLL_MALE_VOICE = "cosyvoice-v3-plus-zhangc2-28a7c3541e1c45518a03046c11baeb1d"
-SCROLL_FEMALE_VOICE = "cosyvoice-v3-plus-jiangnv3-991b204c1d564ac7a60f0cb9a8fd78bd"
+SCROLL_MALE_VOICE = ""   # 新租户初始无自带声音；须由租户克隆/选择后显式传入
+SCROLL_FEMALE_VOICE = ""
 SCROLL_MALE_MODEL = "cosyvoice-v3-plus"
 SCROLL_FEMALE_MODEL = "cosyvoice-v3-plus"
 # 双声 TTS 自然度规则：嵌入所有「男女对话稿」生成 prompt，约束 LLM 产出利于自然朗读的对话文本

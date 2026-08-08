@@ -49,6 +49,10 @@ DEFAULT_SPEECH_RATE = 1.0
 
 def synth(text, voice, out_path, model=DEFAULT_MODEL, speech_rate=DEFAULT_SPEECH_RATE, pitch_rate=1.0, volume=50, retries=3):
     """合成单条文本 -> 保存 wav。失败自动重试。"""
+    if not voice:
+        raise ValueError(
+            "voice_id 为空：租户尚未克隆或选择声音。请先在「声音」页克隆专属音色或选择公开模板后再生成。"
+        )
     from dashscope.audio.tts_v2 import SpeechSynthesizer, AudioFormat
 
     last_err = None

@@ -40,12 +40,12 @@ try:
 except Exception as e:  # pragma: no cover
     print(f"[WARN] 无法导入 qwen_tts: {e}")
     _qwen_synth = None
-    _DEFAULT_MALE = "cosyvoice-v3-plus-zhangc2-28a7c3541e1c45518a03046c11baeb1d"
+    _DEFAULT_MALE = ""
 
 # 角色音色（定稿）
-MALE_VOICE = "cosyvoice-v3-plus-zhangc2-28a7c3541e1c45518a03046c11baeb1d"
+MALE_VOICE = ""   # 新租户初始无自带声音；须由租户克隆/选择后显式传入
 MALE_MODEL = "cosyvoice-v3-plus"
-FEMALE_VOICE = "cosyvoice-v3-plus-jiangnv3-991b204c1d564ac7a60f0cb9a8fd78bd"
+FEMALE_VOICE = ""   # 新租户初始无自带声音；须由租户克隆/选择后显式传入
 FEMALE_MODEL = "cosyvoice-v3-plus"
 
 # 情绪→韵律映射表（D 基调：专家味 + 自然起伏，男女声分设相对倍率 + 句后停顿）
@@ -391,24 +391,39 @@ def gen_black_gold(t, w=W, h=H):
 
 
 # ---------------------------------------------------------------- 对话解析 + TTS
-def parse_dialogue(path):
+def parse_dialogue(path, default_role="M"):
     segs = []
     with open(path, encoding="utf-8-sig") as f:
         text = f.read()
-    return parse_dialogue_text(text)
+    return parse_dialogue_text(text, default_role)
 
 
-def parse_dialogue_text(text):
-    """从字符串解析 女：/男： 对话体，无角色前缀默认男声。"""
+def parse_dialogue_text(text, default_role="M"):
+    """解析 女：/男：/旁白： 对话体。
+    - 若整段无任何角色前缀（纯独白），则全部段落统一使用 default_role（"M"=男声 / "F"=女声）。
+      用于单人独白场景：男声独白传 "M"、女声独白传 "F"。
+    - 若含角色前缀，则按行分配：女：/女: → F，男：/男: → M，旁白：→ M，无前缀行 → M。"""
+    RAW_PREFIXES = ("女：", "女:", "男：", "男:", "旁白：", "旁白:")
+    def _has_prefix(l):
+        s = l.strip()
+        return any(s.startswith(p) for p in RAW_PREFIXES)
+    lines = [l for l in text.splitlines() if l.strip()]
+    # 纯独白（无任一行带角色前缀）：整段统一用 default_role，实现男/女单人独白
+    if lines and not any(_has_prefix(l) for l in lines):
+        segs = [(default_role, l.strip()) for l in lines if l.strip()]
+        return segs
+    # 含角色前缀：逐行解析
     segs = []
-    for line in text.splitlines():
+    for line in lines:
         line = line.strip()
-        if not line:
-            continue
         if line.startswith("女") or line.startswith("女：") or line.startswith("女:"):
             role = "F"
             text = line[line.find("：") + 1:] if "：" in line else line[line.find(":") + 1:]
         elif line.startswith("男") or line.startswith("男：") or line.startswith("男:"):
+            role = "M"
+            text = line[line.find("：") + 1:] if "：" in line else line[line.find(":") + 1:]
+        elif line.startswith("旁白") or line.startswith("旁白：") or line.startswith("旁白:"):
+            # 旁白默认使用男声；后续如需独立旁白声线可扩展为 "N"
             role = "M"
             text = line[line.find("：") + 1:] if "：" in line else line[line.find(":") + 1:]
         else:
@@ -425,9 +440,10 @@ def synth_dialogue_audio(dialogue_text, out_wav, dry=False, gap=0.28,
                          female_voice=FEMALE_VOICE, female_model=FEMALE_MODEL,
                          male_voice=MALE_VOICE, male_model=MALE_MODEL,
                          male_rate=0.98, female_rate=0.98, male_pitch=0.95,
-                         female_pitch=1.02, male_vol=53, female_vol=49):
+                         female_pitch=1.02, male_vol=53, female_vol=49,
+                         default_role="M"):
     """独立合成男女双声对话音频（平台「出音频」对话试听用）。"""
-    segs = parse_dialogue_text(dialogue_text)
+    segs = parse_dialogue_text(dialogue_text, default_role)
     if not segs:
         raise SystemExit("对话稿为空或解析失败")
     tmpdir = tempfile.mkdtemp(prefix="scroll_audio_")
@@ -829,7 +845,8 @@ def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
                female_pitch=1.02, male_vol=53, female_vol=49,
                subtitle_size=HL_SIZE, subtitle_lines=3, subtitle_outline=STROKE_W,
                subtitle_position="bottom",
-               subtitle_style="dynamic", export_ass=False, no_burn_sub=False):
+               subtitle_style="dynamic", export_ass=False, no_burn_sub=False,
+               default_role="M"):
     # 字幕可调参数 → 派生模块全局（历史/未读/行距/锚点随当前行字号同比例，避免重叠或溢出）
     ratio = max(0.4, min(1.6, subtitle_size / HL_SIZE))
     globals().update(dict(
@@ -843,7 +860,7 @@ def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
         SUB_CURRENT_Y=(H // 2) if subtitle_position == "center" else CURRENT_Y,
         SUBTITLE_STYLE=subtitle_style,
     ))
-    segs = parse_dialogue(dialogue)
+    segs = parse_dialogue(dialogue, default_role)
     if not segs:
         raise SystemExit("对话文件为空或解析失败")
     title = title or _auto_title(segs)
@@ -1075,7 +1092,7 @@ def naturalize_dialogue(text):
 
 def main():
     ap = argparse.ArgumentParser(description="滚动字幕卡短视频生成（不出镜·双声·卡拉OK）")
-    ap.add_argument("--dialogue", required=True, help="对话稿 txt（每行 女：/男： 开头）")
+    ap.add_argument("--dialogue", required=True, help="文稿 txt：男女对话每行 女：/男： 开头；单人独白直接写文案（--default-role 指定 M/F）")
     ap.add_argument("--out", required=True, help="输出 mp4 路径")
     ap.add_argument("--bg-style", default="seaside", choices=["seaside", "blackgold"],
                     help="背景风格，固定为滚动海浪(seaside)，不再提供黑金等其他底色")
@@ -1107,6 +1124,8 @@ def main():
     ap.add_argument("--subtitle-style", default="dynamic",
                     choices=["dynamic", "minimal", "bubble"],
                     help="字幕整体风格：dynamic=卡拉OK高亮(默认) / minimal=纯净白字 / bubble=气泡底衬")
+    ap.add_argument("--default-role", default="M", choices=["M", "F"],
+                    help="单人独白声线：纯独白稿（无 女：/男： 前缀）统一使用的声线，M=男声(默认) / F=女声")
     ap.add_argument("--export-ass", action="store_true",
                     help="同时导出 ASS 字幕文件（与成品同名 .ass），便于二次剪辑/换风格重烧")
     ap.add_argument("--no-burn-sub", action="store_true",
@@ -1142,7 +1161,8 @@ def main():
                male_voice=args.male_voice, male_model=args.male_model,
                male_rate=args.male_rate, female_rate=args.female_rate,
                male_pitch=args.male_pitch, female_pitch=args.female_pitch,
-               male_vol=args.male_vol, female_vol=args.female_vol)
+               male_vol=args.male_vol, female_vol=args.female_vol,
+               default_role=args.default_role)
 
 
 if __name__ == "__main__":

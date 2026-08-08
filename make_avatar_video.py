@@ -21,6 +21,7 @@
       --out output/avatar_001.mp4 --name 001
 """
 import argparse
+import io
 import shutil
 import subprocess
 import sys
@@ -29,6 +30,11 @@ import uuid
 from pathlib import Path
 
 import requests
+
+# Windows 控制台默认 GBK，强制 stdout/stderr 用 UTF-8，避免 ✅ 等符号在最后打印时 UnicodeEncodeError
+if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 # 强制使用 full 版 ffmpeg（含 libx264），绕开系统 essentials 版缺编码器的坑
 FFMPEG = r"D:/ffmpeg/ffmpeg-8.1.2-full_build/bin/ffmpeg.exe"

@@ -69,9 +69,9 @@ def default_settings() -> dict:
             "subtitle_style": "white_black_simhei",
             "resolution": "1080x1920",
         },
-        "tts_voice_map": {             # 音色映射（角色→voice_id）
-            "male":   "cosyvoice-v3-plus-zhangc2-28a7c3541e1c45518a03046c11baeb1d",
-            "female": "cosyvoice-v3-plus-jiangnv3-991b204c1d564ac7a60f0cb9a8fd78bd",
+        "tts_voice_map": {             # 音色映射（角色→voice_id）；新租户初始为空，须由租户克隆/选择
+            "male":   "",
+            "female": "",
         },
         "platform_limits": {           # 平台限制开关（次要约束，不阻断核心功能）
             "official_saas_requires_org": True,   # 即创需组织认证
@@ -782,8 +782,7 @@ def get_tenant_voice_id(tenant_id, gender="male") -> str:
     cx.close()
     if row:
         return row["cosy_voice_id"]
-    return default_settings()["tts_voice_map"].get(gender,
-           default_settings()["tts_voice_map"]["male"])
+    return ""  # 无克隆声线 → 返回空；上层须提示「请先克隆或选择声音」，禁止回退到特定克隆音
 
 
 def _seed_default_avatar_voice(tenant_id) -> None:
@@ -797,10 +796,8 @@ def _seed_default_avatar_voice(tenant_id) -> None:
                                str(BASE / "face2face" / "BGZSP20260721_t18_silent.mp4"),
                                role="solo", is_default=1)
     if vcnt == 0:
-        register_tenant_voice(tenant_id, "老张·男声",
-                              default_settings()["tts_voice_map"]["male"], gender="male", is_default=1)
-        register_tenant_voice(tenant_id, "江老师·女声",
-                              default_settings()["tts_voice_map"]["female"], gender="female", is_default=1)
+        # 不再自动播种自带声音：新租户初始无声音，须自行克隆或选公开模板（遵循通用行业平台铁律）
+        pass
     # 预置默认管理员账号（仅当该租户尚无用户）
     _ucx = _conn()
     ucnt = _ucx.execute("SELECT COUNT(*) c FROM users WHERE tenant_id=?", (tenant_id,)).fetchone()["c"]
