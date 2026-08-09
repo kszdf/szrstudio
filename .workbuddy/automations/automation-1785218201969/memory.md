@@ -1,5 +1,13 @@
 # 周更成片-下午(15:00) 执行记录
 
+## 2026-08-09 (周日, 周号 2026-W32)
+- 执行 `weekly_pipeline.py render --slot afternoon`
+- 结果：**成功渲染 1 条**（非跳过）。今日周日(day=6)下午档命中 seq13（老板给员工发工资的坑，dialogue 双声）。
+- 产出：`videos/2026-W32-13-老板给员工发工资的坑.mp4`（约 18.8MB，1080x1920 竖屏 GIF动态背景大字逐字高亮）；同名 sidecar `2026-W32-13-老板给员工发工资的坑.txt`（含发布文案+口播稿）。
+- 队列 seq13 status 已置为 `done`、video_path 回填；README.md 已刷新。**下午档 7 条（seq1/3/5/7/9/11/13）现已全部 done。**
+- ⚠️ 修复项：首次运行报错 `voice_id 为空`（qwen_tts 抛错）。根因=今天 03:00 daily backup 提交(30abbb0)把 `make_scroll_video.py` 的 `MALE_VOICE/FEMALE_VOICE` 改成空（"新租户初始无自带声音"），且 `rewrite_studio.py` 的 `SCROLL_MALE/FEMALE_VOICE` 同样为空；`weekly_pipeline.render` 调 `make_scroll_video.py` 时未传 `--male-voice/--female-voice`，对话稿 TTS 拿不到音色。已在 `weekly_pipeline.py` 的 `cmd_render` 中显式传入老张/江老师克隆音色 id（优先读 env `QWEN_MALE/FEMALE_VOICE_ID`，缺则回退 documented 默认值），重跑成功 EXIT=0。注：工作台「一键出片」目前仍传空音色，存在同样隐患，待用户从「声音」页配置或恢复默认值。
+- 晚间档(20:00 自动化)仍会渲染 seq14（税务局怎么发现你隐匿收入，monologue）；本档为本周最后一条待渲染。
+
 ## 2026-08-06 (周四, 周号 2026-W32)
 - 执行 `weekly_pipeline.py render --slot afternoon`
 - 结果：**成功渲染 1 条**（非跳过）。本周 `output/weekly/2026-W32/queue.json` 存在；当前周四(day=3)下午档命中 seq7（股东借款年底不还的后果，dialogue 双声）。

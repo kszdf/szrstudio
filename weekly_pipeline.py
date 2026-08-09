@@ -371,9 +371,15 @@ def cmd_render(args):
             f.write(feed)
     title = target["title"][:10]
     subtitle = prof.get("subtitle", "老张讲财税 · 老板避坑")
+    # 显式传入男女克隆音色：优先读 env（QWEN_MALE/FEMALE_VOICE_ID），缺则回退 documented 默认值。
+    # 注：make_scroll_video.py 当前 MALE/FEMALE_VOICE 默认空（待「声音」页配置），
+    # 自动化流水线无 UI，故在此强制传入，避免 TTS 报 voice_id 为空。
+    male_v = mp.get_key("QWEN_MALE_VOICE_ID") or "cosyvoice-v3-plus-zhangc2-28a7c3541e1c45518a03046c11baeb1d"
+    female_v = mp.get_key("QWEN_FEMALE_VOICE_ID") or "cosyvoice-v3-plus-jiangnv3-991b204c1d564ac7a60f0cb9a8fd78bd"
     cmd = [PY, os.path.join(BASE, "make_scroll_video.py"),
            "--dialogue", dlg, "--out", out,
-           "--title", title, "--subtitle", subtitle, "--gap", "0.18"]
+           "--title", title, "--subtitle", subtitle, "--gap", "0.18",
+           "--male-voice", male_v, "--female-voice", female_v]
     bg = prof.get("bg")
     if bg and os.path.exists(bg):
         cmd += ["--bg", bg]

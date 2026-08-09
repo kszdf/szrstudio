@@ -1,5 +1,13 @@
 # 周更成片-晚上(20:00) 执行记录
 
+## 2026-08-09 (周日, 周号 2026-W32)
+- 执行 `weekly_pipeline.py render --slot evening`（python 3.13.12）
+- 结果：**成功渲染 1 条**。脚本挑出下一个 `selected + status≠done + period=evening` 选题 = **seq 8 留抵退税被稽查的原因**（抖音/monologue）。
+- 产出：`output/weekly/2026-W32/videos/2026-W32-08-留抵退税被稽查的原因.mp4`（约 34.6MB，1080×1920 竖屏 GIF动态背景＋大字逐字高亮滚动字幕视频）+ 同名 sidecar `.txt`（约 2.1KB，发布文案 + 口播稿三段）。
+- 队列更新：seq8 status→`done`、video_path 已填；`output/weekly/2026-W32/README.md` 已刷新（seq8 行 done+成片路径）。仓库根 README.md 未变（刷新目标是周目录内 README）。
+- ffmpeg/模型 key 就绪，脚本打印 `[render] 完成` 正常退出，无异常无报错，EXIT=0。
+- 剩余晚间待渲染：seq10/12/14（均为 evening，status=scripted）；本周（W32）晚间档尚余 3 条，下一周（W33 自 08-10 起）将由周日23:30 gen-topics 重新建队。
+
 ## 2026-08-04 (周二, 周号 2026-W32)
 - 执行 `weekly_pipeline.py render --slot evening`（python 3.13.12）
 - 结果：**成功渲染 1 条**。脚本按队列顺序挑出首个 `selected + status≠done + period=evening` 选题 = **seq 2 虚开发票罪量刑标准变了**（视频号/monologue/55s）。
