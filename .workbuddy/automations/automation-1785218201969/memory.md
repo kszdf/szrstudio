@@ -66,5 +66,12 @@
 - 结果：**跳过**。本周 `output/weekly/2026-W31/queue.json` 仍不存在（目录仅 `_samples/`，gen-topics 队列从未生成/落盘），脚本打印「未找到 2026-W31 队列」后退出，EXIT=0，未触发 TTS/ffmpeg。
 - 无待渲染选题，无异常。连续第 6 天（07-28→08-02）因队列缺失跳过——gen-topics 上游任务疑似从未成功执行或落盘，建议排查周日 23:30 gen-topics 自动化是否缺失/报错，或手动触发一次 gen-topics 生成本周队列。
 
+## 2026-08-10 (周一, 周号 2026-W33)
+- 执行 `weekly_pipeline.py render --slot afternoon`
+- 结果：**成功渲染 1 条**（非跳过）。本周 `output/weekly/2026-W33/queue.json` 已生成（14 选题，全部 selected/scripted）。当前周一(day=0)下午档命中 seq1（老板这样发工资，等于自杀，dialogue 双声）。
+- 产出：`output/weekly/2026-W33/videos/2026-W33-01-老板这样发工资_等于自杀.mp4`（约 24.5MB，1080x1920 竖屏 GIF动态背景大字逐字高亮）；同名 sidecar `2026-W33-01-老板这样发工资_等于自杀.txt`（含发布文案+口播稿）。
+- 队列 seq1 status 已置为 `done`、video_path 回填；per-week `output/weekly/2026-W33/README.md` 已刷新（脚本 write_readme 写的是周目录内的 README，非项目根 handbook）。脚本自动确保 ffmpeg 与模型 key 就绪，无异常，EXIT=0。
+- 剩余下午档待渲染：seq3/5/7/9/11/13（day 1-6）。注：脚本视频落盘路径为 `output/weekly/<wk>/videos/`，非根 `videos/` 目录（任务描述"videos/ 目录"为泛称，以脚本实际路径为准）。
+
 ## 历史
 - （暂无更早记录）
