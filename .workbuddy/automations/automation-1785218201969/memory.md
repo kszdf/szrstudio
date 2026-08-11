@@ -73,5 +73,12 @@
 - 队列 seq1 status 已置为 `done`、video_path 回填；per-week `output/weekly/2026-W33/README.md` 已刷新（脚本 write_readme 写的是周目录内的 README，非项目根 handbook）。脚本自动确保 ffmpeg 与模型 key 就绪，无异常，EXIT=0。
 - 剩余下午档待渲染：seq3/5/7/9/11/13（day 1-6）。注：脚本视频落盘路径为 `output/weekly/<wk>/videos/`，非根 `videos/` 目录（任务描述"videos/ 目录"为泛称，以脚本实际路径为准）。
 
+## 2026-08-11 (周二, 周号 2026-W33)
+- 执行 `weekly_pipeline.py render --slot afternoon`
+- 结果：**成功渲染 1 条**（非跳过）。当前周二(day=1)下午档命中 seq3（暂估成本，金税四期一查一个准，dialogue 双声）。
+- 产出：`output/weekly/2026-W33/videos/2026-W33-03-暂估成本_金税四期一查一个准.mp4`（约 19.1MB，1080x1920 竖屏 GIF动态背景大字逐字高亮）；同名 sidecar `2026-W33-03-暂估成本_金税四期一查一个准.txt`（含发布文案+口播稿）。
+- 队列 seq3 status 已置为 `done`、video_path 回填；per-week `output/weekly/2026-W33/README.md` 已刷新。脚本自动确保 ffmpeg 与模型 key 就绪，无异常，EXIT=0。
+- 剩余下午档待渲染：seq5/7/9/11/13（day 2-6）。
+
 ## 历史
 - （暂无更早记录）
