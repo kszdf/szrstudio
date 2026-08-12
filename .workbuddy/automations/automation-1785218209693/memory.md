@@ -1,5 +1,13 @@
 # 周更成片-晚上(20:00) 执行记录
 
+## 2026-08-12 (周三, 周号 2026-W33)
+- 执行 `weekly_pipeline.py render --slot evening`（python 3.13.12）
+- 结果：**成功渲染 1 条**。脚本挑出下一个 `selected + status≠done + period=evening` 选题 = **seq 6 数电发票，让虚开无处可逃**（抖音/monologue）。注：seq 4（个人卡流水超20万）已于 08-11 晚间场渲染完成，故本次推进到 seq 6。
+- 产出：`output/weekly/2026-W33/videos/2026-W33-06-数电发票_让虚开无处可逃.mp4`（约 31.9MB，1080×1920 竖屏 GIF动态背景＋大字逐字高亮滚动字幕视频，make_scroll_video 路径）+ 同名 sidecar `.txt`（约 1.9KB，发布文案 + 口播稿三段）。
+- 队列更新：seq6 status→`done`、video_path 已填；周目录 `README.md` 已刷新（seq6 行 done+成片路径）。
+- ffmpeg/模型 key 就绪，脚本打印 `[render] 完成` 正常退出，无异常无报错，EXIT=0。
+- 剩余晚间待渲染：seq 8/10/12/14（均为 evening，status=scripted）；W33 晚档 7 条已渲染 2/4/6，下一周晚间场继续推进 seq8。
+
 ## 2026-08-10 (周一, 周号 2026-W33)
 - 执行 `weekly_pipeline.py render --slot evening`（python 3.13.12）
 - 结果：**成功渲染 1 条**。脚本挑出当前周（W33，自 08-10 起）下一个 `selected + status≠done + period=evening` 选题 = **seq 2 公转私200万，这样转才安全**（monologue，晚档）。
