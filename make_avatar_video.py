@@ -38,6 +38,7 @@ if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
 
 # 强制使用 full 版 ffmpeg（含 libx264），绕开系统 essentials 版缺编码器的坑
 FFMPEG = r"D:/ffmpeg/ffmpeg-8.1.2-full_build/bin/ffmpeg.exe"
+FFPROBE = r"D:/ffmpeg/ffmpeg-8.1.2-full_build/bin/ffprobe.exe"
 
 BASE = Path("D:/heygem_data")
 FACE = BASE / "face2face"
@@ -75,6 +76,40 @@ def strip_audio(src, dst):
     """物理剥离 HEYGEM 自带音轨 -> 仅视频（去双声关键一步）"""
     run([FFMPEG, "-y", "-i", str(src), "-an", "-c:v", "copy", str(dst)])
     return dst
+
+
+# HEYGEM 标 success 时 -r.mp4 常尚未完全 flush（moov 写在文件末尾）。
+# 若立即处理会读到半截文件 -> ffmpeg 报 "moov atom not found" 导致整任务失败。
+# 故取结果后必须等到文件真正落盘完整再继续。
+WAIT_READY_TIMEOUT = 180  # 最多等 180s
+
+
+def wait_file_ready(path, timeout=WAIT_READY_TIMEOUT):
+    """等待 HEYGEM 产物真正落盘完整：文件存在 + ffprobe 可读(moov 完整) + 连续两次大小稳定。"""
+    waited = 0
+    last = -1
+    stable = 0
+    while waited < timeout:
+        if not path.exists():
+            time.sleep(2); waited += 2; continue
+        try:
+            sz = path.stat().st_size
+        except OSError:
+            time.sleep(2); waited += 2; continue
+        r = subprocess.run([FFPROBE, "-v", "error", "-show_entries",
+                            "format=nb_streams", "-of", "default=nw=1:nk=1", str(path)],
+                           capture_output=True, text=True, encoding="utf-8", errors="ignore")
+        ok = (r.returncode == 0 and r.stdout.strip().isdigit()
+              and int(r.stdout.strip()) >= 1)
+        if ok and sz > 0 and sz == last:
+            stable += 1
+        else:
+            stable = 0
+        last = sz
+        if stable >= 2:   # 连续两次(约4s)大小不变且可读 = 落盘完成
+            return True
+        time.sleep(2); waited += 2
+    return False
 
 
 def mux(video_noaudio, audio, dst):
@@ -214,6 +249,13 @@ def main():
             sys.exit(f"未找到生成结果: {TEMP}/{code}-r.mp4")
 
     print(f"[3] 生成结果: {result}  ({result.stat().st_size//1024} KB)")
+    # 关键修复：HEYGEM 标 success 时文件可能尚未完全落盘，必须等真正写完再处理，
+    # 否则 ffmpeg 读半截文件会报 "moov atom not found" 导致整任务失败。
+    if not wait_file_ready(result):
+        sys.exit(f"HEYGEM 产物 {result.name} 等待落盘超时（{WAIT_READY_TIMEOUT}s）——"
+                 f"文件未完整写入，可能容器卷同步延迟或渲染异常。"
+                 f"请重试，或 `docker restart heygem-gen-video` 后重跑。")
+    print("[3+] 文件已确认完整落盘，开始后期处理")
 
     # 4) 去双声: 剥离自带音轨
     noa = TEMP / f"{code}_noa.mp4"
