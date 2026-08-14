@@ -62,10 +62,11 @@ def model_host_path(container_path: str) -> Path:
 
 
 def run(cmd):
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True,
+                       encoding="utf-8", errors="ignore")
     if r.returncode != 0:
         print("  [ERR] 命令失败:", " ".join(str(c) for c in cmd[:6]), "...")
-        print(r.stderr[-1000:])
+        print((r.stderr or "")[-1000:])
         sys.exit(1)
     return r
 
@@ -94,6 +95,13 @@ def main():
     ap.add_argument("--scene", default=None,
                     help="出镜场景：office_a(办公桌前·正面) / office_b(办公桌前·侧面)；"
                          "未显式指定 --model 时由场景决定模特视频")
+    ap.add_argument("--subtitle-style", default="minimal",
+                    choices=["dynamic", "minimal", "bubble"],
+                    help="字幕风格：dynamic=逐字高亮 / minimal=纯净白字 / bubble=气泡底衬"
+                         "（finalize_v2_pil 用）")
+    ap.add_argument("--font", default=None, help="字幕主字体路径（透传 finalize_v2_pil）")
+    ap.add_argument("--karaoke", default=None,
+                    help="逐字高亮时间轴 sidecar JSON（dynamic 风格使用）")
     args = ap.parse_args()
 
     # —— 场景解析（安全接线：素材未就位时回退默认模特，绝不因未知参数崩溃）——
@@ -222,8 +230,14 @@ def main():
     out.parent.mkdir(parents=True, exist_ok=True)
     print("[6] PIL 烧字幕 + 拼片头 ...")
     # 关键：finalize_v2_pil 抽帧重编码会丢原音轨，必须 --replace-audio 重新注入千问音频
-    run([sys.executable, str(FINALIZE), "--video", str(synced),
-         "--ass", str(ass), "--replace-audio", str(audio), "--out", str(out)])
+    fin_args = [sys.executable, str(FINALIZE), "--video", str(synced),
+                "--ass", str(ass), "--replace-audio", str(audio), "--out", str(out),
+                "--subtitle-style", args.subtitle_style]
+    if args.karaoke:
+        fin_args += ["--karaoke", str(args.karaoke)]
+    if args.font:
+        fin_args += ["--font", args.font]
+    run(fin_args)
     print(f"\n✅ 成品: {out}  ({out.stat().st_size//1024} KB)")
 
 

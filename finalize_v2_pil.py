@@ -15,6 +15,7 @@
   --no-intro             (不加片头)
 """
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -58,10 +59,11 @@ if F_MAIN is None:
 
 
 def run(cmd):
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True,
+                       encoding="utf-8", errors="ignore")
     if r.returncode != 0:
         print("  [ERR] 命令失败:", " ".join(cmd[:6]), "...")
-        print(r.stderr[-800:])
+        print((r.stderr or "")[-800:])
         sys.exit(1)
 
 
@@ -134,8 +136,15 @@ def clean_subtitle_text(text):
 def _char_width(draw, ch):
     return draw.textlength(ch, font=_font_for(ch))
 
-def draw_subtitle(img, text):
-    """在帧底部居中画白字黑边；逐字符选字体，emoji 用 Segoe 渲染避免方块乱码。"""
+SUB_HILITE = (255, 212, 0)   # 逐字高亮色（金）：已读到/唱到的字高亮，未到的仍白
+
+
+def draw_subtitle(img, text, style="minimal", karaoke_event=None, t=None):
+    """在帧底部居中画字幕。
+    - minimal：白字黑边（默认）
+    - dynamic + karaoke_event：已读完的字符着金色高亮（卡拉OK式跟随配音）
+    - bubble：半透明圆角气泡底衬，提升低反差场景可读性
+    逐字符选字体，emoji 用 Segoe 渲染避免方块乱码。"""
     text = clean_subtitle_text(text)
     if not text:
         return
@@ -145,21 +154,45 @@ def draw_subtitle(img, text):
     total_h = line_h * len(lines)
     W, H = img.size
     y0 = H - SUB_MARGIN_BOTTOM - total_h
+
+    # 卡拉OK逐字状态：把 karaoke_event 的字符按朗读顺序摊平成判定序列
+    kflat = []
+    if karaoke_event and isinstance(karaoke_event, dict):
+        for ln in karaoke_event.get("lines", []):
+            for ch in ln:
+                kflat.append(ch)
+
+    char_idx = [0]
     for i, ln in enumerate(lines):
         widths = [_char_width(draw, ch) for ch in ln]
         tw = sum(widths)
         x = (W - tw) // 2
         y = y0 + i * line_h
+        # bubble 气泡底衬
+        if style == "bubble":
+            pad = 20
+            bx, by = x - pad, y - 12
+            bw, bh = tw + pad * 2, line_h + 6
+            try:
+                draw.rounded_rectangle([bx, by, bx + bw, by + bh], radius=16,
+                                       fill=(0, 0, 0, 160))
+            except Exception:
+                draw.rectangle([bx, by, bx + bw, by + bh], fill=(0, 0, 0, 160))
         cx = x
         for ch, w in zip(ln, widths):
             f = _font_for(ch)
+            spoken = False
+            if kflat and t is not None and char_idx[0] < len(kflat):
+                spoken = t >= kflat[char_idx[0]].get("e", 0)
+            char_idx[0] += 1
             # 黑边（多次偏移）
             for dx in range(-SUB_BORDER, SUB_BORDER + 1):
                 for dy in range(-SUB_BORDER, SUB_BORDER + 1):
                     if dx * dx + dy * dy <= SUB_BORDER * SUB_BORDER:
                         draw.text((cx + dx, y + dy), ch, font=f, fill=(0, 0, 0))
-            # 白字
-            draw.text((cx, y), ch, font=f, fill=(255, 255, 255))
+            # 字体填充色：dynamic 已读到的字高亮金，其余白
+            fill = SUB_HILITE if (style == "dynamic" and spoken) else (255, 255, 255)
+            draw.text((cx, y), ch, font=f, fill=fill)
             cx += w
 
 
@@ -171,20 +204,27 @@ def extract_frames(video, frames_dir):
     return sorted(frames_dir.glob("f_*.png"))
 
 
-def burn_frames(events, frames):
-    print(f"  共 {len(frames)} 帧，{len(events)} 条字幕")
+def burn_frames(events, frames, karaoke=None, style="minimal"):
+    # 按 start 时间建立逐字高亮事件索引（与 parse_ass 事件同序同起止）
+    kmap = {}
+    if karaoke and isinstance(karaoke, dict):
+        for ev in karaoke.get("events", []):
+            kmap[round(float(ev.get("start", 0)), 2)] = ev
+    print(f"  共 {len(frames)} 帧，{len(events)} 条字幕，字幕风格={style}")
     n = len(frames)
     for i, png in enumerate(frames):
         t = i / FPS
         # 找当前时间字幕
         cur = None
+        kev = None
         for s, e, txt in events:
             if s <= t < e:
                 cur = txt
+                kev = kmap.get(round(s, 2))
                 break
         if cur:
             img = Image.open(png).convert("RGB")
-            draw_subtitle(img, cur)
+            draw_subtitle(img, cur, style=style, karaoke_event=kev, t=t)
             img.save(png, "PNG")
         # 每 50 帧回报一次进度（后端解析 [3] 烧字幕 N%）
         if i % 50 == 0 or i == n - 1:
@@ -234,7 +274,19 @@ def main():
     ap.add_argument("--intro", default=str(INTRO))
     ap.add_argument("--no-intro", action="store_true")
     ap.add_argument("--replace-audio", default=None)
+    ap.add_argument("--subtitle-style", default="minimal",
+                    choices=["dynamic", "minimal", "bubble"],
+                    help="字幕风格：dynamic=逐字高亮 / minimal=纯净白字 / bubble=气泡底衬")
+    ap.add_argument("--karaoke", default=None, help="逐字高亮时间轴 sidecar JSON")
+    ap.add_argument("--font", default=None, help="字幕主字体路径（默认 fonts/simhei.ttf）")
     args = ap.parse_args()
+
+    # 字幕字体：--font 指定则覆盖默认黑体（路径不存在回退默认）
+    global F_MAIN
+    if args.font and Path(args.font).exists():
+        F_MAIN = _load_font(args.font, SUB_SIZE)
+    elif args.font:
+        print(f"[WARN] 字体路径不存在，回退默认黑体: {args.font}")
 
     video = Path(args.video)
     ass = Path(args.ass)
@@ -242,6 +294,13 @@ def main():
         sys.exit(f"视频不存在: {video}")
     if not ass.exists():
         sys.exit(f"字幕不存在: {ass}")
+
+    karaoke = None
+    if args.karaoke and Path(args.karaoke).exists():
+        try:
+            karaoke = json.loads(Path(args.karaoke).read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"  [WARN] 逐字高亮 sidecar 解析失败，回退纯净字幕: {e}")
 
     TMP.mkdir(parents=True, exist_ok=True)
 
@@ -257,7 +316,7 @@ def main():
         print(f"  时间范围: {events[0][0]:.2f}s - {events[-1][1]:.2f}s")
 
     print(f"\n[3/4] PIL 烧字幕 ...")
-    burn_frames(events, frames)
+    burn_frames(events, frames, karaoke=karaoke, style=args.subtitle_style)
 
     print(f"\n[4/4] 合成视频 ...")
     mid = TMP / "mid.mp4"

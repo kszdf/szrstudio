@@ -1124,6 +1124,7 @@ def main():
     ap.add_argument("--subtitle-style", default="dynamic",
                     choices=["dynamic", "minimal", "bubble"],
                     help="字幕整体风格：dynamic=卡拉OK高亮(默认) / minimal=纯净白字 / bubble=气泡底衬")
+    ap.add_argument("--font", default=None, help="字幕字体路径（默认黑体 fonts/simhei.ttf）")
     ap.add_argument("--default-role", default="M", choices=["M", "F"],
                     help="单人独白声线：纯独白稿（无 女：/男： 前缀）统一使用的声线，M=男声(默认) / F=女声")
     ap.add_argument("--export-ass", action="store_true",
@@ -1133,6 +1134,14 @@ def main():
     ap.add_argument("--natural", action="store_true",
                     help="调用 DeepSeek 把书面稿自动改写为自然口语（加语气词、去AI感、像真人在叙事）")
     args = ap.parse_args()
+
+    # 字幕字体：--font 指定则覆盖默认黑体（路径不存在回退默认）
+    if args.font:
+        if os.path.exists(args.font):
+            global FONT_PATH
+            FONT_PATH = args.font
+        else:
+            print(f"[WARN] 字体路径不存在，回退默认黑体: {args.font}")
 
     dialogue_arg = args.dialogue
     if args.natural:
