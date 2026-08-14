@@ -136,7 +136,31 @@ def clean_subtitle_text(text):
 def _char_width(draw, ch):
     return draw.textlength(ch, font=_font_for(ch))
 
+
+def _wrap_text_to_width(draw, text, max_width):
+    """按像素宽度自动换行，保持字符顺序，不破坏 karaoke 逐字同步。
+    只在必要时拆分，已存在的 \n 换行会被保留。"""
+    if not text:
+        return text
+    out_lines = []
+    for raw_line in text.split("\n"):
+        line_chars, line_w = [], 0.0
+        for ch in raw_line:
+            w = _char_width(draw, ch)
+            # 单个字符过宽时强制换行兜底
+            if line_w + w > max_width and line_chars:
+                out_lines.append("".join(line_chars))
+                line_chars, line_w = [ch], w
+            else:
+                line_chars.append(ch)
+                line_w += w
+        if line_chars:
+            out_lines.append("".join(line_chars))
+    return "\n".join(out_lines)
+
+
 SUB_HILITE = (255, 212, 0)   # 逐字高亮色（金）：已读到/唱到的字高亮，未到的仍白
+SUB_HMARGIN = 40             # 字幕左右安全边距（px）
 
 
 def draw_subtitle(img, text, style="minimal", karaoke_event=None, t=None):
@@ -149,11 +173,16 @@ def draw_subtitle(img, text, style="minimal", karaoke_event=None, t=None):
     if not text:
         return
     draw = ImageDraw.Draw(img)
+    W, H = img.size
+    # 按实际帧宽度自动换行，防止长句溢出屏幕；karaoke 同步依赖字符顺序，换行不影响
+    max_line_width = max(W - SUB_HMARGIN * 2, int(W * 0.86))
+    text = _wrap_text_to_width(draw, text, max_line_width)
     lines = text.split("\n")
     line_h = SUB_SIZE + 8
     total_h = line_h * len(lines)
-    W, H = img.size
     y0 = H - SUB_MARGIN_BOTTOM - total_h
+    if style == "dynamic" and not karaoke_event:
+        print(f"  [WARN] dynamic 字幕缺少 karaoke sidecar，将回退为整句白字（不同步高亮）", file=sys.stderr)
 
     # 卡拉OK逐字状态：把 karaoke_event 的字符按朗读顺序摊平成判定序列
     kflat = []
