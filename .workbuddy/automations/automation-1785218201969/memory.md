@@ -80,5 +80,12 @@
 - 队列 seq3 status 已置为 `done`、video_path 回填；per-week `output/weekly/2026-W33/README.md` 已刷新。脚本自动确保 ffmpeg 与模型 key 就绪，无异常，EXIT=0。
 - 剩余下午档待渲染：seq5/7/9/11/13（day 2-6）。
 
+## 2026-08-14 (周五, 周号 2026-W33)
+- 执行 `weekly_pipeline.py render --slot afternoon`
+- 结果：**成功渲染 1 条**（非跳过）。本周 `output/weekly/2026-W33/queue.json` 存在；当前周五(day=4)下午档命中 seq9（老板不懂法，公司钱就是私钱，dialogue 双声）。
+- 产出：`output/weekly/2026-W33/videos/2026-W33-09-老板不懂法_公司钱就是私钱.mp4`（约 16.7MB，1080x1920 竖屏 GIF动态背景大字逐字高亮）；同名 sidecar `2026-W33-09-老板不懂法_公司钱就是私钱.txt`（含发布文案+口播稿）。
+- 队列 seq9 status 已置为 `done`、video_path 回填；per-week `output/weekly/2026-W33/README.md` 已刷新（seq9 显示 done+成片路径）。脚本自动确保 ffmpeg 与模型 key 就绪，无异常，EXIT=0。
+- 剩余下午档待渲染：seq11/13（day 5-6，周六/周日 15:00 自动化继续）。
+
 ## 历史
 - （暂无更早记录）
