@@ -87,5 +87,12 @@
 - 队列 seq9 status 已置为 `done`、video_path 回填；per-week `output/weekly/2026-W33/README.md` 已刷新（seq9 显示 done+成片路径）。脚本自动确保 ffmpeg 与模型 key 就绪，无异常，EXIT=0。
 - 剩余下午档待渲染：seq11/13（day 5-6，周六/周日 15:00 自动化继续）。
 
+## 2026-08-15 (周六, 周号 2026-W33)
+- 执行 `weekly_pipeline.py render --slot afternoon`
+- 结果：**成功渲染 1 条**（非跳过）。本周 `output/weekly/2026-W33/queue.json` 存在；当前周六(day=5)下午档命中 seq11（个税汇算3月启动，这些老板要补税，dialogue 双声）。
+- 产出：`output/weekly/2026-W33/videos/2026-W33-11-个税汇算3月启动_这些老板要补税.mp4`（约 17.8MB / 18,694,353字节，1080x1920 竖屏 GIF动态背景大字逐字高亮）；同名 sidecar `2026-W33-11-个税汇算3月启动_这些老板要补税.txt`（1342字节，含发布文案+口播稿）。
+- 队列 seq11 status 已置为 `done`、video_path 回填；per-week `output/weekly/2026-W33/README.md` 已刷新（脚本 write_readme 写周目录内 README）。脚本自动确保 ffmpeg 与模型 key 就绪，无异常，EXIT=0。
+- 剩余下午档待渲染：seq13（day 6，周日 15:00 自动化继续）。注：seq5/7 此前已 done（queue 已确认），故今日直接命中 seq11。
+
 ## 历史
 - （暂无更早记录）

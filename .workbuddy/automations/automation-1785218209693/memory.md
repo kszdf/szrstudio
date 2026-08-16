@@ -1,5 +1,13 @@
 # 周更成片-晚上(20:00) 执行记录
 
+## 2026-08-16 (周日, 周号 2026-W33)
+- 执行 `weekly_pipeline.py render --slot evening`（python 3.13.12）
+- 结果：**成功渲染 1 条**。脚本挑出下一个 `selected + status≠done + period=evening` 选题 = **seq 12 注销公司，居然还要补三年税**（抖音/monologue）。注：seq 10 已于 08-15 渲染完成（未记入本自动化记忆），故本次推进到 seq 12。
+- 产出：`output/weekly/2026-W33/videos/2026-W33-12-注销公司_居然还要补三年税.mp4`（约 46.0MB，1080×1920 竖屏 GIF动态背景＋大字逐字高亮滚动字幕视频）+ 同名 sidecar `.txt`（约 2.8KB，发布文案 + 口播稿三段）。
+- 队列更新：seq12 status→`done`、video_path 已填；周目录 `README.md` 已刷新（seq12 行 done+成片路径）。
+- ffmpeg/模型 key 就绪，脚本打印 `[render] 完成` 正常退出，无异常无报错，EXIT=0。
+- 剩余晚间待渲染：seq 14（evening，status=scripted）；W33 晚档 7 条已渲染 2/4/6/8/10/12，仅余 seq14，下一周晚间场继续推进 seq14。
+
 ## 2026-08-13 (周四, 周号 2026-W33)
 - 执行 `weekly_pipeline.py render --slot evening`（python 3.13.12）
 - 结果：**成功渲染 1 条**。脚本挑出下一个 `selected + status≠done + period=evening` 选题 = **seq 8 留抵退税，退了怕查？这样做**（monologue，晚档）。W33 晚档 7 条已渲染 2/4/6/8。
