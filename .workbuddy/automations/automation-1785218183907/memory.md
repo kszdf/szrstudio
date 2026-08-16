@@ -13,3 +13,10 @@
 - 结果：成功生成 14 条，dialogue 7 / monologue 7 均衡；相关度 90–99；全部 selected=true, confirmed=false（待周一 08:00 前 keep/drop）。
 - 产物：output/weekly/2026-W33/queue.json + topics/week_topics.md。无运行时异常。
 - 模型：deepseek-v4-flash（enable_search 联网），key 有效。
+
+## 2026-08-16 (周日 23:25 触发)
+- 周号：2026-W34（8/17–8/23，下一周）。
+- 关键决策：周日 8/16 落 W33 末日，周一 8/17 起为 W34；为让周一 08:00 select/create-scripts 用 week_key() 能命中队列，显式 `--week 2026-W34` 产出（沿用 8/9 同款决策）。
+- 结果：成功生成 14 条，dialogue 7 / monologue 7 均衡；相关度 80–100；全部 selected=true, confirmed=false（待周一 08:00 前 keep/drop）。
+- 产物：output/weekly/2026-W34/queue.json + topics/week_topics.md。无运行时异常。
+- 模型：deepseek（enable_search 联网），key 有效。

@@ -1,5 +1,12 @@
 # 周更成片-下午(15:00) 执行记录
 
+## 2026-08-16 (周日, 周号 2026-W33)
+- 执行 `weekly_pipeline.py render --slot afternoon`
+- 结果：**成功渲染 1 条**（非跳过）。本周 `output/weekly/2026-W33/queue.json` 存在；当前周日(day=6)下午档命中 seq13（老板的钱这样走出去，最省心，dialogue 双声）。
+- 产出：`output/weekly/2026-W33/videos/2026-W33-13-老板的钱这样走出去_最省心.mp4`（约 25.6MB，1080x1920 竖屏 GIF动态背景大字逐字高亮）；同名 sidecar `2026-W33-13-老板的钱这样走出去_最省心.txt`（含发布文案+口播稿）。
+- 队列 seq13 status 已置为 `done`、video_path 回填；per-week `output/weekly/2026-W33/README.md` 已刷新（seq13 显示 done+成片路径）。脚本自动确保 ffmpeg 与模型 key 就绪，无异常，EXIT=0。
+- **下午档 7 条（seq1/3/5/7/9/11/13）现已全部 done**；待渲染下午选题列表为空。本周仅剩晚间档 seq14（金税四期下，小规模别再这样开票，monologue，day6 evening）待 20:00 自动化渲染。
+
 ## 2026-08-09 (周日, 周号 2026-W32)
 - 执行 `weekly_pipeline.py render --slot afternoon`
 - 结果：**成功渲染 1 条**（非跳过）。今日周日(day=6)下午档命中 seq13（老板给员工发工资的坑，dialogue 双声）。
