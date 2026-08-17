@@ -101,5 +101,12 @@
 - 队列 seq11 status 已置为 `done`、video_path 回填；per-week `output/weekly/2026-W33/README.md` 已刷新（脚本 write_readme 写周目录内 README）。脚本自动确保 ffmpeg 与模型 key 就绪，无异常，EXIT=0。
 - 剩余下午档待渲染：seq13（day 6，周日 15:00 自动化继续）。注：seq5/7 此前已 done（queue 已确认），故今日直接命中 seq11。
 
+## 2026-08-17 (周一, 周号 2026-W34)
+- 执行 `weekly_pipeline.py render --slot afternoon`（EXIT=0）。
+- 结果：**成功渲染 1 条**（非跳过）。本周W34队列已生成（14选题，全部selected）。当前周一(day=0)下午档命中 seq1（公转私10万被查，错在哪，dialogue 双声）。
+- 产出：`output/weekly/2026-W34/videos/2026-W34-01-公转私10万被查_错在哪.mp4`（16,408,998字节≈16MB，1080x1920竖屏 GIF动态背景大字逐字高亮）；同名 sidecar `videos/2026-W34-01-公转私10万被查_错在哪.txt`（1259字节，含发布文案+口播稿）。
+- 队列 seq1 status 已置为 `done`、`video_path` 回填；per-week `output/weekly/2026-W34/README.md` 已刷新（seq1 显示 done+成片路径）。脚本自动确保 ffmpeg 与模型 key 就绪，无异常。
+- 剩余下午档待渲染：seq3/5/7/9/11/13（day 1-6，周二至周日 15:00 自动化继续）。
+
 ## 历史
 - （暂无更早记录）
