@@ -1,5 +1,13 @@
 # 周更成片-晚上(20:00) 执行记录
 
+## 2026-08-19 (周三, 周号 2026-W34)
+- 执行 `weekly_pipeline.py render --slot evening`（python 3.13.12，路径用正斜杠规避 bash 反斜杠转义）
+- 结果：**成功渲染 1 条**。脚本挑出 W34 下一个 `selected + status≠done + period=evening` 选题 = **seq 6 留抵退税被倒查，原因就一个**（monologue，晚档）。注：W34 晚档 seq2/4 已分别于 08-18、本次前渲染完成。
+- 产出：`output/weekly/2026-W34/videos/2026-W34-06-留抵退税被倒查_原因就一个.mp4`（约 23.1MB，1080×1920 竖屏 GIF动态背景＋大字逐字高亮滚动字幕，make_scroll_video 路径）+ 同名 sidecar `.txt`（约 1.6KB，发布文案 + 口播稿三段）。
+- 队列更新：seq6 status→`done`、video_path 已填；周目录 `README.md` 已刷新（seq6 行 done+成片路径）。
+- ffmpeg/模型 key 就绪，脚本打印 `[render] 完成` 正常退出，无异常无报错，EXIT=0，耗时约 2m28s。
+- 剩余晚间待渲染：seq 8/10/12/14（均为 evening，status=scripted）；W34 晚档 7 条已渲染 seq2/4/6，下一周晚间场继续推进 seq8。
+
 ## 2026-08-18 (周二, 周号 2026-W34)
 - 执行 `weekly_pipeline.py render --slot evening`（python 3.13.12）
 - 结果：**成功渲染 1 条**。当前周已切换为 **2026-W34**（W33 于 08-16 周日结束，其 seq14 随周切换未再补渲；本自动化按"本周"逻辑转入 W34）。脚本挑出 W34 下一个 `selected + status≠done + period=evening` 选题 = **seq 2 暂估成本冲了，利润没降反被罚**（monologue，晚档）。注：W34 seq1（公转私10万被查，dialogue）已于 08-17 由其他时段渲染完成。
