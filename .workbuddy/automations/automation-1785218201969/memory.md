@@ -115,5 +115,12 @@
 - 队列 seq3 status 已置为 `done`、`video_path` 回填；per-week `output/weekly/2026-W34/README.md` 已刷新。脚本自动确保 ffmpeg 与模型 key 就绪，无异常。
 - 剩余下午档待渲染：seq5/7/9/11/13（day 2-6，周三至周日 15:00 自动化继续）。
 
+## 2026-08-20 (周四, 周号 2026-W34)
+- 执行 `weekly_pipeline.py render --slot afternoon`（EXIT=0）。
+- 结果：**成功渲染 1 条**（非跳过）。本周W34队列已生成（14选题，seq1/3 已 done）。当前周四(day=3)下午档命中 seq7（社保入税后，按最低基数缴行吗，dialogue 双声）。
+- 产出：`output/weekly/2026-W34/videos/2026-W34-07-社保入税后_按最低基数缴行吗.mp4`（25,735,043字节≈25.7MB，1080x1920竖屏 GIF动态背景大字逐字高亮）；同名 sidecar `videos/2026-W34-07-社保入税后_按最低基数缴行吗.txt`（1665字节，含发布文案+口播稿）。
+- 队列 seq7 status 已置为 `done`、`video_path` 回填；per-week `output/weekly/2026-W34/README.md` 已刷新。脚本自动确保 ffmpeg 与模型 key 就绪，无异常。
+- 剩余下午档待渲染：seq9/11/13（day 4-6，周五至周日 15:00 自动化继续）。
+
 ## 历史
 - （暂无更早记录）
