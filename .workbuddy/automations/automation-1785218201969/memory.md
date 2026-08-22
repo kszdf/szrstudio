@@ -129,5 +129,12 @@
 - 队列 seq9 status 已置为 `done`、`video_path` 回填；per-week `output/weekly/2026-W34/README.md` 已刷新（seq9 显示 done+成片路径）。脚本自动确保 ffmpeg 与模型 key 就绪，无异常。
 - 剩余下午档待渲染：seq11/13（day 5-6，周六/周日 15:00 自动化继续）。
 
+## 2026-08-22 (周六, 周号 2026-W34)
+- 执行 `weekly_pipeline.py render --slot afternoon`（EXIT=0）。
+- 结果：**成功渲染 1 条**（非跳过）。本周W34队列已生成（14选题，seq1/3/5/7/9 已 done）。当前周六(day=5)下午档命中 seq11（老板低价卖房给公司，有风险吗，dialogue 双声）。
+- 产出：`output/weekly/2026-W34/videos/2026-W34-11-老板低价卖房给公司_有风险吗.mp4`（18,521,054字节≈18.5MB，1080x1920竖屏 GIF动态背景大字逐字高亮）；同名 sidecar `videos/2026-W34-11-老板低价卖房给公司_有风险吗.txt`（1241字节，含发布文案+口播稿）。
+- 队列 seq11 status 已置为 `done`、`video_path` 回填；per-week `output/weekly/2026-W34/README.md` 已刷新（seq11 显示 done+成片路径）。脚本自动确保 ffmpeg 与模型 key 就绪，无异常。
+- 剩余下午档待渲染：seq13（往来款挂账三年，税务盯上了，day 6，周日 15:00 自动化继续）。
+
 ## 历史
 - （暂无更早记录）

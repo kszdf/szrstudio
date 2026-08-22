@@ -46,6 +46,7 @@ APP_FILE = BASE / "app.html"   # 商用化新前端（接真实接口，顶替�
 PY310 = r"D:/heygem/py310/Scripts/python.exe"      # 出片网关线用 py310
 MAKE_AVATAR = BASE / "make_avatar_video.py"
 MAKE_SCROLL = BASE / "make_scroll_video.py"          # 不出镜·滚动字幕卡（男女对话）
+SCRIPT_EDIT = BASE / "auto_edit.py"                  # 成片后自动剪辑包装（fast/artistic/vlog/pip）
 PY313 = r"C:/Users/lenovo/.workbuddy/binaries/python/versions/3.13.12/python.exe"  # 滚动字幕卡用 3.13（自带 dashscope+Pillow+numpy）
 SCROLL_DEFAULT_GIF = r"C:/Users/lenovo/WorkBuddy/2026-07-27-09-14-15/videos/ocean_rolling_9x16_deepblue.gif"   # 用户默认 GIF 海景背景（已清理旧 20260721TP.gif 引用）
 SCROLL_MALE_VOICE = ""   # 新租户初始无自带声音；须由租户克隆/选择后显式传入
@@ -451,14 +452,21 @@ def start_render(name: str, model_id: str = "", provider: str = "heygem",
                  avatar_id: str | None = None, voice_mode: str = "official",
                  bg: str | None = None, title: str | None = None,
                  subtitle: str | None = None, bg_fit: str | None = None,
-                 tenant_id: int | None = None) -> dict:
+                 subtitle_style: str = "dynamic", subtitle_size: int | None = None,
+                 subtitle_outline: int | None = None, subtitle_position: str = "bottom",
+                 subtitle_lines: int | None = None, edit_style: str | None = None,
+                 bgm: str | None = None, tenant_id: int | None = None) -> dict:
     """出片入口。provider 默认 heygem（原本地流程，零改动）；
     provider=thirdparty 走第三方官方数字人，不动 HEYGEM 任何逻辑；
     provider=scroll 走不出镜·滚动字幕卡（男女对话），输出同一 VIDEO_DIR/<name>.mp4，下游无缝复用。"""
     if provider == "thirdparty":
         return _start_render_thirdparty(name, avatar_id, voice_mode)
     if provider == "scroll":
-        return _start_render_scroll(name, bg, title, subtitle, bg_fit=bg_fit, tenant_id=tenant_id)
+        return _start_render_scroll(name, bg, title, subtitle, bg_fit=bg_fit,
+                                     tenant_id=tenant_id, subtitle_style=subtitle_style,
+                                     subtitle_size=subtitle_size, subtitle_outline=subtitle_outline,
+                                     subtitle_position=subtitle_position, subtitle_lines=subtitle_lines,
+                                     bgm=bgm, edit_style=edit_style)
     models = {m["id"]: m for m in list_models()}
     if model_id in models:
         model_container = models[model_id]["container"]
@@ -483,11 +491,14 @@ def start_render(name: str, model_id: str = "", provider: str = "heygem",
     # 父进程读不到 (code=...) 与 [N] 步骤，导致 heygem_code 抓不到、进度条卡 0%。
     cmd = [PY310, "-u", str(MAKE_AVATAR), "--audio", str(audio), "--ass", str(ass),
            "--model", model_container, "--out", str(out), "--name", name]
+    if subtitle_style in ("dynamic", "minimal", "bubble"):
+        cmd += ["--subtitle-style", subtitle_style]
     job_id = "job_" + os.urandom(4).hex()
     with JOB_LOCK:
         JOBS[job_id] = {"status": "running", "step": "准备提交 HEYGEM",
                         "progress": 0, "video_url": None, "error": None}
     threading.Thread(target=_run_render, args=(job_id, cmd, out),
+                     kwargs={"edit_style": edit_style, "title": title, "subtitle": subtitle},
                      daemon=True).start()
     return {"ok": True, "job_id": job_id}
 
@@ -557,7 +568,14 @@ def _start_render_scroll(name: str, bg: str | None = None,
                           title: str | None = None,
                           subtitle: str | None = None,
                           bg_fit: str | None = None,
-                          tenant_id: int | None = None) -> dict:
+                          tenant_id: int | None = None,
+                          subtitle_style: str = "dynamic",
+                          subtitle_size: int | None = None,
+                          subtitle_outline: int | None = None,
+                          subtitle_position: str = "bottom",
+                          subtitle_lines: int | None = None,
+                          bgm: str | None = None,
+                          edit_style: str | None = None) -> dict:
     """不出镜·滚动字幕卡（男女对话）出片：调 make_scroll_video.py，输出到 VIDEO_DIR/<name>.mp4。
     下游（预览/字幕/质检/发布/队列）只认这个 mp4，与数字人出片零差别复用。"""
     p = project_path(name)
@@ -589,6 +607,24 @@ def _start_render_scroll(name: str, bg: str | None = None,
         cmd += ["--subtitle", subtitle.strip()[:40]]
     if bg_fit and bg_fit in ("fill", "contain", "stretch"):
         cmd += ["--bg-fit", bg_fit]
+    # 字幕风格深度参数化（make_scroll_video.py 已支持）
+    if subtitle_style in ("dynamic", "minimal", "bubble"):
+        cmd += ["--subtitle-style", subtitle_style]
+    if subtitle_size:
+        cmd += ["--subtitle-size", str(int(subtitle_size))]
+    if subtitle_outline is not None:
+        cmd += ["--subtitle-outline", str(int(subtitle_outline))]
+    if subtitle_position in ("bottom", "center"):
+        cmd += ["--subtitle-position", subtitle_position]
+    if subtitle_lines:
+        cmd += ["--subtitle-lines", str(int(subtitle_lines))]
+    # BGM：bgm 为情绪 key（light/inspire/calm/tech/suspense），映射到 bgm_library/<key>.mp3；缺失则跳过不报错
+    if bgm:
+        bgm_file = BASE / "bgm_library" / f"{bgm}.mp3"
+        if bgm_file.exists():
+            cmd += ["--bgm", str(bgm_file)]
+        else:
+            print(f"[WARN] BGM 库缺失 {bgm_file}，跳过背景音乐（请在 bgm_library/ 放入授权音乐）")
     job_id = "job_" + os.urandom(4).hex()
     with JOB_LOCK:
         JOBS[job_id] = {"status": "running", "step": "滚动字幕卡渲染中（TTS+合成）",
@@ -600,7 +636,31 @@ def _start_render_scroll(name: str, bg: str | None = None,
             "hint": "不出镜·滚动字幕卡（男女对话），无需 Docker 与模特"}
 
 
-def _run_render_scroll(job_id: str, cmd: list, out: Path):
+def _apply_edit_style(job_id, src_mp4, name, edit_style, title="", subtitle="", name_tag="慧根堂 · 财税军师"):
+    """成片后自动剪辑包装：调用 auto_edit.py 按 edit_style 生成最终片；失败/不支持则回退原片。"""
+    if not edit_style or edit_style not in ("fast", "artistic", "vlog", "pip"):
+        return src_mp4
+    tmp_out = VIDEO_DIR / f"{name}_edited.mp4"
+    cmd = [PY313, "-u", str(SCRIPT_EDIT), "--input", str(src_mp4),
+           "--output", str(tmp_out), "--edit-style", edit_style,
+           "--title", (title or "")[:20], "--subtitle", (subtitle or "")[:40],
+           "--name-tag", name_tag]
+    _update_job(job_id, f"🎬 自动剪辑包装（{edit_style}）中…", 96)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=600)
+        if proc.returncode == 0 and tmp_out.exists():
+            # 用剪辑包装片覆盖原片，保持下游（字幕/质检/发布）按 name.mp4 复用
+            os.replace(tmp_out, src_mp4)
+            return src_mp4
+        _update_job(job_id, f"⚠️ 剪辑包装失败，保留原片（{edit_style}）", 99)
+        return src_mp4
+    except Exception as e:  # noqa
+        _update_job(job_id, f"⚠️ 剪辑包装异常，保留原片：{str(e)[:60]}", 99)
+        return src_mp4
+
+
+def _run_render_scroll(job_id: str, cmd: list, out: Path, edit_style=None, title=None, subtitle=None):
     """运行 make_scroll_video.py，解析「成品」行标记完成。"""
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
@@ -617,7 +677,8 @@ def _run_render_scroll(job_id: str, cmd: list, out: Path):
                     _update_job(job_id, "✅ 滚动字幕卡已生成", 100)
         rc = proc.wait()
         if rc == 0 and out.exists():
-            rel = out.relative_to(VIDEO_DIR).as_posix()
+            final = _apply_edit_style(job_id, out, out.stem, edit_style, title, subtitle)
+            rel = final.relative_to(VIDEO_DIR).as_posix()
             with JOB_LOCK:
                 JOBS[job_id].update({"status": "done", "progress": 100,
                                      "video_url": f"/api/video/{rel}"})
@@ -631,7 +692,7 @@ def _run_render_scroll(job_id: str, cmd: list, out: Path):
             JOBS[job_id].update({"status": "error", "error": str(e)[:400]})
 
 
-def _run_render(job_id: str, cmd: list, out: Path):
+def _run_render(job_id: str, cmd: list, out: Path, edit_style=None, title=None, subtitle=None):
     # 后端主动轮询 HEYGEM /easy/query 拿真实进度（HEYGEM 渲染中 stdout 不会打 progress=）
     HEYGEM_API = "http://localhost:8383"
     last_heygem_poll = [0.0]   # 上次轮询时间
@@ -762,9 +823,10 @@ def _run_render(job_id: str, cmd: list, out: Path):
                         JOBS[job_id]["step"] = "📦 准备素材包 + 桥接音频到 HEYGEM…"
         proc.wait()
         if out.exists():
+            final = _apply_edit_style(job_id, out, out.stem, edit_style, title, subtitle)
             with JOB_LOCK:
                 # 用相对 VIDEO_DIR 的完整相对路径（含子目录，如 batch1/001.mp4），否则前端 GET 会丢子目录 404
-                rel = out.relative_to(VIDEO_DIR).as_posix()
+                rel = final.relative_to(VIDEO_DIR).as_posix()
                 JOBS[job_id].update({"status": "done", "progress": 100,
                                      "video_url": f"/api/video/{rel}",
                                      "step": "完成"})
@@ -1453,6 +1515,14 @@ class Handler(BaseHTTPRequestHandler):
                     bg=body.get("bg"),
                     title=body.get("title"),
                     subtitle=body.get("subtitle"),
+                    bg_fit=body.get("bg_fit"),
+                    subtitle_style=body.get("subtitle_style", "dynamic"),
+                    subtitle_size=body.get("subtitle_size"),
+                    subtitle_outline=body.get("subtitle_outline"),
+                    subtitle_position=body.get("subtitle_position", "bottom"),
+                    subtitle_lines=body.get("subtitle_lines"),
+                    edit_style=body.get("edit_style") or None,
+                    bgm=body.get("bgm"),
                     tenant_id=tid))
             if action == "publish":
                 return self._send_json(do_publish(name, generate=True))

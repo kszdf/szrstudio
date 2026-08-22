@@ -936,6 +936,61 @@
         </div>
       </div>
 
+      <!-- 字幕与剪辑设置 -->
+      <div class="render-edit" style="margin:14px 0 4px;padding:12px 14px;background:#fbfaff;border:1px solid #e9e3ff;border-radius:10px;">
+        <div style="font-weight:600;margin-bottom:10px;">🎬 字幕与剪辑设置</div>
+        <div style="display:flex;flex-wrap:wrap;gap:14px;">
+          <div style="flex:1 1 220px;min-width:200px;">
+            <div style="font-size:12.5px;color:#475569;margin-bottom:4px;">字幕风格</div>
+            <select id="subStyle" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;width:100%;">
+              <option value="dynamic">卡拉OK高亮（逐字跟随配音）</option>
+              <option value="minimal">纯净白字黑边</option>
+              <option value="bubble">气泡底衬（低反差更清晰）</option>
+            </select>
+          </div>
+          <div style="flex:1 1 120px;min-width:120px;">
+            <div style="font-size:12.5px;color:#475569;margin-bottom:4px;">字幕字号</div>
+            <input id="subSize" type="number" min="48" max="140" value="92" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;width:100%;">
+          </div>
+          <div style="flex:1 1 120px;min-width:120px;">
+            <div style="font-size:12.5px;color:#475569;margin-bottom:4px;">描边宽度</div>
+            <input id="subOutline" type="number" min="0" max="12" value="5" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;width:100%;">
+          </div>
+          <div style="flex:1 1 160px;min-width:160px;">
+            <div style="font-size:12.5px;color:#475569;margin-bottom:4px;">字幕位置</div>
+            <select id="subPos" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;width:100%;">
+              <option value="bottom">底部</option>
+              <option value="center">居中</option>
+            </select>
+          </div>
+          <div style="flex:1 1 120px;min-width:120px;">
+            <div style="font-size:12.5px;color:#475569;margin-bottom:4px;">最大行数</div>
+            <select id="subLines" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;width:100%;">
+              <option value="1">1 行</option>
+              <option value="2">2 行</option>
+              <option value="3" selected>3 行</option>
+            </select>
+          </div>
+        </div>
+        <div style="font-size:12px;color:#94a3b8;margin:10px 0 4px;">剪辑风格（成片后自动包装；滚动字幕卡支持全部，数字人支持快节奏/文艺/vlog）</div>
+        <select id="editStyle" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;width:100%;max-width:560px;">
+          <option value="">不剪辑（原片直出）</option>
+          <option value="fast">快节奏卡点（品牌片头+动感+CTA片尾）</option>
+          <option value="artistic">文艺电影感（黑边+暖调+暗角）</option>
+          <option value="vlog">日常 vlog 框（圆角+姓名条）</option>
+          <option value="pip">画中画混剪（需副视频，未提供则跳过）</option>
+        </select>
+          <div style="font-size:12px;color:#94a3b8;margin:10px 0 4px;">背景音乐（需订阅授权曲库，放入 bgm_library/；缺文件则自动跳过）</div>
+          <select id="bgmSel" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;width:100%;max-width:560px;">
+            <option value="">无 BGM（纯人声）</option>
+            <option value="light">轻快（口播/知识类）</option>
+            <option value="inspire">励志（案例/成果）</option>
+            <option value="calm">舒缓（政策解读）</option>
+            <option value="tech">科技感（数据/系统）</option>
+            <option value="suspense">悬疑（风险/稽查）</option>
+          </select>
+      </div>
+
       <div class="progress"><i id="renderBar"></i></div>
       <div id="renderStep" class="tip"></div>
       <div class="tip">本地数字人 / 第三方出片需 Docker 或平台账号；选「📜 滚动字幕卡」则无需 Docker 与模特，自动生成男女双声 + 滚动字幕。出片后可在右侧预览，下游字幕/质检/发布链路通用。</div>
@@ -2100,6 +2155,14 @@ $("renderBtn").addEventListener("click",async()=>{
     body.title=$("scrollTitle")?($("scrollTitle").value||""):"";
     body.subtitle=$("scrollSubtitle")?($("scrollSubtitle").value||""):"";
   }
+  // 字幕与剪辑设置透传
+  body.subtitle_style=$("subStyle")?($("subStyle").value||"dynamic"):"dynamic";
+  body.subtitle_size=parseInt(($("subSize")?($("subSize").value):"")||"92",10);
+  body.subtitle_outline=parseInt(($("subOutline")?($("subOutline").value):"")||"5",10);
+  body.subtitle_position=$("subPos")?($("subPos").value||"bottom"):"bottom";
+  body.subtitle_lines=parseInt(($("subLines")?($("subLines").value):"")||"3",10);
+  body.edit_style=$("editStyle")?($("editStyle").value||""):"";
+  body.bgm=$("bgmSel")?($("bgmSel").value||""):"";
   const r=await fetch("/api/project/"+encodeURIComponent(currentName)+"/render",{method:"POST",
     headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
   const d=await r.json();
