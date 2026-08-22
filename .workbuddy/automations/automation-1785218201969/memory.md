@@ -122,5 +122,12 @@
 - 队列 seq7 status 已置为 `done`、`video_path` 回填；per-week `output/weekly/2026-W34/README.md` 已刷新。脚本自动确保 ffmpeg 与模型 key 就绪，无异常。
 - 剩余下午档待渲染：seq9/11/13（day 4-6，周五至周日 15:00 自动化继续）。
 
+## 2026-08-21 (周五, 周号 2026-W34)
+- 执行 `weekly_pipeline.py render --slot afternoon`（EXIT=0）。
+- 结果：**成功渲染 1 条**（非跳过）。本周W34队列已生成（14选题，seq1/3/5/7 已 done）。当前周五(day=4)下午档命中 seq9（企业注销了，税务还能查你，dialogue 双声）。
+- 产出：`output/weekly/2026-W34/videos/2026-W34-09-企业注销了_税务还能查你.mp4`（25,012,456字节≈25.0MB，1080x1920竖屏 GIF动态背景大字逐字高亮）；同名 sidecar `videos/2026-W34-09-企业注销了_税务还能查你.txt`（1676字节，含发布文案+口播稿）。
+- 队列 seq9 status 已置为 `done`、`video_path` 回填；per-week `output/weekly/2026-W34/README.md` 已刷新（seq9 显示 done+成片路径）。脚本自动确保 ffmpeg 与模型 key 就绪，无异常。
+- 剩余下午档待渲染：seq11/13（day 5-6，周六/周日 15:00 自动化继续）。
+
 ## 历史
 - （暂无更早记录）
