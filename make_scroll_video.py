@@ -140,7 +140,7 @@ STROKE_FILL = (0, 0, 0)   # 黑边
 SUB_DONE = (255, 255, 255)   # 当前句已读：纯白（卡拉OK 高亮扫过，最清晰）
 SUB_TODO = (205, 212, 226)   # 当前句未读：浅蓝灰，提示"待读"，与纯白形成逐字高亮对比
 HIST_RGB = (190, 198, 214)   # 历史句基础：淡蓝灰（配合 alpha 逐渐淡出）
-BRAND_RGB = (255, 255, 255)  # 品牌条
+BRAND_RGB = (255, 201, 64)   # 品牌条（金色，与标题金呼应，深色背景上更高级）
 
 # 顶部固定标题（≤10字，自动生成，不随滚动；参照视频号常规大小，不喧宾夺主）
 TITLE_MAX_CHARS = 10
@@ -387,7 +387,77 @@ def gen_black_gold(t, w=W, h=H):
     val = np.clip(val, 0, 255)
     g = val[..., None]
     rgb = np.concatenate([g, g * 0.80, g * 0.22], axis=2)
+    # 金色对角光晕（缓慢流动，克制）
+    cx = w * 0.75 + 40.0 * np.sin(t * 0.32)
+    cy = h * 0.25 + 20.0 * np.cos(t * 0.26)
+    d2 = (xx - cx) ** 2 + (yy - cy) ** 2
+    glow = np.exp(-d2 / (2 * 170.0 ** 2))
+    gold = np.array([201, 162, 39], dtype=np.float32)[None, None, :]
+    rgb = rgb + glow[..., None] * gold * 0.22
     return np.clip(rgb, 0, 255).astype(np.uint8)
+
+
+def gen_deepnavy(t, w=W, h=H):
+    """深海军蓝黑渐变 + 金色微光 + 极淡光点上浮（财税高级感，对标财经大号）。
+    确定性程序化（仅依赖 t 相位），逐帧连贯不闪烁。"""
+    yy = np.arange(h)[:, None].astype(np.float32)
+    xx = np.arange(w)[None, :].astype(np.float32)
+
+    # 1) 深蓝黑垂直渐变（顶部微亮 → 底部更深），与标题区深蓝底纹条同色系
+    top = np.array([20, 34, 66], dtype=np.float32)   # #142242
+    bot = np.array([7, 12, 26], dtype=np.float32)    # #070C1A
+    f = np.clip(yy / h, 0, 1)
+    bg = top[None, None, :] * (1 - f)[..., None] + bot[None, None, :] * f[..., None]
+
+    # 2) 对角金色光晕（缓慢流动，极克制）
+    cx = w * 0.78 + 40.0 * np.sin(t * 0.35)
+    cy = h * 0.22 + 20.0 * np.cos(t * 0.28)
+    d2 = (xx - cx) ** 2 + (yy - cy) ** 2
+    glow = np.exp(-d2 / (2 * 160.0 ** 2))
+    gold = np.array([201, 162, 39], dtype=np.float32)[None, None, :]
+    bg = bg + glow[..., None] * gold * 0.30
+
+    # 3) 极淡金色光点（确定性伪随机，缓慢上浮，营造"数据星河"质感）
+    dots = np.zeros((h, w), dtype=np.float32)
+    for (px, py, amp, sp) in [(0.18, 0.62, 0.10, 0.20), (0.62, 0.80, 0.08, 0.16),
+                               (0.38, 0.45, 0.06, 0.24), (0.85, 0.55, 0.09, 0.18),
+                               (0.50, 0.30, 0.07, 0.22)]:
+        dx = px * w + 30.0 * np.sin(t * sp)
+        dy = (py * h - 20.0 * t * sp) % h
+        d2 = (xx - dx) ** 2 + (yy - dy) ** 2
+        dots = dots + np.exp(-d2 / (2 * 90.0 ** 2)) * amp
+    bg = bg + dots[..., None] * gold * 0.5
+
+    return np.clip(bg, 0, 255).astype(np.uint8)
+
+
+def gen_inkblue(t, w=W, h=H):
+    """墨蓝 + 极淡网格线 + 顶部光线扫过（数据/专业感，适合政策解读与干货清单）。"""
+    yy = np.arange(h)[:, None].astype(np.float32)
+    xx = np.arange(w)[None, :].astype(np.float32)
+
+    # 墨蓝渐变
+    top = np.array([13, 24, 46], dtype=np.float32)
+    bot = np.array([4, 8, 18], dtype=np.float32)
+    f = np.clip(yy / h, 0, 1)
+    bg = top[None, None, :] * (1 - f)[..., None] + bot[None, None, :] * f[..., None]
+
+    # 极淡网格（竖线 + 横线，透明度很低）
+    grid = np.zeros((h, w), dtype=np.float32)
+    step = 108
+    for gx in range(0, w, step):
+        grid = grid + np.exp(-((xx - gx) ** 2) / (2 * 2.0 ** 2)) * 0.10
+    for gy in range(0, h, step):
+        grid = grid + np.exp(-((yy - gy) ** 2) / (2 * 2.0 ** 2)) * 0.10
+    cyan = np.array([90, 160, 210], dtype=np.float32)[None, None, :]
+    bg = bg + grid[..., None] * cyan * 0.16
+
+    # 顶部光线斜扫（缓慢）
+    sweep = np.exp(-((xx - (w * 0.5 + 160.0 * np.sin(t * 0.3))) ** 2) / (2 * 60.0 ** 2))
+    sweep = sweep * np.clip(1.0 - yy / h, 0, 1)
+    bg = bg + sweep[..., None] * cyan * 0.10
+
+    return np.clip(bg, 0, 255).astype(np.uint8)
 
 
 # ---------------------------------------------------------------- 对话解析 + TTS
@@ -836,7 +906,7 @@ def _draw_title(draw, title, subtitle=""):
 
 
 # ---------------------------------------------------------------- 主流程
-def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
+def make_video(dialogue, out_path, bg_style="deepnavy", bg_image=None, dry=False,
                gap=0.28, no_intro=False, bgm=None, title=None, subtitle=None,
                bg_fit="fill",
                female_voice=FEMALE_VOICE, female_model=FEMALE_MODEL,
@@ -948,7 +1018,9 @@ def make_video(dialogue, out_path, bg_style="seaside", bg_image=None, dry=False,
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=flog, stderr=subprocess.STDOUT)
         n_frames = int(out_duration * FPS) + 2
         frame_bytes = W * H * 3
-        bg_func = gen_black_gold if bg_style == "blackgold" else gen_seaside
+        _BG_FUNCS = {"deepnavy": gen_deepnavy, "blackgold": gen_black_gold,
+                     "inkblue": gen_inkblue, "seaside": gen_seaside}
+        bg_func = _BG_FUNCS.get(bg_style, gen_deepnavy)
         try:
             for fi in range(n_frames):
                 tt = fi / FPS
@@ -1094,8 +1166,9 @@ def main():
     ap = argparse.ArgumentParser(description="滚动字幕卡短视频生成（不出镜·双声·卡拉OK）")
     ap.add_argument("--dialogue", required=True, help="文稿 txt：男女对话每行 女：/男： 开头；单人独白直接写文案（--default-role 指定 M/F）")
     ap.add_argument("--out", required=True, help="输出 mp4 路径")
-    ap.add_argument("--bg-style", default="seaside", choices=["seaside", "blackgold"],
-                    help="背景风格，固定为滚动海浪(seaside)，不再提供黑金等其他底色")
+    ap.add_argument("--bg-style", default="deepnavy",
+                    choices=["deepnavy", "blackgold", "inkblue", "seaside"],
+                    help="背景风格：deepnavy 深海军蓝(默认高级感) / blackgold 黑金 / inkblue 墨蓝网格 / seaside 浅海景(休闲)")
     ap.add_argument("--bg", default=None, help="自定义背景图片路径（覆盖 --bg-style）")
     ap.add_argument("--bg-fit", default="fill", choices=["fill", "contain", "stretch"],
                     help="背景缩放模式：fill=填充/覆盖(默认) contain=适应/留边 stretch=拉伸/变形")
