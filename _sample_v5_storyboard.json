@@ -1,0 +1,11 @@
+[
+  {"sentence":"很多老板月底一看账，利润虚高，就动起暂估成本的心思。","visual_type":"scene","title":"暂估成本的诱惑","tone":"risk","image_prompt":"企业老板在办公室盯着电脑上的财务报表，眉头微皱，略带焦虑","keywords":["暂估","虚高"]},
+  {"sentence":"头一步，先把存货和往来账实盘点清楚。","visual_type":"step","title":"账实盘点","tone":"neutral","image_prompt":"仓库里会计正在逐件清点存货并核对账面，严谨认真","keywords":["盘点"]},
+  {"sentence":"接着，把没有发票的暂估，一笔笔列出来。","visual_type":"step","title":"列出无票暂估","tone":"risk","image_prompt":"桌面上摊开一叠暂估入库单，其中没有对应发票的部分被红笔圈出","keywords":["发票"]},
+  {"sentence":"然后，用合同和入库单，把真实成本坐实。","visual_type":"step","title":"坐实真实成本","tone":"safe","image_prompt":"正式商业合同与入库单并排摆放，旁边盖着对勾章，安心感","keywords":["合同"]},
+  {"sentence":"光滞纳金，一天就是万分之五。","visual_type":"number","title":"滞纳一天多少","tone":"risk","highlight_num":"万分之五","num_sub":"每日滞纳","keywords":["滞纳金"]},
+  {"sentence":"这三样不齐，税务就不认你的成本。","visual_type":"list","title":"税务认成本三件套","tone":"risk","items":["合同","入库单","发票"],"keywords":["三样"]},
+  {"sentence":"小规模和一般纳税人的税负，差得不是一点半点。","visual_type":"table","title":"两种纳税人税负","tone":"neutral","table":{"head":["类型","征收率"],"rows":[["小规模","3%"],["一般纳税人","13%"]]},"keywords":["税负"]},
+  {"sentence":"这样列支，才睡得踏实。","visual_type":"quote","title":"收个口","tone":"safe","quote_text":"这样列支才踏实","keywords":["踏实"]},
+  {"sentence":"把账做干净，老板夜里才不慌。","visual_type":"scene","title":"干净账本安心","tone":"safe","image_prompt":"一本整洁的账本合上，老板在灯下露出安心的神情，温润沉稳","keywords":["账干净"]}
+]

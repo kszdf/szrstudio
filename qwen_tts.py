@@ -82,7 +82,82 @@ def synth(text, voice, out_path, model=DEFAULT_MODEL, speech_rate=DEFAULT_SPEECH
                 pass
             last_err = f"{type(e).__name__}: {e}" + (f" | last_error={le}" if le else "")
         time.sleep(2 * (i + 1))
-    sys.exit(f"合成失败（已重试 {retries} 次）: {last_err}")
+    raise RuntimeError(f"合成失败（已重试 {retries} 次）: {last_err}")
+
+
+def _split_sentences(text):
+    """按句末标点/换行拆分, 保留标点用于韵律判断。"""
+    import re as _re
+    parts = _re.split(r"([。！？\n])", text)
+    sents, buf = [], ""
+    for seg in parts:
+        if seg in "。！？\n":
+            if buf.strip():
+                sents.append(buf + seg)
+                buf = ""
+        else:
+            buf += seg
+    if buf.strip():
+        sents.append(buf)
+    return [s for s in sents if s.strip()]
+
+
+def _sentence_pace(sent, base_rate=0.92):
+    """返回 (speech_rate, pause_after_ms)。引导/结论/提醒句放慢并加长停顿, 列举密集句正常偏快。"""
+    slow_kw = ["先说清楚", "再提醒", "比如", "其实", "要注意", "还要提醒",
+               "别", "不能", "不是", "红线", "谨慎", "务必", "别抱"]
+    if any(k in sent for k in slow_kw):
+        rate, base = 0.82, 600
+    elif sent.count("、") >= 2:
+        rate, base = 1.0, 320
+    else:
+        rate, base = base_rate, 450
+    s = sent.rstrip()
+    if s.endswith(("？", "！", "?", "!")):
+        base += 150
+    return rate, base
+
+
+def synth_natural(text, voice, out_path, model=DEFAULT_MODEL, base_rate=0.92, retries=3):
+    """分句合成 + 逐句语速 + 句间静音, 解决'机械匀速无停顿'的 AI 痕迹。
+    引导/结论句放慢到 0.82 并加长停顿, 列举密集句保持 1.0, 其余 0.92。"""
+    import wave, os
+    if not voice:
+        raise ValueError(
+            "voice_id 为空：租户尚未克隆或选择声音。请先在「声音」页克隆专属音色或选择公开模板后再生成。"
+        )
+    sents = _split_sentences(text) or [text]
+    params = None
+    buf = bytearray()
+    tmp_files = []
+    try:
+        for i, s in enumerate(sents):
+            rate, pause = _sentence_pace(s, base_rate)
+            tmp = out_path + f".part{i}.wav"
+            synth(s, voice, tmp, model=model, speech_rate=rate,
+                  pitch_rate=1.0, volume=50, retries=retries)
+            with wave.open(tmp, "rb") as w:
+                if params is None:
+                    params = (w.getnchannels(), w.getsampwidth(), w.getframerate())
+                data = w.readframes(w.getnframes())
+                buf += data
+                if i < len(sents) - 1 and pause > 0:
+                    sr = params[2]
+                    n_sil = int(pause / 1000 * sr)
+                    buf += b"".join(b"\x00\x00" for _ in range(n_sil))
+            tmp_files.append(tmp)
+        from pathlib import Path as _P
+        _P(out_path).parent.mkdir(parents=True, exist_ok=True)
+        with wave.open(out_path, "wb") as w:
+            w.setnchannels(params[0]); w.setsampwidth(params[1]); w.setframerate(params[2])
+            w.writeframes(bytes(buf))
+        return out_path
+    finally:
+        for t in tmp_files:
+            try:
+                os.remove(t)
+            except OSError:
+                pass
 
 
 def batch(in_src, voice, outdir, model=DEFAULT_MODEL):

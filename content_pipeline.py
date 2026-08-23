@@ -36,7 +36,7 @@ import argparse
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from qwen_tts import synth, DEFAULT_VOICE_ID, DEFAULT_MODEL
+from qwen_tts import synth, synth_natural, DEFAULT_VOICE_ID, DEFAULT_MODEL
 from forbidden_words import build_guidance, scan as scan_forbidden, format_report, clean_script
 from model_providers import ensure_env, get_text_config, deepseek_chat
 ensure_env()  # 让 model_keys.env 里的 key 自动生效
@@ -152,7 +152,7 @@ def run_one(topic, out_dir, rewrite_req="", no_audio=False):
 
     print("[4/4] 千问TTS配音(老张v2音色)...")
     audio_path = out_dir / "04_音频.wav"
-    synth(clean_script(final), DEFAULT_VOICE_ID, str(audio_path), model=DEFAULT_MODEL)
+    synth_natural(clean_script(final), DEFAULT_VOICE_ID, str(audio_path), model=DEFAULT_MODEL)
     print(f"  已保存: {audio_path}")
     return final
 

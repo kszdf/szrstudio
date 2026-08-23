@@ -28,6 +28,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import urllib.request
 import uuid
 from pathlib import Path
@@ -57,7 +58,8 @@ ENTR = 0.6           # 入场动画时长(秒)
 SUB_Y = H - 200      # 字幕基准 y
 
 # 转场类型(按场景序号循环, 制造节奏变化, 破解"每幕都一样"的单调)
-TRANS_TYPES = ["wipe_lr", "wipe_tb", "zoom", "fade", "slide_lr", "iris"]
+TRANS_TYPES = ["wipe_lr", "wipe_tb", "zoom", "fade", "slide_lr", "iris",
+               "blur_fade", "flash", "push", "soft_rotate", "glitch", "luma"]
 # 插画风格轮替(每幕换一种观感, 但保持财税专业家族感, 不撞款)
 IMG_STYLES = [
     "扁平矢量商务插画，简洁几何化人物与场景",
@@ -65,6 +67,8 @@ IMG_STYLES = [
     "半色调双色 duotone 财经插画，现代克制",
     "写实电影感插画，景深与明暗光影",
     "手绘线条信息图插画，清爽专业",
+    "商务极简扁平插画，大量留白，低饱和高级灰，克制专业",
+    "新中式禅意插画，水墨留白意境，温润玉色，沉稳大气",
 ]
 
 # ============================== 字体 ==============================
@@ -77,18 +81,47 @@ def font(size, kind="hei"):
     return _F[key]
 
 # ============================== 配色(情绪, 用于降级占位/数字强调) ==============================
+# ============================== 包装主题预设 (借鉴开拍"网感模板") ==============================
+# 每套含 risk/safe/neutral 三档配色(保留风险红/合规绿语义) + 动效组合
+STYLE_PRESETS = {
+    "财经严谨": {
+        "risk":    dict(bg_top=(30, 14, 16), bg_bot=(52, 24, 28), accent=(244, 63, 63), accent2=(251, 191, 191), glow=(190, 40, 40)),
+        "safe":    dict(bg_top=(10, 26, 30), bg_bot=(16, 46, 50), accent=(16, 185, 129), accent2=(153, 246, 206), glow=(16, 150, 100)),
+        "neutral": dict(bg_top=(14, 22, 42), bg_bot=(30, 40, 58), accent=(245, 158, 11), accent2=(254, 215, 110), glow=(200, 140, 30)),
+        "entrance": "fade_scale", "dual_line": True, "kw_pop": True, "cover": "dark",
+    },
+    "带货活力": {
+        "risk":    dict(bg_top=(34, 12, 22), bg_bot=(60, 20, 46), accent=(244, 63, 94), accent2=(252, 165, 195), glow=(200, 40, 90)),
+        "safe":    dict(bg_top=(12, 30, 24), bg_bot=(20, 54, 42), accent=(16, 200, 140), accent2=(165, 250, 215), glow=(16, 160, 110)),
+        "neutral": dict(bg_top=(26, 12, 44), bg_bot=(52, 24, 78), accent=(236, 72, 153), accent2=(249, 168, 212), glow=(200, 50, 130)),
+        "entrance": "slide_in", "dual_line": True, "kw_pop": True, "cover": "vivid",
+    },
+    "简约高级": {
+        "risk":    dict(bg_top=(34, 22, 24), bg_bot=(52, 34, 36), accent=(220, 90, 90), accent2=(240, 200, 200), glow=(180, 70, 70)),
+        "safe":    dict(bg_top=(22, 34, 30), bg_bot=(36, 52, 46), accent=(90, 190, 160), accent2=(200, 235, 220), glow=(70, 160, 130)),
+        "neutral": dict(bg_top=(24, 24, 28), bg_bot=(40, 40, 46), accent=(220, 220, 225), accent2=(170, 170, 180), glow=(130, 130, 140)),
+        "entrance": "fade_scale", "dual_line": False, "kw_pop": True, "cover": "minimal",
+    },
+}
+STYLE_NAME = "财经严谨"   # 全局, main 按 --style 覆盖
+
 def get_palette(tone):
-    if tone == "risk":
-        return dict(bg_top=(30, 14, 16), bg_bot=(52, 24, 28), accent=(244, 63, 63),
-                    accent2=(251, 191, 191), glow=(190, 40, 40))
-    if tone == "safe":
-        return dict(bg_top=(10, 26, 30), bg_bot=(16, 46, 50), accent=(16, 185, 129),
-                    accent2=(153, 246, 206), glow=(16, 150, 100))
-    return dict(bg_top=(14, 22, 42), bg_bot=(30, 40, 58), accent=(245, 158, 11),
-                accent2=(254, 215, 110), glow=(200, 140, 30))
+    pres = STYLE_PRESETS.get(STYLE_NAME, STYLE_PRESETS["财经严谨"])
+    return pres.get(tone, pres["neutral"])
+
+def _pop(local, appear, dur=0.20):
+    """关键词弹入缩放因子: 1 -> 1.22 -> 1 (三角 overshoot), 借鉴开拍 pop 强调。"""
+    x = (local - appear) / dur
+    if x <= 0 or x >= 1:
+        return 1.0
+    return 1.0 + 0.22 * (1 - abs(2 * x - 1))
 
 WHITE = (250, 251, 253)
 MUTED = (200, 210, 222)
+
+# 双声对话音色: 男=张老师克隆音(zhangc2), 女=江老师克隆音(jiangnv3), 均 cosyvoice-v3-plus
+MALE_VOICE = "cosyvoice-v3-plus-zhangc2-28a7c3541e1c45518a03046c11baeb1d"
+FEMALE_VOICE = "cosyvoice-v3-plus-jiangnv3-991b204c1d564ac7a60f0cb9a8fd78bd"
 
 # ============================== 缓动 ==============================
 def ease(p):
@@ -216,28 +249,113 @@ def draw_title(img, text, cx, cy, size, fill, anchor="mm"):
     d.text((cx + 4, cy + 4), text, font=f, fill=(0, 0, 0), anchor=anchor)
     d.text((cx, cy), text, font=f, fill=fill, anchor=anchor)
 
-def draw_number(img, num, sub, cx, cy, accent):
+def draw_number(img, num, sub, cx, cy, accent, scale=1.0):
     d = ImageDraw.Draw(img)
     fn = font(190, "sans")
-    d.text((cx + 5, cy + 5), num, font=fn, fill=(0, 0, 0), anchor="mm")
-    d.text((cx, cy), num, font=fn, fill=accent, anchor="mm")
+    if scale != 1.0:
+        pad = 280
+        layer = Image.new("RGBA", (2 * pad, 2 * pad), (0, 0, 0, 0))
+        ld = ImageDraw.Draw(layer)
+        ld.text((pad, pad), num, font=fn, fill=accent, anchor="mm")
+        nw, nh = int(2 * pad * scale), int(2 * pad * scale)
+        layer = layer.resize((nw, nh), Image.LANCZOS)
+        img.alpha_composite(layer, (cx - nw // 2, cy - nh // 2))
+    else:
+        d.text((cx + 5, cy + 5), num, font=fn, fill=(0, 0, 0), anchor="mm")
+        d.text((cx, cy), num, font=fn, fill=accent, anchor="mm")
     if sub:
         fs = font(46, "hei")
         d.text((cx, cy + 150), sub, font=fs, fill=WHITE, anchor="mm")
 
-def draw_subtitle(img, text):
+def _split_fragments(line, keywords):
+    """把一行按关键词切成 [(文本, 是否关键词)] 片段, 关键词作为一个整体不拆开。"""
+    if not keywords:
+        return [(line, False)]
+    import re as _re
+    pat = "(" + "|".join(_re.escape(k) for k in keywords if k) + ")"
+    if len(pat) <= 2:
+        return [(line, False)]
+    parts = _re.split(pat, line)
+    frags = []
+    for p in parts:
+        if not p:
+            continue
+        if any(p == k for k in keywords if k):
+            frags.append((p, True))
+        else:
+            frags.append((p, False))
+    return frags
+
+
+def draw_text_fragments(d, text, cx, y, sz, pal, reveal=None, keywords=None,
+                        local=0.0, scdur=3.0, total_chars=1, char_start=0, align="center"):
+    """核心逐片段绘制: 非关键词白字黑描边; 关键词独立圆角胶囊(accent 底 + 白字), 二者不重叠。
+    align='center' 整行居中; 'left' 从 cx 起向右排。返回本行占用宽度。
+    关键词支持 pop 弹入(_pop), 弹入时胶囊与文字同步缩放。"""
+    f = font(sz, "hei")
+    line_w = d.textlength(text, font=f)
+    x = (cx - line_w / 2) if align == "center" else cx
+    kwpop = STYLE_PRESETS.get(STYLE_NAME, STYLE_PRESETS["财经严谨"]).get("kw_pop", True)
+    frags = _split_fragments(text, keywords)
+    pos = char_start
+    for seg, is_kw in frags:
+        seg_w = d.textlength(seg, font=f)
+        if reveal is not None:
+            vis = max(0, min(len(seg), int(reveal * total_chars) - pos))
+            if vis <= 0:
+                pos += len(seg); x += seg_w; continue
+            if vis < len(seg):
+                seg = seg[:vis]; seg_w = d.textlength(seg, font=f)
+        if is_kw:
+            appear = (pos / total_chars) * min(scdur, 0.5) if total_chars else 0
+            scale = _pop(local, appear) if kwpop else 1.0
+            kf = font(int(sz * scale), "hei")
+            kw_w = d.textlength(seg, font=kf)
+            pad_x, pad_y = sz * 0.16, sz * 0.14
+            box = [x - pad_x, y - sz * 0.60 - pad_y, x + kw_w + pad_x, y + sz * 0.60 + pad_y]
+            d.rounded_rectangle(box, radius=sz * 0.42, fill=pal["accent"])
+            d.text((x, y), seg, font=kf, fill=WHITE, anchor="ls",
+                   stroke_width=2, stroke_fill=(0, 0, 0))
+            x += kw_w
+        else:
+            d.text((x, y), seg, font=f, fill=WHITE, anchor="ls",
+                   stroke_width=7, stroke_fill=(0, 0, 0))
+            x += seg_w
+        pos += len(seg)
+    return line_w
+
+
+def draw_subtitle(img, text, pal, reveal=None, keywords=None, local=0.0, scdur=3.0):
+    """底部字幕: 白字黑描边; 关键词独立胶囊高亮(不覆盖白字); 双行网感排版; 打字机逐字。"""
+    pres = STYLE_PRESETS.get(STYLE_NAME, STYLE_PRESETS["财经严谨"])
+    dual = pres.get("dual_line", True)
     d = ImageDraw.Draw(img)
     lines = wrap(text, 15)
-    size = 52
-    lh = 74
-    total_h = len(lines) * lh
-    y0 = H - 150 - total_h + lh
     cx = W // 2
-    f = font(size, "hei")
+    total_chars = sum(len(l) for l in lines) or 1
+    shown = (max(0, min(total_chars, int(reveal * total_chars))) if reveal is not None
+             else total_chars)
+    n = len(lines)
+    lh = 74
+    base_size = 52
+    total_h = n * lh
+    y0 = H - 150 - total_h + lh
+    drawn = 0
     for i, ln in enumerate(lines):
+        sz = base_size
+        xoff = 0
+        if dual and n == 2 and i == 1:      # 双行网感: 副行小一号且右错
+            sz = 44
+            xoff = 70
         y = y0 + i * lh
-        d.text((cx, y), ln, font=f, fill=WHITE, anchor="mm",
-               stroke_width=7, stroke_fill=(0, 0, 0))
+        cx_line = cx + xoff
+        visible = ln[: max(0, shown - drawn)] if reveal is not None else ln
+        if visible:
+            draw_text_fragments(d, visible, cx_line, y, sz, pal,
+                                reveal=None, keywords=keywords, local=local,
+                                scdur=scdur, total_chars=total_chars,
+                                char_start=drawn, align="center")
+        drawn += len(ln)
 
 # ============================== 分镜(LLM + 规则) ==============================
 TEMPLATES = ["bigtext", "number", "compare", "checklist",
@@ -245,38 +363,72 @@ TEMPLATES = ["bigtext", "number", "compare", "checklist",
 
 SB_PROMPT = """你是财税口播短视频的分镜导演。下面是一段口播稿按序号切好的句子。
 为每个句子判断最适合的「视觉呈现类型(visual_type)」, 并给出对应内容。
-核心原则: 该是场景是场景, 该是表格是表格, 该是清单是清单, 不要一律生图。
 
-visual_type 取值与含义:
-- "scene": 内容讲「场景/情境/故事/人物」, 用一张扁平矢量商务插画表现。给 image_prompt(扁平矢量商务插画描述, 干净克制专业, 无文字无数字无字母)。
-- "table": 内容含「数据对比/税率/金额对照/比率」, 必须用表格才清晰。给 table{"head":[列1,列2],"rows":[[值,值],...]}。
-- "list": 内容讲「步骤/要点/清单/注意事项」, 适合打勾清单。给 items:[项1,项2,...](≤5项, 每项≤10字)。
-- "number": 内容聚焦「一个关键数字/日期/比率」, 适合数字大卡。给 highlight_num(原样如"500万"/"25%"/"5月31日") + num_sub(数字含义≤8字)。
-- "quote": 内容是「强警示语/金句/收口」, 适合大字卡。给 quote_text(≤14字)。
+核心原则（务必遵守，避免把视频做成枯燥的清单堆砌）:
+1. 该是场景是场景, 该是表格是表格, 该是清单是清单, 不要一律生图。
+2. 跨多句的「有序流程/步骤」(如"第一步盘点→接着函证→然后补凭证")——每一步单独成一张 step 卡并标 step_no, 严禁把整段流程压进一张 list 卡。
+3. 对比/反比句(如"账上有的、实物没有, 那就是漏洞")用 scene, 不要拆成 list。
+4. list 只用于「同一句内」的并列要点/注意事项; 凡需跨句顺承或对比的内容, 都用 step 或 scene, 绝不 list。
 
-每句还要给: title(顶部精炼主标题≤12字, 口语化抓人)、tone("risk"风险/"safe"合规/"neutral"中性)。
+visual_type 取值:
+- "scene": 讲「场景/情境/故事/人物/对比」, 用一张扁平矢量商务插画表现。给 image_prompt(扁平矢量商务插画描述, 干净克制专业, 无文字无数字无字母)。
+- "table": 含「两组以上数字对照/税率/金额对照」, 必须用表格才清晰。给 table{"head":[列1,列2],"rows":[[值,值],...]}。
+- "list": 仅限「单句内的并列要点/注意事项」, 给 items:[项1,项2,...](≤5项, 每项≤10字)。
+- "step": 是「有序流程中的某一环」, 与上下句构成先后顺序。给 step_no(第几步, 从1起, 整数) + image_prompt(同 scene 要求)。此类型不写 items。
+- "number": 聚焦「一个关键数字/日期/比率」, 给 highlight_num(原样如"500万"/"25%"/"5月31日") + num_sub(数字含义≤8字)。
+- "quote": 真正短促有力的「警示语/金句/收口」(≤14字), 给 quote_text。同一视频连续 quote 不超过2张。
 
-判断优先级: 有两组以上数字对照 → table; 单句含关键数字/日期 → number; 列要点步骤 → list; 短促警示/金句(且非以上) → quote; 其余讲人/事/情境 → scene。注意 quote 仅用于真正短促有力的金句, 同一视频连续 quote 不超过2张, 避免整片都是文字卡。
+每句还要给: title(顶部精炼主标题≤12字, 口语化抓人, 不要千篇一律写"财税干货")、tone("risk"风险/"safe"合规/"neutral"中性")、keywords(本句最该强调的 1-3 个词, 每词≤4字, 用于视频里高亮强调, 如["暂估","成本"]; 没有给 [])。
+
+判断优先级: 两组以上数字对照→table; 单句关键数字/日期→number; 单句内并列要点→list; 有序流程中的一环→step; 短促金句(且非以上)→quote; 讲人/事/情境/对比→scene。
 
 输出: 严格 JSON 数组, 每句一个元素, 不要解释或代码块:
-[{"idx":0,"visual_type":"scene","image_prompt":"...","title":"...","tone":"risk"},
- {"idx":1,"visual_type":"table","table":{"head":["项目","税率"],"rows":[["一般纳税人","13%"],["小规模","3%"]]},"title":"...","tone":"neutral"},
- {"idx":2,"visual_type":"list","items":["合同","入库单","发票"],"title":"...","tone":"safe"},
- {"idx":3,"visual_type":"number","highlight_num":"25%","num_sub":"综合税负","title":"...","tone":"risk"},
- {"idx":4,"visual_type":"quote","quote_text":"这样列支才稳","title":"...","tone":"safe"}]
+[{"idx":0,"visual_type":"scene","image_prompt":"...","title":"...","tone":"risk","keywords":["虚开","红线"]},
+ {"idx":1,"visual_type":"step","step_no":1,"image_prompt":"...","title":"...","tone":"neutral"},
+ {"idx":2,"visual_type":"table","table":{"head":["项目","税率"],"rows":[["一般纳税人","13%"],["小规模","3%"]]},"title":"...","tone":"neutral"},
+ {"idx":3,"visual_type":"list","items":["合同","入库单","发票"],"title":"...","tone":"safe"},
+ {"idx":4,"visual_type":"number","highlight_num":"25%","num_sub":"综合税负","title":"...","tone":"risk"},
+ {"idx":5,"visual_type":"quote","quote_text":"这样列支才稳","title":"...","tone":"safe"}]
 
 句子列表:
 """
 
+def _llm_call(fn, prompt, cfg, timeout=90, retries=2):
+    """带重试的 LLM 调用; 全部失败抛最后一个异常。"""
+    last = None
+    for _ in range(retries + 1):
+        try:
+            return fn(prompt, model=cfg["model"], key=cfg["key"],
+                      base_url=cfg["base_url"], timeout=timeout)
+        except Exception as e:  # 超时/网络/HTTP 错误均重试
+            last = e
+            time.sleep(2)
+    raise last
+
+
 def llm_storyboard(sentences):
+    """用 LLM 生成「叙事感知」分镜: 区分 有序流程(step) / 并列清单(list) / 对比(scene),
+    根治把内容拍平成一个清单卡的堆砌问题。带双模型降级 + 重试; 失败抛异常交由 main 回退规则。"""
     sys.path.insert(0, str(BASE))
     from model_providers import ensure_env, get_text_config, deepseek_chat
     ensure_env()
-    cfg = get_text_config()
     listing = "\n".join(f"{i}. {s}" for i, s in enumerate(sentences))
-    raw = deepseek_chat(SB_PROMPT + listing, model=cfg["model"], key=cfg["key"],
-                        base_url=cfg["base_url"], timeout=90)
-    raw = raw.strip()
+
+    # 模型降级链: 优先配置默认(deepseek) → 失败试 qwen → 再失败抛异常
+    used_provider = None
+    try:
+        cfg = get_text_config()            # 默认优先 deepseek
+        used_provider = cfg["provider"]
+        raw = _llm_call(deepseek_chat, SB_PROMPT + listing, cfg, timeout=90)
+    except Exception as e1:
+        try:
+            cfg = get_text_config(force_provider="qwen")
+            used_provider = "qwen"
+            raw = _llm_call(deepseek_chat, SB_PROMPT + listing, cfg, timeout=90)
+        except Exception as e2:
+            raise RuntimeError(f"LLM 分镜双模型均失败: {e1} | {e2}")
+    print(f"  [分镜模型] 使用 {used_provider} 成功")
+
     raw = re.sub(r"^```(json)?|```$", "", raw.strip(), flags=re.M).strip()
     data = json.loads(raw)
     out = {}
@@ -284,7 +436,9 @@ def llm_storyboard(sentences):
         idx = int(item.get("idx", -1))
         if 0 <= idx < len(sentences):
             vtype = str(item.get("visual_type", "scene"))
-            if vtype not in ("scene", "table", "list", "number", "quote"):
+            if vtype not in ("scene", "table", "list", "step", "number", "quote"):
+                vtype = "scene"
+            if vtype == "compare":          # 对比句渲染层走 scene
                 vtype = "scene"
             sc = {
                 "visual_type": vtype,
@@ -294,6 +448,8 @@ def llm_storyboard(sentences):
                 "highlight_num": str(item.get("highlight_num", ""))[:20],
                 "num_sub": str(item.get("num_sub", ""))[:12],
                 "quote_text": str(item.get("quote_text", ""))[:16],
+                "step_no": int(item.get("step_no", 0) or 0),
+                "keywords": [str(x)[:4] for x in (item.get("keywords") or [])][:3],
             }
             tb = item.get("table")
             if isinstance(tb, dict) and tb.get("head") and tb.get("rows"):
@@ -341,8 +497,14 @@ def rule_one(idx, sent, total):
     if nums and len(sent) <= 22:
         return {"visual_type": "number", "title": sent[:12], "tone": tone,
                 "highlight_num": nums[0], "num_sub": ""}
-    # 清单: 列要点/步骤/顿号列举/长句
-    if re.search(r"清单|要点|步骤|注意|一是|二是|三是|首先|其次|最后|、", sent) or len(sent) > 40:
+    # 五步法序列词 → step 流程卡(强调顺序推进, 不作并列平铺)
+    if re.search(r"头一步|第一步|第二步|第三步|第四步|第五步|接着|然后|再补|收尾|最后一步|第[①②③④⑤]步", sent):
+        title = re.sub(r"^(头一步|第一步|第二步|第三步|第四步|第五步|接着|然后|再补|收尾|最后一步)[，,，]?\s*", "", sent)
+        return {"visual_type": "step", "title": (title or sent)[:20], "tone": tone, "step_no": 0}
+    # 真并列列举 → list(仅明确列举引导词或收口总结词, 去掉"有顿号即list"的误判)
+    ENUM_LEAD = ["清单", "要点", "步骤", "一是", "二是", "三是", "首先", "其次", "比如以下", "包括"]
+    ENUM_TAIL = ["这都算", "这三处", "这类", "主要有", "分别是", "以下几类", "以下几处"]
+    if any(k in sent for k in ENUM_LEAD) or any(t in sent for t in ENUM_TAIL):
         parts = re.split(r"[、，,]", sent)
         items = [p.strip()[:10] for p in parts if p.strip()][:5]
         if len(items) >= 2:
@@ -353,6 +515,9 @@ def rule_one(idx, sent, total):
         if kw in sent:
             img_p, title = p, t
             break
+    # 默认标题用句子实义前 14 字, 避免反复出现"财税干货"显单调
+    if title == "财税干货":
+        title = sent[:14]
     return {"visual_type": "scene", "image_prompt": img_p, "title": title, "tone": tone}
 
 # ============================== 时间轴 ==============================
@@ -484,9 +649,50 @@ def _render_list(sc, pal, p, a):
         d.text((cx + 88, y), it, font=font(50, "hei"), fill=WHITE, anchor="lm")
     return img
 
+def _render_step(sc, pal, idx, local, scdur, base_img):
+    """五步法流程卡: 左侧大序号 + 右侧步骤名, 强调顺序推进(不作并列平铺)。"""
+    np_ = min(1.0, local / scdur) if scdur and scdur > 0 else 1.0
+    kb = idx % 5
+    if kb == 0:
+        sca, dx, dy = 1.0 + 0.07 * np_, 0, 0
+    elif kb == 1:
+        sca, dx, dy = 1.07 - 0.07 * np_, 0, 0
+    elif kb == 2:
+        sca, dx, dy = 1.14, int(70 * (0.5 - np_)), 0
+    elif kb == 3:
+        sca, dx, dy = 1.14, int(-70 * (0.5 - np_)), 0
+    else:
+        sca, dx, dy = 1.0, 0, 0
+    if base_img:
+        img = kb_zoom(base_img, sca, dx, dy).convert("RGBA")
+    else:
+        img = fallback_img(sc.get("tone", "neutral"))
+    dt, db = dark_overlay()
+    img = Image.alpha_composite(img, dt)
+    img = Image.alpha_composite(img, db)
+    d = ImageDraw.Draw(img)
+    sn = sc.get("step_no", 1)
+    st = sc.get("step_total", sn)
+    # 顶部步骤进度条: 强调"有序推进"而非并列平铺
+    bx, by, bw = 120, 130, W - 240
+    d.text((bx, by - 64), f"第 {sn} / {st} 步", font=font(44, "hei"), fill=WHITE, anchor="lm")
+    d.rounded_rectangle([bx, by, bx + bw, by + 22], radius=11, fill=(255, 255, 255, 45))
+    fillw = int(bw * (sn / st)) if st else bw
+    d.rounded_rectangle([bx, by, bx + fillw, by + 22], radius=11, fill=pal["accent"])
+    for k in range(1, st + 1):
+        px = bx + bw * (k - 1) // max(1, st - 1) if st > 1 else bx + bw // 2
+        col = pal["accent"] if k <= sn else (255, 255, 255, 80)
+        d.ellipse([px - 13, by - 13, px + 13, by + 35], fill=col)
+    d.text((235, 470), f"{sn:02d}", font=font(300, "hei"), fill=pal["accent"], anchor="mm")
+    d.text((235, 848), "STEP", font=font(70, "hei"), fill=(255, 255, 255), anchor="mm")
+    d.line([(520, 430), (520, 910)], fill=pal["accent"], width=6)
+    draw_title(img, sc.get("title", ""), 770, 570, 74, WHITE)
+    return img
+
 def _render_number(sc, pal, p, a):
     img = gradient_bg(pal)
-    draw_number(img, sc.get("highlight_num", ""), sc.get("num_sub", ""), W // 2, 780, pal["accent"])
+    draw_number(img, sc.get("highlight_num", ""), sc.get("num_sub", ""), W // 2, 780,
+                pal["accent"], scale=0.9 + 0.1 * a)
     draw_title(img, sc.get("title", ""), W // 2, 360, 80, WHITE)
     return img
 
@@ -505,38 +711,121 @@ def _render_quote(sc, pal, p, a):
     draw_title(img, sc.get("title", ""), W // 2, 360, 80, WHITE)
     return img
 
-def render_scene_frame(idx, local, sentences, tl, sb, imgs):
-    """按 visual_type 分支渲染某场景帧, 再做统一入场 + 底部字幕。"""
+def _avatar(d, cx, cy, r, label, accent, active):
+    """简洁圆形头像占位: 圆底 + 角色色环 + 首字; active 时加粗环表示正在说话。"""
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(18, 24, 38),
+              outline=accent, width=10 if active else 4)
+    if active:                                  # 正在说话: 外圈柔光
+        d.ellipse([cx - r - 12, cy - r - 12, cx + r + 12, cy + r + 12],
+                  outline=accent, width=4)
+    f = font(int(r * 0.95), "hei")
+    d.text((cx, cy), label, font=f, fill=WHITE, anchor="mm",
+           stroke_width=3, stroke_fill=(0, 0, 0))
+
+
+def _render_dialog(sc, pal, idx, local, scdur, role, sentence):
+    """男女对话: 上下分屏, 当前说话人侧亮 + 名牌 + 头像, 另一侧压暗;
+    底部气泡台词(角色名标签 + 关键词胶囊)。对话模式不调万相生图, 纯代码绘制。"""
+    img = gradient_bg(pal)
+    d = ImageDraw.Draw(img)
+    speaker = role                       # "F" / "M"
+    female_active = (speaker == "F")
+    male_active = (speaker == "M")
+
+    # 上方: 江老师(女)
+    _avatar(d, W // 2, 320, 120, "江", (255, 120, 170), female_active)
+    draw_title(img, "江老师 · 财税顾问", W // 2, 500, 50,
+               (255, 150, 190) if female_active else (150, 152, 162), anchor="mm")
+    # 下方: 张老师(男)
+    _avatar(d, W // 2, H // 2 + 320, 120, "张", (245, 158, 11), male_active)
+    draw_title(img, "张老师 · 财税专家", W // 2, H // 2 + 500, 50,
+               (245, 190, 80) if male_active else (150, 152, 162), anchor="mm")
+
+    # 压暗非说话侧
+    if not female_active:
+        d.rectangle([0, 0, W, H // 2], fill=(0, 0, 0, 120))
+    if not male_active:
+        d.rectangle([0, H // 2, W, H], fill=(0, 0, 0, 120))
+    # 中间分隔条
+    d.rectangle([0, H // 2 - 4, W, H // 2 + 4], fill=pal["accent"])
+
+    # 底部气泡
+    bw, bh = W - 140, 380
+    bx, by = 70, H - 440
+    d.rounded_rectangle([bx, by, bx + bw, by + bh], radius=30,
+                        fill=(245, 247, 252, 238), outline=pal["accent"], width=5)
+    tag = "江老师" if speaker == "F" else "张老师"
+    tag_col = (214, 56, 116) if speaker == "F" else (198, 134, 16)
+    d.rounded_rectangle([bx + 28, by + 26, bx + 28 + 150, by + 26 + 56],
+                        radius=18, fill=tag_col)
+    d.text((bx + 103, by + 54), tag, font=font(38, "hei"), fill=WHITE, anchor="mm")
+    # 台词(气泡内, 左对齐, 关键词胶囊, 角色色)
+    pal2 = dict(pal); pal2["accent"] = tag_col
+    lines = wrap(sentence, 15)
+    ly = by + 130
+    for ln in lines[:3]:
+        if ln.strip():
+            draw_text_fragments(d, ln, bx + 36, ly, 46, pal2,
+                                reveal=None, keywords=sc.get("keywords"),
+                                local=local, scdur=scdur,
+                                total_chars=max(1, len(sentence)),
+                                char_start=0, align="left")
+        ly += 70
+    return img
+
+
+def render_scene_frame(idx, local, sentences, tl, sb, imgs, trans=False):
+    """按 visual_type 分支渲染某场景帧, 再做统一入场 + 底部字幕。
+    trans=True 表示正处转场中, 入场交给转场处理, 避免重复动效(克制原则)。"""
     sc = sb[idx]
     vtype = sc.get("visual_type", "scene")
     pal = get_palette(sc.get("tone", "neutral"))
     p = min(1.0, local / ENTR)
     a = ease(p)
     scdur = (tl[idx][1] - tl[idx][0]) if idx < len(tl) else 3.0
+    if vtype == "dialog":
+        # 对话模式: 上下分屏 + 气泡台词, 字幕已在 _render_dialog 内绘制
+        role = sc.get("role", "M")
+        return _render_dialog(sc, pal, idx, local, scdur, role, sentences[idx]).convert("RGB")
     if vtype == "scene":
         img = _render_scene(sc, pal, idx, local, scdur, imgs[idx])
     elif vtype == "table":
         img = _render_table(sc, pal, p, a)
     elif vtype == "list":
         img = _render_list(sc, pal, p, a)
+    elif vtype == "step":
+        img = _render_step(sc, pal, idx, local, scdur, imgs[idx])
     elif vtype == "number":
         img = _render_number(sc, pal, p, a)
     elif vtype == "quote":
         img = _render_quote(sc, pal, p, a)
     else:
         img = _render_scene(sc, pal, idx, local, scdur, imgs[idx])
-    # 统一入场: 整帧缩放淡入
-    sca = 1.0 + (1 - a) * 0.05
-    if sca != 1.0:
-        nw, nh = int(W * sca), int(H * sca)
-        resized = img.resize((nw, nh), Image.LANCZOS)
-        framed = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-        framed.alpha_composite(resized, ((W - nw) // 2, (H - nh) // 2))
-        img = framed
-    if a < 1:
-        fade = Image.new("RGBA", (W, H), (0, 0, 0, int(120 * (1 - a))))
-        img = Image.alpha_composite(img, fade)
-    draw_subtitle(img, sentences[idx])
+    # 统一入场(转场进行中时跳过, 交给转场)
+    if not trans:
+        estyle = STYLE_PRESETS.get(STYLE_NAME, STYLE_PRESETS["财经严谨"]).get("entrance", "fade_scale")
+        if estyle == "slide_in":
+            off = int((1 - a) * 60)
+            moved = Image.new("RGBA", (W, H))
+            moved.alpha_composite(img.convert("RGBA"), (off, 0))
+            img = moved
+        else:  # fade_scale
+            sca = 1.0 + (1 - a) * 0.04
+            if sca != 1.0:
+                nw, nh = int(W * sca), int(H * sca)
+                resized = img.resize((nw, nh), Image.LANCZOS)
+                framed = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+                framed.alpha_composite(resized, ((W - nw) // 2, (H - nh) // 2))
+                img = framed
+        if a < 1:
+            fade = Image.new("RGBA", (W, H), (0, 0, 0, int(120 * (1 - a))))
+            img = Image.alpha_composite(img, fade)
+    # 字幕: scene/step 用打字机逐字(旁白同步感), 其余淡入; 关键词高亮
+    kw = sc.get("keywords")
+    if vtype in ("scene", "step"):
+        draw_subtitle(img, sentences[idx], pal, reveal=p, keywords=kw, local=local, scdur=scdur)
+    else:
+        draw_subtitle(img, sentences[idx], pal, reveal=None, keywords=kw, local=local, scdur=scdur)
     return img.convert("RGB")
 
 def wipe_mask(prog):
@@ -606,15 +895,58 @@ def apply_transition(prev, cur, prog, ttype):
     if ttype == "zoom":
         sca = 1.14 - 0.14 * p
         nw, nh = int(W * sca), int(H * sca)
-        zd = cur.resize((nw, nh), Image.LANCZOS)
-        cm = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-        cm.alpha_composite(zd, ((W - nw) // 2, (H - nh) // 2))
-        return _composite_masked(prev, cm, None, int(255 * p))
+        zd = cur.resize((nw, nh), Image.LANCZOS).convert("RGBA")
+        # 居中裁剪回 W×H, 避免 alpha_composite 的偏移/尺寸不匹配
+        left, top = (nw - W) // 2, (nh - H) // 2
+        zd = zd.crop((left, top, left + W, top + H))
+        return _composite_masked(prev, zd, None, int(255 * p))
     if ttype == "slide_lr":
         off = int(W * (1 - p))
         cm = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         cm.alpha_composite(cur.convert("RGBA"), (off, 0))
         return Image.alpha_composite(prev.convert("RGBA"), cm).convert("RGB")
+    if ttype == "blur_fade":
+        prev_b = prev.convert("RGBA").filter(ImageFilter.GaussianBlur(10 * (1 - p)))
+        cur_b = cur.convert("RGBA").filter(ImageFilter.GaussianBlur(10 * p))
+        return _composite_masked(prev_b, cur_b, None, int(255 * p))
+    if ttype == "flash":
+        base = _composite_masked(prev, cur, None, int(255 * p))
+        intensity = int(200 * (1 - abs(2 * p - 1)))
+        if intensity > 0:
+            base = Image.alpha_composite(
+                base.convert("RGBA"),
+                Image.new("RGBA", (W, H), (255, 255, 255, intensity))).convert("RGB")
+        return base
+    if ttype == "push":
+        off = int(W * (1 - p))
+        pm = Image.new("RGBA", (W, H))
+        pm.alpha_composite(prev.convert("RGBA"), (-off, 0))
+        cm = Image.new("RGBA", (W, H))
+        cm.alpha_composite(cur.convert("RGBA"), (off, 0))
+        return Image.alpha_composite(pm, cm).convert("RGB")
+    if ttype == "soft_rotate":
+        ang = (1 - p) * 9
+        rc = cur.convert("RGBA").rotate(ang, resample=Image.BICUBIC, center=(W // 2, H // 2))
+        return _composite_masked(prev, rc, None, int(255 * p))
+    if ttype == "glitch":
+        base = _composite_masked(prev, cur, None, int(255 * p))
+        if 0.15 < p < 0.85:
+            curc = cur.convert("RGBA")
+            r, g, b, al = curc.split()
+            sh = int(26 * (1 - abs(2 * p - 1)))
+            r2 = ImageChops.offset(r, sh, 0)
+            g2 = ImageChops.offset(g, -sh, 0)
+            gl = Image.merge("RGBA", (r2, g2, b, al))
+            base = Image.alpha_composite(base.convert("RGBA"), gl).convert("RGB")
+        return base
+    if ttype == "luma":
+        base = _composite_masked(prev, cur, None, int(255 * p))
+        dip = int(70 * (1 - abs(2 * p - 1)))
+        if dip > 0:
+            base = Image.alpha_composite(
+                base.convert("RGBA"),
+                Image.new("RGBA", (W, H), (0, 0, 0, dip))).convert("RGB")
+        return base
     # 默认 wipe_lr
     return _composite_masked(prev, cur, wipe_mask(prog))
 
@@ -629,25 +961,147 @@ def render_frame(t, sentences, tl, sb, imgs):
     if cur > 0 and local < TRANS:
         ttype = TRANS_TYPES[(cur - 1) % len(TRANS_TYPES)]
         prev = render_scene_frame(cur - 1, (tl[cur - 1][1] - tl[cur - 1][0]) - 0.001,
-                                  sentences, tl, sb, imgs)
-        curf = render_scene_frame(cur, local, sentences, tl, sb, imgs)
+                                  sentences, tl, sb, imgs, trans=True)
+        curf = render_scene_frame(cur, local, sentences, tl, sb, imgs, trans=True)
         return apply_transition(prev, curf, local / TRANS, ttype)
     return render_scene_frame(cur, local, sentences, tl, sb, imgs)
+
+
+# ============================== 对话模式(男女双声) ==============================
+def parse_dialogue(text):
+    """解析剧本: 以 女：/男：(或 江：/张：) 开头的行识别角色, 其余行续接上一句。
+    返回 [{'role':'F'/'M','text':...}, ...]"""
+    import re
+    segs, cur = [], None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        m = re.match(r"^(女|男|江|张)\s*[：:]\s*(.*)$", line)
+        if m:
+            who, content = m.group(1), m.group(2).strip()
+            role = "F" if who in ("女", "江") else "M"
+            if cur and cur["role"] == role:
+                cur["text"] += content
+            else:
+                cur = {"role": role, "text": content}
+                segs.append(cur)
+        else:
+            if cur:
+                cur["text"] += line
+            else:
+                cur = {"role": "M", "text": line}
+                segs.append(cur)
+    return [s for s in segs if s["text"].strip()]
+
+
+def _synth_segment_subprocess(text, voice, out_path, timeout=90, retries=3):
+    """子进程跑 synth_natural, 带超时(防 dashscope 网络卡死无限挂起) + 重试 + 断点续传。
+    已知坑: jiangnv3 女声对 '那[，]?我' 邻接会返回异常小文件/None, 自动改写('那个，我')救活。
+    返回 True=已得有效音频(含续传命中), False=彻底失败。"""
+    import re as _re
+    MIN_VALID = 6000          # 真实语音(即便只有'嗯')>6KB; 崩坏输出仅2-4KB
+    op = Path(out_path)
+    if op.exists() and op.stat().st_size > MIN_VALID:
+        return True           # 续传命中, 跳过
+    gpt_dir = str(BASE).replace("\\", "\\\\")
+    candidates = [text]
+    # 破 jiangnv3 女声 '那[标点/省略号]?我' 邻接抽风: 那与我之间插'个，'
+    fixed = _re.sub(r"那[，。…、：；\s]*我", "那个，我", text)
+    if fixed != text:
+        candidates.append(fixed)
+    last = ""
+    for cand in candidates:
+        code = (
+            "import sys; sys.path.insert(0, r'%s');"
+            "from qwen_tts import synth_natural;"
+            "synth_natural(%r, %r, %r)"
+        ) % (gpt_dir, cand, voice, str(out_path))
+        for attempt in range(retries):
+            try:
+                r = subprocess.run([sys.executable, "-c", code], timeout=timeout,
+                                   capture_output=True, text=True, cwd=str(BASE), check=False)
+                if op.exists() and op.stat().st_size > MIN_VALID:
+                    return True
+                last = (r.stderr or r.stdout or "")[-300:]
+            except subprocess.TimeoutExpired:
+                last = f"超时({timeout}s)"
+            try:                                    # 清半截/崩坏文件, 下次重来
+                if op.exists() and op.stat().st_size <= MIN_VALID:
+                    op.unlink()
+            except OSError:
+                pass
+            time.sleep(1)
+    print(f"  [!] 段落合成失败(已重试并改写): {text[:22]} | {last}")
+    return False
+
+
+def build_dialogue_audio(segments, out_wav, gap_ms=350):
+    """逐轮用对应音色合成(子进程带超时) + 轮间静音, ffmpeg 拼接为单轨。
+    断点续传: 已合成的 tN.wav 跳过(目录按 out 名确定, 重跑不重复烧额度)。
+    返回 (总时长秒, 每轮时间轴 [(start,end),...])。"""
+    key = hashlib.md5(str(out_wav).encode()).hexdigest()[:8]
+    tmp_dir = TMP / f"dlg_{key}"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    parts = []
+    for i, seg in enumerate(segments):
+        voice = FEMALE_VOICE if seg["role"] == "F" else MALE_VOICE
+        p = str(tmp_dir / f"t{i}.wav")
+        print(f"  [{i+1}/{len(segments)}] {seg['role']} 合成: {seg['text'][:20]}")
+        ok = _synth_segment_subprocess(seg["text"], voice, p, timeout=90, retries=3)
+        if not ok:
+            raise RuntimeError(
+                f"段落合成失败(已重试且尝试改写): {seg['text'][:30]}。"
+                f"可重跑本命令自动续传已成功段, 仅重试此段。")
+        r = subprocess.run([FFPROBE, "-v", "error", "-show_entries", "format=duration",
+                            "-of", "default=noprint_wrappers=1:nokey=1", p],
+                           capture_output=True, text=True)
+        parts.append((p, float(r.stdout.strip() or 1.0)))
+    # 拼接(轮间插入静音)
+    lines, cumul, tl = [], 0.0, []
+    for i, (p, dur) in enumerate(parts):
+        tl.append((cumul, cumul + dur))
+        lines.append(f"file '{p.replace(chr(92), '/')}'")
+        cumul += dur
+        if i < len(parts) - 1:
+            gp = str(tmp_dir / f"g{i}.wav")
+            subprocess.run([FFMPEG, "-y", "-f", "lavfi",
+                            "-i", f"anullsrc=r=22050:cl=mono:d={gap_ms/1000:.3f}",
+                            "-c:a", "pcm_s16le", gp], capture_output=True, text=True)
+            lines.append(f"file '{gp.replace(chr(92), '/')}'")
+            cumul += gap_ms / 1000.0
+    listf = tmp_dir / "list.txt"
+    listf.write_text("\n".join(lines), encoding="utf-8")
+    subprocess.run([FFMPEG, "-y", "-f", "concat", "-safe", "0", "-i", str(listf),
+                    "-c", "copy", str(out_wav)], capture_output=True, text=True)
+    return cumul, tl
+
 
 # ============================== 主流程 ==============================
 def main():
     ap = argparse.ArgumentParser(description="幕后音图解视频生成器 v4 (智能生图版)")
-    ap.add_argument("--script", required=True)
-    ap.add_argument("--audio", required=True)
+    ap.add_argument("--script", default="", help="口播稿 md(与 --storyboard 二选一)")
+    ap.add_argument("--audio", default="", help="音频文件(对话模式可省略, 自动双声生成)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--title", default="图解视频")
     ap.add_argument("--no-llm", action="store_true")
     ap.add_argument("--no-gen", action="store_true", help="跳过生图, 渐变占位(调试)")
     ap.add_argument("--regen", action="store_true", help="强制重生生图")
     ap.add_argument("--preview", type=int, default=0, help="只渲染前 N 帧")
+    ap.add_argument("--storyboard", default="", help="载入外部分镜JSON(含sentence/visual_type等), 跳过LLM与稿件解析")
+    ap.add_argument("--style", default="财经严谨", help="包装主题预设: 财经严谨/带货活力/简约高级")
+    ap.add_argument("--dialogue", action="store_true", help="对话模式: 脚本含 女：/男： 前缀, 自动双声拼接+上下分屏")
     args = ap.parse_args()
+    global STYLE_NAME
+    if args.style in STYLE_PRESETS:
+        STYLE_NAME = args.style
+    else:
+        print(f"[警告] 未知 --style '{args.style}', 用默认 '财经严谨'")
 
-    script_path, audio, out = Path(args.script), Path(args.audio), Path(args.out)
+    if not args.storyboard and not args.script:
+        sys.exit("需提供 --script 稿件 或 --storyboard 分镜JSON 之一")
+
+    out = Path(args.out)
     # 单实例互斥锁: 防后台重复启动造成写同一文件冲突
     import atexit
     _lock = out.with_suffix(".lock")
@@ -657,28 +1111,69 @@ def main():
     except FileExistsError:
         sys.exit(f"[互斥] 检测到锁文件 {_lock}, 疑似已有实例运行或上次异常残留。确认无重复进程后删除该文件再运行。")
     atexit.register(lambda: os.path.exists(str(_lock)) and os.remove(str(_lock)))
-    text = clean_script(script_path.read_text(encoding="utf-8"))
-    sentences = split_sentences(text)
-    if not sentences:
-        sys.exit("稿子解析后为空")
 
-    r = subprocess.run([FFPROBE, "-v", "error", "-show_entries", "format=duration",
-                        "-of", "default=noprint_wrappers=1:nokey=1", str(audio)],
-                       capture_output=True, text=True)
-    dur = float(r.stdout.strip())
-    tl = timeline(sentences, dur)
-    print(f"[1/6] 稿件 {len(sentences)} 句, 音频 {dur:.1f}s")
-
-    if args.no_llm:
-        sb = [rule_one(i, s, len(sentences)) for i, s in enumerate(sentences)]
-        print("[2/6] 规则分镜")
+    if args.dialogue:
+        # ---- 对话模式: 解析 女:/男: 前缀 → 双声拼接 → 分镜 ----
+        from model_providers import ensure_env
+        ensure_env()
+        raw = Path(args.script).read_text(encoding="utf-8")
+        segs = parse_dialogue(raw)
+        if not segs:
+            sys.exit("对话模式未解析到对话(需以 女：/男： 开头)")
+        dlg_audio = out.with_suffix(".dialogue.wav")
+        dur, tl = build_dialogue_audio(segs, str(dlg_audio))
+        args.audio = str(dlg_audio)
+        sentences = [s["text"] for s in segs]
+        sb = [{"visual_type": "dialog", "role": s["role"],
+               "tone": "neutral", "keywords": None} for s in segs]
+        print(f"[1/6] 对话 {len(segs)} 轮, 双声音频 {dur:.1f}s")
+        print("[2/6] 对话分镜(上下分屏 · 气泡台词)")
+    elif args.storyboard:
+        data = json.loads(Path(args.storyboard).read_text(encoding="utf-8"))
+        sentences = [it.get("sentence", "") for it in data]
+        sb = []
+        for it in data:
+            sc = {k: v for k, v in it.items()
+                  if k not in ("sentence", "idx", "start", "end")}
+            sb.append(sc)
+        print(f"[2/6] 载入外部分镜 {len(sb)} 句")
     else:
-        try:
-            sb = llm_storyboard(sentences)
-            print("[2/6] DeepSeek 分镜完成")
-        except Exception as e:
-            print(f"[2/6] LLM 分镜失败({e}), 回退规则")
+        text = clean_script(Path(args.script).read_text(encoding="utf-8"))
+        sentences = split_sentences(text)
+        if not sentences:
+            sys.exit("稿子解析后为空")
+
+    if not args.dialogue:
+        if not args.audio:
+            sys.exit("非对话模式需提供 --audio 音频文件")
+        r = subprocess.run([FFPROBE, "-v", "error", "-show_entries", "format=duration",
+                            "-of", "default=noprint_wrappers=1:nokey=1", str(args.audio)],
+                           capture_output=True, text=True)
+        dur = float(r.stdout.strip())
+        tl = timeline(sentences, dur)
+        print(f"[1/6] 稿件 {len(sentences)} 句, 音频 {dur:.1f}s")
+
+        if args.storyboard:
+            pass
+        elif args.no_llm:
             sb = [rule_one(i, s, len(sentences)) for i, s in enumerate(sentences)]
+            print("[2/6] 规则分镜")
+        else:
+            try:
+                sb = llm_storyboard(sentences)
+                print("[2/6] LLM 智能分镜完成")
+            except Exception as e:
+                print(f"[2/6] LLM 分镜失败({e}), 回退规则")
+                sb = [rule_one(i, s, len(sentences)) for i, s in enumerate(sentences)]
+
+    # 给 step 类型按出现顺序编号, 并记总数(顶部进度条用)
+    step_total = sum(1 for _sc in sb if _sc.get("visual_type") == "step")
+    _step = 0
+    for _sc in sb:
+        if _sc.get("visual_type") == "step":
+            _step += 1
+            _sc["step_no"] = _step
+            _sc["step_total"] = step_total
 
     sb_path = out.with_suffix(".v4storyboard.json")
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -690,7 +1185,7 @@ def main():
     # 生图(仅 scene 类型调万相)
     imgs = []
     scene_n = sum(1 for sc in sb if sc.get("visual_type") == "scene")
-    if args.no_gen:
+    if args.no_gen or args.dialogue:
         print("[3/6] 跳过生图(渐变占位)")
         for sc in sb:
             imgs.append(None if sc.get("visual_type") != "scene" else fallback_img(sc.get("tone", "neutral")))
@@ -730,7 +1225,7 @@ def main():
     print("[5/6] ffmpeg 合成 ...")
     mid = frames_dir / "mid.mp4"
     cmd = [FFMPEG, "-y", "-r", str(FPS), "-i", str(frames_dir / "f_%05d.png"),
-           "-i", str(audio), "-c:v", "libx264", "-pix_fmt", "yuv420p",
+           "-i", str(args.audio), "-c:v", "libx264", "-pix_fmt", "yuv420p",
            "-c:a", "aac", "-ar", "44100", "-shortest", str(mid)]
     rr = subprocess.run(cmd, capture_output=True, text=True)
     if rr.returncode != 0:
@@ -757,6 +1252,39 @@ def main():
     shutil.rmtree(frames_dir, ignore_errors=True)
     print(f"\n成品: {out}  ({out.stat().st_size // 1024} KB)")
     print(f"分镜审查: {sb_path}")
+    # 一键 AI 封面帧(借鉴开拍: 按场景模板自动填标题)
+    try:
+        cov = make_cover(sb, sentences, args.title)
+        cov_path = out.with_suffix(".cover.png")
+        cov.save(str(cov_path))
+        print(f"封面帧: {cov_path}")
+    except Exception as e:
+        print(f"[封面] 生成失败(不影响正片): {e}")
+
+def make_cover(sb, sentences, title):
+    """一键 AI 封面帧(借鉴开拍): 复用分镜 title 大字 + 背景渐变 + 风格装饰。"""
+    pres = STYLE_PRESETS.get(STYLE_NAME, STYLE_PRESETS["财经严谨"])
+    pal = pres["neutral"]
+    img = gradient_bg(pal)
+    d = ImageDraw.Draw(img)
+    d.text((W // 2, 300), "财税图解", font=font(46, "hei"), fill=pal["accent2"], anchor="mm")
+    cover_title = title
+    for sc in sb:
+        if sc.get("title"):
+            cover_title = sc["title"]
+            break
+    lines = wrap(cover_title, 9)
+    f = font(100, "hei")
+    y = 720
+    for ln in lines:
+        d.text((W // 2, y), ln, font=f, fill=WHITE, anchor="mm",
+               stroke_width=10, stroke_fill=(0, 0, 0))
+        y += 124
+    sub = (sentences[0][:16] if sentences else "")
+    if sub:
+        d.text((W // 2, y + 30), sub, font=font(40, "hei"), fill=pal["accent2"], anchor="mm")
+    d.line([(W // 2 - 220, y + 90), (W // 2 + 220, y + 90)], fill=pal["accent"], width=6)
+    return img
 
 if __name__ == "__main__":
     main()
