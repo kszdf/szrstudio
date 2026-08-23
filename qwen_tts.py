@@ -47,12 +47,13 @@ DEFAULT_MODEL = "cosyvoice-v3-plus"
 DEFAULT_SPEECH_RATE = 1.0
 
 
-def synth(text, voice, out_path, model=DEFAULT_MODEL, speech_rate=DEFAULT_SPEECH_RATE, pitch_rate=1.0, volume=50, retries=3):
-    """合成单条文本 -> 保存 wav。失败自动重试。"""
+def synth(text, voice, out_path, model=DEFAULT_MODEL, speech_rate=DEFAULT_SPEECH_RATE, pitch_rate=1.0, volume=50, retries=3, timeout=90):
+    """合成单条文本 -> 保存 wav。失败自动重试。带超时保护（防 dashscope 网络卡死无限阻塞）。"""
     if not voice:
         raise ValueError(
             "voice_id 为空：租户尚未克隆或选择声音。请先在「声音」页克隆专属音色或选择公开模板后再生成。"
         )
+    import threading
     from dashscope.audio.tts_v2 import SpeechSynthesizer, AudioFormat
 
     last_err = None
@@ -67,7 +68,21 @@ def synth(text, voice, out_path, model=DEFAULT_MODEL, speech_rate=DEFAULT_SPEECH
                 volume=volume,
                 language_hints=["zh"],
             )
-            audio_bytes = synth.call(text=text)
+            # 用守护线程 + 超时包裹 call，防止网络卡死时无限阻塞
+            box = {}
+            def _call():
+                try:
+                    box["audio"] = synth.call(text=text)
+                except Exception as _e:  # noqa: BLE001
+                    box["err"] = _e
+            t = threading.Thread(target=_call, daemon=True)
+            t.start()
+            t.join(timeout=timeout)
+            if t.is_alive():
+                raise TimeoutError(f"TTS 超时（>{timeout}s，网络或服务无响应）")
+            if "err" in box:
+                raise box["err"]
+            audio_bytes = box.get("audio")
             if not isinstance(audio_bytes, (bytes, bytearray)) or len(audio_bytes) < 1000:
                 raise RuntimeError(f"返回内容异常: type={type(audio_bytes).__name__}, len={len(audio_bytes) if hasattr(audio_bytes, '__len__') else '?'}")
             Path(out_path).parent.mkdir(parents=True, exist_ok=True)

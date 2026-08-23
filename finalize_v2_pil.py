@@ -35,9 +35,9 @@ FRAMES = TMP / "frames"
 FPS = 30
 
 # 字幕样式（匹配 build_package.py 生成的 ass）
-SUB_SIZE = 42              # 实际视频 720x1280 下的等效字号（ass 64 in 1920 → 42.7）
-SUB_BORDER = 4             # 黑边宽度
-SUB_MARGIN_BOTTOM = 53     # 底部边距（ass 80 in 1920 → 53.3）
+SUB_SIZE = 34              # 实际视频 720x1280 下的等效字号（从 42 调小，减少换行行数）
+SUB_BORDER = 3             # 黑边宽度
+SUB_MARGIN_BOTTOM = 46     # 底部边距（ass 80 in 1920 → 53.3）
 
 # —— 字幕字体（多字体 fallback，根治 emoji/缺字乱码）——
 # SimHei 不含 emoji 彩色字形，会把 ✅🔥💡 等渲染成方块(tofu)=视频字幕乱码；
@@ -162,6 +162,30 @@ def _wrap_text_to_width(draw, text, max_width):
 SUB_HILITE = (255, 212, 0)   # 逐字高亮色（金）：已读到/唱到的字高亮，未到的仍白
 SUB_HMARGIN = 40             # 字幕左右安全边距（px）
 
+# 关键词颜色标记（财税短视频：数字金额金色、风险词红色，其余白色）
+_RISK_WORDS = ["稽查", "虚开", "补税", "补缴", "追缴", "罚款", "滞纳金", "坐牢",
+               "刑责", "被查", "一查", "盯上", "查到", "补税", "风险"]
+_DIGIT_RE = __import__("re").compile(r"[0-9]+(?:[.,][0-9]+)?[%万亿]?[元]?")
+
+
+def _char_colors(text):
+    """返回与 text 等长的颜色标记列表：'gold'=数字金额 / 'red'=风险词 / 'normal'=普通。"""
+    n = len(text)
+    colors = ["normal"] * n
+    for m in _DIGIT_RE.finditer(text):
+        for i in range(m.start(), m.end()):
+            colors[i] = "gold"
+    for w in _RISK_WORDS:
+        start = 0
+        while True:
+            i = text.find(w, start)
+            if i < 0:
+                break
+            for j in range(i, i + len(w)):
+                colors[j] = "red"
+            start = i + len(w)
+    return colors
+
 
 def draw_subtitle(img, text, style="minimal", karaoke_event=None, t=None):
     """在帧底部居中画字幕。
@@ -172,6 +196,7 @@ def draw_subtitle(img, text, style="minimal", karaoke_event=None, t=None):
     text = clean_subtitle_text(text)
     if not text:
         return
+    colors = _char_colors(text)   # 关键词颜色标记（数字金/风险词红）
     draw = ImageDraw.Draw(img)
     W, H = img.size
     # 按实际帧宽度自动换行，防止长句溢出屏幕；karaoke 同步依赖字符顺序，换行不影响
@@ -192,21 +217,21 @@ def draw_subtitle(img, text, style="minimal", karaoke_event=None, t=None):
                 kflat.append(ch)
 
     char_idx = [0]
+    ci = [0]   # 颜色索引（与 karaoke 的 char_idx 独立，映射 colors）
     for i, ln in enumerate(lines):
         widths = [_char_width(draw, ch) for ch in ln]
         tw = sum(widths)
         x = (W - tw) // 2
         y = y0 + i * line_h
-        # bubble 气泡底衬
-        if style == "bubble":
-            pad = 20
-            bx, by = x - pad, y - 12
-            bw, bh = tw + pad * 2, line_h + 6
-            try:
-                draw.rounded_rectangle([bx, by, bx + bw, by + bh], radius=16,
-                                       fill=(0, 0, 0, 160))
-            except Exception:
-                draw.rectangle([bx, by, bx + bw, by + bh], fill=(0, 0, 0, 160))
+        # 半透明圆角底衬（默认开启，提升低反差场景可读性与高级感）
+        pad = 14
+        bx, by = x - pad, y - 10
+        bw, bh = tw + pad * 2, line_h + 4
+        try:
+            draw.rounded_rectangle([bx, by, bx + bw, by + bh], radius=14,
+                                   fill=(0, 0, 0, 120))
+        except Exception:
+            draw.rectangle([bx, by, bx + bw, by + bh], fill=(0, 0, 0, 120))
         cx = x
         for ch, w in zip(ln, widths):
             f = _font_for(ch)
@@ -214,13 +239,22 @@ def draw_subtitle(img, text, style="minimal", karaoke_event=None, t=None):
             if kflat and t is not None and char_idx[0] < len(kflat):
                 spoken = t >= kflat[char_idx[0]].get("e", 0)
             char_idx[0] += 1
+            kw = colors[ci[0]] if ci[0] < len(colors) else "normal"
+            ci[0] += 1
             # 黑边（多次偏移）
             for dx in range(-SUB_BORDER, SUB_BORDER + 1):
                 for dy in range(-SUB_BORDER, SUB_BORDER + 1):
                     if dx * dx + dy * dy <= SUB_BORDER * SUB_BORDER:
                         draw.text((cx + dx, y + dy), ch, font=f, fill=(0, 0, 0))
-            # 字体填充色：dynamic 已读到的字高亮金，其余白
-            fill = SUB_HILITE if (style == "dynamic" and spoken) else (255, 255, 255)
+            # 填充色优先级：风险词红 > 数字金 > dynamic 已读金 > 白
+            if kw == "red":
+                fill = (255, 82, 82)
+            elif kw == "gold":
+                fill = (255, 200, 60)
+            elif style == "dynamic" and spoken:
+                fill = SUB_HILITE
+            else:
+                fill = (255, 255, 255)
             draw.text((cx, y), ch, font=f, fill=fill)
             cx += w
 

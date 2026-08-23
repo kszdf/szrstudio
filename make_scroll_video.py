@@ -398,65 +398,86 @@ def gen_black_gold(t, w=W, h=H):
 
 
 def gen_deepnavy(t, w=W, h=H):
-    """深海军蓝黑渐变 + 金色微光 + 极淡光点上浮（财税高级感，对标财经大号）。
-    确定性程序化（仅依赖 t 相位），逐帧连贯不闪烁。"""
-    yy = np.arange(h)[:, None].astype(np.float32)
-    xx = np.arange(w)[None, :].astype(np.float32)
+    """深海军蓝渐变 + 金色光晕 + 光点上浮（财税高级感，对标财经大号）。
+    降采样(1/4)计算后上采样，性能优化：全图 exp 从 6 次降为低分辨率 6 次，速度提升 ~16 倍。"""
+    S = 4
+    sw, sh = w // S, h // S
+    yy = np.arange(sh)[:, None].astype(np.float32) * S
+    xx = np.arange(sw)[None, :].astype(np.float32) * S
 
-    # 1) 深蓝黑垂直渐变（顶部微亮 → 底部更深），与标题区深蓝底纹条同色系
-    top = np.array([20, 34, 66], dtype=np.float32)   # #142242
-    bot = np.array([7, 12, 26], dtype=np.float32)    # #070C1A
+    # 1) 深蓝渐变（提亮：可辨识的深蓝，非近黑）
+    top = np.array([30, 52, 100], dtype=np.float32)
+    bot = np.array([14, 26, 56], dtype=np.float32)
     f = np.clip(yy / h, 0, 1)
-    bg = top[None, None, :] * (1 - f)[..., None] + bot[None, None, :] * f[..., None]
+    base = top[None, None, :] * (1 - f)[..., None] + bot[None, None, :] * f[..., None]
 
-    # 2) 对角金色光晕（缓慢流动，极克制）
+    gold = np.array([214, 176, 54], dtype=np.float32)[None, None, :]
+
+    # 2) 金色对角光晕（明显，缓慢流动）
     cx = w * 0.78 + 40.0 * np.sin(t * 0.35)
     cy = h * 0.22 + 20.0 * np.cos(t * 0.28)
     d2 = (xx - cx) ** 2 + (yy - cy) ** 2
-    glow = np.exp(-d2 / (2 * 160.0 ** 2))
-    gold = np.array([201, 162, 39], dtype=np.float32)[None, None, :]
-    bg = bg + glow[..., None] * gold * 0.30
+    glow = np.exp(-d2 / (2 * 210.0 ** 2))
+    bg = base + glow[..., None] * gold * 0.55
 
-    # 3) 极淡金色光点（确定性伪随机，缓慢上浮，营造"数据星河"质感）
-    dots = np.zeros((h, w), dtype=np.float32)
-    for (px, py, amp, sp) in [(0.18, 0.62, 0.10, 0.20), (0.62, 0.80, 0.08, 0.16),
-                               (0.38, 0.45, 0.06, 0.24), (0.85, 0.55, 0.09, 0.18),
-                               (0.50, 0.30, 0.07, 0.22)]:
+    # 3) 顶部金色装饰带
+    band = np.exp(-((yy - 110.0) ** 2) / (2 * 28.0 ** 2))
+    bg = bg + band[..., None] * gold * 0.28
+
+    # 4) 金色光点上浮
+    dots = np.zeros((sh, sw), dtype=np.float32)
+    for (px, py, amp, sp) in [(0.18, 0.62, 0.14, 0.20), (0.62, 0.80, 0.11, 0.16),
+                               (0.38, 0.45, 0.09, 0.24), (0.85, 0.55, 0.12, 0.18),
+                               (0.50, 0.30, 0.10, 0.22)]:
         dx = px * w + 30.0 * np.sin(t * sp)
         dy = (py * h - 20.0 * t * sp) % h
         d2 = (xx - dx) ** 2 + (yy - dy) ** 2
-        dots = dots + np.exp(-d2 / (2 * 90.0 ** 2)) * amp
-    bg = bg + dots[..., None] * gold * 0.5
+        dots = dots + np.exp(-d2 / (2 * 95.0 ** 2)) * amp
+    bg = bg + dots[..., None] * gold * 0.7
 
+    # 上采样回全分辨率
+    bg = np.repeat(np.repeat(bg, S, axis=0), S, axis=1)[:h, :w]
     return np.clip(bg, 0, 255).astype(np.uint8)
 
 
 def gen_inkblue(t, w=W, h=H):
-    """墨蓝 + 极淡网格线 + 顶部光线扫过（数据/专业感，适合政策解读与干货清单）。"""
-    yy = np.arange(h)[:, None].astype(np.float32)
-    xx = np.arange(w)[None, :].astype(np.float32)
+    """墨蓝 + 网格线 + 顶部光线扫过（数据/专业感，适合政策解读与干货清单）。
+    降采样计算 + 网格用取模判断（去掉全图 exp 循环），性能优化。"""
+    S = 4
+    sw, sh = w // S, h // S
+    yy = np.arange(sh)[:, None].astype(np.float32) * S
+    xx = np.arange(sw)[None, :].astype(np.float32) * S
 
-    # 墨蓝渐变
-    top = np.array([13, 24, 46], dtype=np.float32)
-    bot = np.array([4, 8, 18], dtype=np.float32)
+    # 墨蓝渐变（提亮）
+    top = np.array([26, 44, 82], dtype=np.float32)
+    bot = np.array([14, 26, 54], dtype=np.float32)
     f = np.clip(yy / h, 0, 1)
     bg = top[None, None, :] * (1 - f)[..., None] + bot[None, None, :] * f[..., None]
 
-    # 极淡网格（竖线 + 横线，透明度很低）
-    grid = np.zeros((h, w), dtype=np.float32)
+    # 网格线（取模判断，快；硬边细线 + 低强度）
     step = 108
-    for gx in range(0, w, step):
-        grid = grid + np.exp(-((xx - gx) ** 2) / (2 * 2.0 ** 2)) * 0.10
-    for gy in range(0, h, step):
-        grid = grid + np.exp(-((yy - gy) ** 2) / (2 * 2.0 ** 2)) * 0.10
-    cyan = np.array([90, 160, 210], dtype=np.float32)[None, None, :]
-    bg = bg + grid[..., None] * cyan * 0.16
+    grid = (((xx % step) < 2).astype(np.float32) + ((yy % step) < 2).astype(np.float32))
+    cyan = np.array([110, 175, 220], dtype=np.float32)[None, None, :]
+    bg = bg + grid[..., None] * cyan * 0.22
 
-    # 顶部光线斜扫（缓慢）
-    sweep = np.exp(-((xx - (w * 0.5 + 160.0 * np.sin(t * 0.3))) ** 2) / (2 * 60.0 ** 2))
+    # 顶部光线斜扫
+    sweep = np.exp(-((xx - (w * 0.5 + 160.0 * np.sin(t * 0.3))) ** 2) / (2 * 70.0 ** 2))
     sweep = sweep * np.clip(1.0 - yy / h, 0, 1)
-    bg = bg + sweep[..., None] * cyan * 0.10
+    bg = bg + sweep[..., None] * cyan * 0.16
 
+    # 金色点缀光点
+    gold = np.array([214, 176, 54], dtype=np.float32)[None, None, :]
+    dots = np.zeros((sh, sw), dtype=np.float32)
+    for (px, py, amp, sp) in [(0.30, 0.70, 0.10, 0.18), (0.70, 0.45, 0.08, 0.22),
+                               (0.50, 0.85, 0.09, 0.15)]:
+        dx = px * w + 25.0 * np.sin(t * sp)
+        dy = (py * h - 15.0 * t * sp) % h
+        d2 = (xx - dx) ** 2 + (yy - dy) ** 2
+        dots = dots + np.exp(-d2 / (2 * 90.0 ** 2)) * amp
+    bg = bg + dots[..., None] * gold * 0.5
+
+    # 上采样回全分辨率
+    bg = np.repeat(np.repeat(bg, S, axis=0), S, axis=1)[:h, :w]
     return np.clip(bg, 0, 255).astype(np.uint8)
 
 

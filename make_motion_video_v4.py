@@ -1007,10 +1007,14 @@ def _synth_segment_subprocess(text, voice, out_path, timeout=90, retries=3):
         return True           # 续传命中, 跳过
     gpt_dir = str(BASE).replace("\\", "\\\\")
     candidates = [text]
-    # 破 jiangnv3 女声 '那[标点/省略号]?我' 邻接抽风: 那与我之间插'个，'
-    fixed = _re.sub(r"那[，。…、：；\s]*我", "那个，我", text)
-    if fixed != text:
-        candidates.append(fixed)
+    # 破 jiangnv3 女声坑：句首"那/那么"会返回异常小音频(0.05s)，去掉"那"；
+    # "那...我"邻接 → "那个，我"
+    fixed1 = _re.sub(r"^那么?[，。…、：；\s]*", "", text)
+    if fixed1 != text and fixed1:
+        candidates.append(fixed1)
+    fixed2 = _re.sub(r"那[，。…、：；\s]*我", "那个，我", text)
+    if fixed2 != text and fixed2 not in candidates:
+        candidates.append(fixed2)
     last = ""
     for cand in candidates:
         code = (
