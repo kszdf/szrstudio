@@ -233,6 +233,39 @@ def ensure_clean(text, style, retries=2):
     return text
 
 
+# ------------------------------------------------------------------ 解析
+def parse_topics_raw(raw, n):
+    """直接解析第一次 LLM 返回的选题文本，不再回灌模型（避免二次生成丢条）。"""
+    s = _strip_fence(raw).strip()
+    # 1) 直接 JSON 数组/对象
+    try:
+        data = json.loads(s)
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return [data]
+    except Exception:
+        pass
+    # 2) 正则取首个 JSON 数组
+    m = re.search(r"\[.*\]", s, re.DOTALL)
+    if m:
+        try:
+            data = json.loads(m.group(0))
+            if isinstance(data, list):
+                return data
+        except Exception:
+            pass
+    # 3) 兜底：逐个提取 {...} 对象（模型可能漏外层括号）
+    objs = re.findall(r"\{[^{}]*\}", s, re.DOTALL)
+    out = []
+    for o in objs:
+        try:
+            out.append(json.loads(o))
+        except Exception:
+            pass
+    return out
+
+
 # ------------------------------------------------------------------ 子命令
 def cmd_gen_topics(args):
     prof = load_profile()
@@ -241,12 +274,9 @@ def cmd_gen_topics(args):
     n = args.limit or prof.get("weekly_count", 14)
     print(f"[gen-topics] 调用 DeepSeek 生成 {n} 条选题（联网检索）…")
     raw = llm(build_topics_prompt(prof, n), enable_search=True, timeout=150)
-    try:
-        topics = llm_json(_strip_fence(raw), expect_obj=False)
-        if isinstance(topics, dict):
-            topics = [topics]
-    except Exception as e:
-        print("  选题解析失败：", e)
+    topics = parse_topics_raw(raw, n)
+    if not topics:
+        print("  选题解析失败：未从模型响应中解析到 JSON 数组")
         return
     q = {"week": wk, "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
          "confirmed": False, "topics": []}

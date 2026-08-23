@@ -20,3 +20,10 @@
 - 结果：成功生成 14 条，dialogue 7 / monologue 7 均衡；相关度 80–100；全部 selected=true, confirmed=false（待周一 08:00 前 keep/drop）。
 - 产物：output/weekly/2026-W34/queue.json + topics/week_topics.md。无运行时异常。
 - 模型：deepseek（enable_search 联网），key 有效。
+
+## 2026-08-23 (周日 23:25 触发)
+- 周号：2026-W35（8/24–8/30，下一周）。
+- 关键决策：周日 8/23 落 W34 末日，周一 8/24 起为 W35；沿用历史，显式 `--week 2026-W35` 产出，保证周一 08:00 的 select/create-scripts(week_key()=W35) 能命中队列。
+- 异常修复：首次 gen-topics 仅产出 1 条占位（title="选题1"），根因为 cmd_gen_topics 把首次 LLM 回复回灌 llm_json 二次生成，本次模型对二次输入只回吐 1 条残缺对象。已在脚本新增 parse_topics_raw() 直接解析首次返回（不再回灌），重跑后稳定产出 14 条。
+- 结果：14 条，dialogue 7（1,3,5,7,9,11,13）/ monologue 7（2,4,6,8,10,12,14）均衡；相关度 86–99；全部 selected=true, confirmed=false（待周一 08:00 前 keep/drop）。
+- 产物：output/weekly/2026-W35/queue.json + topics/week_topics.md（覆盖旧的 1 条占位）。
