@@ -216,9 +216,44 @@ def draw_subtitle(img, text, style="minimal", karaoke_event=None, t=None):
             for ch in ln:
                 kflat.append(ch)
 
+    # ── 逐行出现（数字人出镜专用：区别于滚动字幕的一次性多行）──
+    # 按"已读到哪个字符"推算当前应显示到第几行：已读字符所在行及之前的行全显示，
+    # 未读到的行先不画（下一行等读到该行第一个字时才出现），像真人一句句讲。
+    # 无 karaoke 时退化为"前 N 行按时间均分逐行出现"（每行分配 (e-s)/行数 秒）。
+    shown_lines = len(lines)
+    if karaoke_event and kflat and t is not None:
+        # 找已读字符数（char 的 e 时间 <= 当前 t）
+        read_n = 0
+        for chd in kflat:
+            if chd.get("e", 0) <= t:
+                read_n += 1
+            else:
+                break
+        # 该字符落在第几行（按 karaoke lines 的行边界）
+        row = 0
+        acc = 0
+        klines = karaoke_event.get("lines", []) or []
+        for ri, ln in enumerate(klines):
+            acc += len(ln)
+            if read_n <= acc:
+                row = ri
+                break
+        shown_lines = row + 1
+    elif t is not None and karaoke_event and karaoke_event.get("start") is not None:
+        ev_start = float(karaoke_event.get("start", 0))
+        ev_end = float(karaoke_event.get("end", ev_start + 3))
+        ev_dur = max(0.3, ev_end - ev_start)
+        per_line = ev_dur / max(1, len(lines))
+        shown_lines = min(len(lines), int((t - ev_start) / per_line) + 1)
+    # 行数上限保护（>2 行时等比例上移，避免顶到数字人下巴/画面中部）
+    if len(lines) > 2:
+        y0 = max(120, y0 - (len(lines) - 2) * line_h // 2)
+
     char_idx = [0]
     ci = [0]   # 颜色索引（与 karaoke 的 char_idx 独立，映射 colors）
     for i, ln in enumerate(lines):
+        if i >= shown_lines:
+            break   # 逐行出现：未读到的行不画
         widths = [_char_width(draw, ch) for ch in ln]
         tw = sum(widths)
         x = (W - tw) // 2
@@ -267,13 +302,75 @@ def extract_frames(video, frames_dir):
     return sorted(frames_dir.glob("f_*.png"))
 
 
-def burn_frames(events, frames, karaoke=None, style="minimal"):
+def render_graphic_card(kind, title, data, pal=None):
+    """数字人出镜时的智能图解卡（简洁深色风格，与数字人画面统一）。
+    kind: 'number' 数据卡(大数字) / 'warn' 警示卡(红线词) / 'step' 流程卡(步骤) / 'scene' 场景卡(标题+说明)
+    返回 RGBA 图（1080x1920）。"""
+    from PIL import ImageDraw as _D
+    if pal is None:
+        pal = {"bg_top": (10, 16, 30), "bg_bot": (22, 30, 52), "accent": (220, 180, 60),
+               "accent2": (80, 140, 220), "text": (235, 240, 248)}
+    W, H = 1080, 1920
+    img = Image.new("RGB", (W, H))
+    d = _D.Draw(img)
+    # 深色渐变背景
+    for y in range(H):
+        t = y / H
+        c = tuple(int(a + (b - a) * t) for a, b in zip(pal["bg_top"], pal["bg_bot"]))
+        d.line([(0, y), (W, y)], fill=c)
+    # 顶部标题 + 品牌条
+    f_t = ImageFont.truetype(str(BASE / "fonts/simhei.ttf"), 72)
+    d.text((W // 2, 240), title[:12], font=f_t, fill=pal["text"], anchor="mm")
+    d.rectangle([W // 2 - 120, 300, W // 2 + 120, 308], fill=pal["accent"])
+    d.text((W // 2, 1760), "慧根堂财税 · 合规解读", font=ImageFont.truetype(str(BASE / "fonts/simhei.ttf"), 36),
+           fill=(150, 158, 175), anchor="mm")
+    if kind == "number":
+        # 大数字居中
+        big = str(data.get("num", ""))
+        f_num = ImageFont.truetype(str(BASE / "fonts/simhei.ttf"), 200)
+        d.text((W // 2, H // 2 - 120), big, font=f_num, fill=pal["accent"], anchor="mm")
+        sub = str(data.get("sub", ""))[:14]
+        d.text((W // 2, H // 2 + 120), sub, font=ImageFont.truetype(str(BASE / "fonts/simhei.ttf"), 52),
+               fill=pal["text"], anchor="mm")
+    elif kind == "warn":
+        # 警示：红色警示块 + 关键词
+        f_w = ImageFont.truetype(str(BASE / "fonts/simhei.ttf"), 64)
+        d.rounded_rectangle([120, H // 2 - 160, W - 120, H // 2 + 160], radius=28,
+                            fill=(60, 16, 20, 230), outline=(230, 80, 70), width=6)
+        d.text((W // 2, H // 2 - 40), "⚠ 风险提示", font=ImageFont.truetype(str(BASE / "fonts/simhei.ttf"), 56),
+               fill=(255, 120, 110), anchor="mm")
+        d.text((W // 2, H // 2 + 70), str(data.get("kw", ""))[:18],
+               font=f_w, fill=(255, 240, 240), anchor="mm")
+    elif kind == "step":
+        # 流程：纵向步骤
+        steps = (data.get("steps") or [])[:4]
+        y = H // 2 - 180
+        f_s = ImageFont.truetype(str(BASE / "fonts/simhei.ttf"), 52)
+        for i, st in enumerate(steps, 1):
+            d.ellipse([200, y - 28, 264, y + 28], fill=pal["accent"])
+            d.text((232, y), str(i), font=ImageFont.truetype(str(BASE / "fonts/simhei.ttf"), 40),
+                   fill=(20, 26, 40), anchor="mm")
+            d.text((320, y), str(st)[:16], font=f_s, fill=pal["text"], anchor="lm")
+            y += 110
+    else:  # scene
+        f_b = ImageFont.truetype(str(BASE / "fonts/simhei.ttf"), 54)
+        lines = _wrap_text_to_width(d, str(data.get("desc", ""))[:40], W - 240)
+        yy = H // 2 - 80
+        for ln in lines.split("\n")[:4]:
+            d.text((W // 2, yy), ln, font=f_b, fill=pal["text"], anchor="mm")
+            yy += 90
+    return img
+
+
+def burn_frames(events, frames, karaoke=None, style="minimal", graphics=None):
     # 按 start 时间建立逐字高亮事件索引（与 parse_ass 事件同序同起止）
     kmap = {}
     if karaoke and isinstance(karaoke, dict):
         for ev in karaoke.get("events", []):
             kmap[round(float(ev.get("start", 0)), 2)] = ev
-    print(f"  共 {len(frames)} 帧，{len(events)} 条字幕，字幕风格={style}")
+    # 图解时间轴：graphics = [{"start":..,"end":..,"kind":..,"title":..,"data":{...}}, ...]
+    gfx = graphics or []
+    print(f"  共 {len(frames)} 帧，{len(events)} 条字幕，{len(gfx)} 段图解，字幕风格={style}")
     n = len(frames)
     for i, png in enumerate(frames):
         t = i / FPS
@@ -285,8 +382,17 @@ def burn_frames(events, frames, karaoke=None, style="minimal"):
                 cur = txt
                 kev = kmap.get(round(s, 2))
                 break
-        if cur:
+        # 找当前时间图解（若有则用图解卡替换数字人画面，实现"按内容穿插智能图解"）
+        gcard = None
+        for g in gfx:
+            if g.get("start", -1) <= t < g.get("end", -1):
+                gcard = g
+                break
+        if cur or gcard:
             img = Image.open(png).convert("RGB")
+            if gcard:
+                img = render_graphic_card(gcard.get("kind", "scene"), gcard.get("title", ""),
+                                          gcard.get("data") or {})
             draw_subtitle(img, cur, style=style, karaoke_event=kev, t=t)
             img.save(png, "PNG")
         # 每 50 帧回报一次进度（后端解析 [3] 烧字幕 N%）
@@ -342,6 +448,8 @@ def main():
                     help="字幕风格：dynamic=逐字高亮 / minimal=纯净白字 / bubble=气泡底衬")
     ap.add_argument("--karaoke", default=None, help="逐字高亮时间轴 sidecar JSON")
     ap.add_argument("--font", default=None, help="字幕主字体路径（默认 fonts/simhei.ttf）")
+    ap.add_argument("--graphics", default=None,
+                    help="智能图解时间轴 JSON：[{\"start\":..,\"end\":..,\"kind\":\"number|warn|step|scene\",\"title\":..,\"data\":{...}}]")
     args = ap.parse_args()
 
     # 字幕字体：--font 指定则覆盖默认黑体（路径不存在回退默认）
@@ -365,6 +473,14 @@ def main():
         except Exception as e:
             print(f"  [WARN] 逐字高亮 sidecar 解析失败，回退纯净字幕: {e}")
 
+    graphics = []
+    if args.graphics and Path(args.graphics).exists():
+        try:
+            graphics = json.loads(Path(args.graphics).read_text(encoding="utf-8"))
+            print(f"  智能图解时间轴: {len(graphics)} 段")
+        except Exception as e:
+            print(f"  [WARN] 图解时间轴解析失败，忽略: {e}")
+
     TMP.mkdir(parents=True, exist_ok=True)
 
     # 每轮独立帧目录，避免删旧帧触发安全删除 shim、也杜绝残留帧串味
@@ -379,7 +495,7 @@ def main():
         print(f"  时间范围: {events[0][0]:.2f}s - {events[-1][1]:.2f}s")
 
     print(f"\n[3/4] PIL 烧字幕 ...")
-    burn_frames(events, frames, karaoke=karaoke, style=args.subtitle_style)
+    burn_frames(events, frames, karaoke=karaoke, style=args.subtitle_style, graphics=graphics)
 
     print(f"\n[4/4] 合成视频 ...")
     mid = TMP / "mid.mp4"

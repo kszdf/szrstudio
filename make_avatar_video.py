@@ -137,6 +137,8 @@ def main():
     ap.add_argument("--font", default=None, help="字幕主字体路径（透传 finalize_v2_pil）")
     ap.add_argument("--karaoke", default=None,
                     help="逐字高亮时间轴 sidecar JSON（dynamic 风格使用）")
+    ap.add_argument("--graphics", default=None,
+                    help="智能图解时间轴 JSON（数字人出镜时按内容穿插图解卡）")
     args = ap.parse_args()
 
     # —— 场景解析（安全接线：素材未就位时回退默认模特，绝不因未知参数崩溃）——
@@ -277,6 +279,8 @@ def main():
                 "--subtitle-style", args.subtitle_style]
     if args.karaoke:
         fin_args += ["--karaoke", str(args.karaoke)]
+    if args.graphics:
+        fin_args += ["--graphics", str(args.graphics)]
     if args.font:
         fin_args += ["--font", args.font]
     run(fin_args)
