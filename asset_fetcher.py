@@ -189,7 +189,9 @@ def search_official(policy_ref: dict | str, timeout: int = 40) -> list[dict]:
 
 # ------------------------------------------------------------------ 抓取 + 正文提取
 def _http_get(url: str, timeout: int = 30) -> tuple[str, str]:
-    """返回 (html, final_url)。http 失败时自动重试 https（gov 站点常强制 https）。"""
+    """返回 (html, final_url)。http 失败时自动重试 https（gov 站点常强制 https）。
+    编码：优先 Content-Type charset，其次 HTML meta charset，兜底 utf-8。
+    修复：国税总局等站点为 GBK/GB2312 编码，硬编码 utf-8 会把标题解成乱码。"""
     candidates = [url]
     if url.startswith("http://"):
         candidates.append("https://" + url[len("http://"):])
@@ -200,7 +202,20 @@ def _http_get(url: str, timeout: int = 30) -> tuple[str, str]:
                 u, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"})
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return resp.read().decode("utf-8", errors="replace"), resp.geturl()
+                raw = resp.read()
+                charset = None
+                ct = resp.headers.get("Content-Type") or ""
+                m = re.search(r"charset=([\w-]+)", ct, re.I)
+                if m:
+                    charset = m.group(1).strip().strip('"').strip("'")
+                if not charset:
+                    m = re.search(rb'<meta[^>]+charset=["\']?([\w-]+)', raw[:4096], re.I)
+                    if m:
+                        charset = m.group(1).decode("ascii", "ignore")
+                enc = (charset or "utf-8").lower()
+                if enc in ("gb2312", "gbk", "gb18030"):
+                    enc = "gb18030"   # gb18030 是 gbk/gb2312 的超集，兼容三者
+                return raw.decode(enc, errors="replace"), resp.geturl()
         except Exception as e:
             last_err = e
     raise last_err
@@ -255,11 +270,26 @@ def locate_clause(paragraphs: list[str], keywords: str) -> str:
 
 
 _GENERIC_WORDS = {"公告", "通知", "文件", "政策", "关于", "规定", "办法", "条例", "法规", "解读", "公告"}
+# 官方行文用词差异：检索口语（如"小微"）与原文（如"小型微利"）的宽松等价对
+_FUZZY_PAIRS = (("小微", "小型微利"),)
+
+
+def _kw_hit(kw: str, text: str) -> bool:
+    """宽松关键词命中：精确包含，或按官方行文差异对宽松匹配。"""
+    if kw in text:
+        return True
+    for short, full in _FUZZY_PAIRS:
+        if short in kw and full in text:
+            return True
+        if full in kw and short in text:
+            return True
+    return False
 
 
 def _is_relevant(title: str, ref: dict) -> bool:
-    """判断抓到的页面标题是否与政策引用相关（文号精确匹配，或 ≥2 个非通用关键词命中）。
-    用于过滤搜索结果里混入的不相关 gov.cn 页面。"""
+    """判断抓到的页面标题是否与政策引用相关（文号精确匹配，或 ≥min(2, n) 个非通用关键词命中）。
+    修复：单关键词（如"小微企业所得税优惠政策"）要求 ≥2 命中永远失败 → 降级为 ≥1；
+    并支持"小微/小型微利"等官方行文差异的宽松匹配。"""
     t = title or ""
     doc_no = ref.get("doc_no", "")
     if doc_no and doc_no in t:
@@ -268,7 +298,8 @@ def _is_relevant(title: str, ref: dict) -> bool:
            if len(k) >= 2 and k not in _GENERIC_WORDS]
     if not kws:
         return True   # 无有效关键词时不拦截
-    return sum(1 for k in kws if k in t) >= 2
+    need = min(2, len(kws))
+    return sum(1 for k in kws if _kw_hit(k, t)) >= need
 
 
 # ------------------------------------------------------------------ PIL 渲染「政策条款证据卡」

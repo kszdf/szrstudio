@@ -42,6 +42,7 @@ __pycache__/
 *.pyc
 .cache/
 _tmp_pil/
+_tmp_motion_v4/
 _test/
 _scratch/
 ab_test/
