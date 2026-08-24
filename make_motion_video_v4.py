@@ -435,25 +435,39 @@ def _llm_call(fn, prompt, cfg, timeout=90, retries=2):
     raise last
 
 
-def llm_storyboard(sentences):
+SB_DIALOG_PROMPT = SB_PROMPT.replace(
+    "你是财税口播短视频的分镜导演。下面是一段口播稿按序号切好的句子。",
+    "你是财税口播短视频的分镜导演。下面是一段**男女对话稿**（女声提问/抛出场景，男声解答）按序号切好的句子。\n"
+    "对话稿的视觉原则：普通一问一答保持 \"dialog\" 上下分屏气泡；只有**讲案例/故事/情境/对比**的句子才用 \"scene\" 配插画生图；"
+    "数据对照仍用 table、关键数字用 number、短金句用 quote。\n"
+    "新增 visual_type: \"dialog\" = 男女对话问答句（上下分屏+气泡台词），不给 image_prompt。"
+).replace(
+    "visual_type 取值:\n- \"scene\"",
+    "visual_type 取值:\n- \"dialog\": 男女对话问答句(上下分屏+气泡), 不给 image_prompt\n- \"scene\"",
+)
+
+
+def llm_storyboard(sentences, dialogue=False):
     """用 LLM 生成「叙事感知」分镜: 区分 有序流程(step) / 并列清单(list) / 对比(scene),
-    根治把内容拍平成一个清单卡的堆砌问题。带双模型降级 + 重试; 失败抛异常交由 main 回退规则。"""
+    根治把内容拍平成一个清单卡的堆砌问题。带双模型降级 + 重试; 失败抛异常交由 main 回退规则。
+    dialogue=True 时用对话感知提示词（scene 句接万相生图，问答句保持 dialog 气泡）。"""
     sys.path.insert(0, str(BASE))
     from model_providers import ensure_env, get_text_config, deepseek_chat
     ensure_env()
     listing = "\n".join(f"{i}. {s}" for i, s in enumerate(sentences))
+    prompt_tpl = SB_DIALOG_PROMPT if dialogue else SB_PROMPT
 
     # 模型降级链: 优先配置默认(deepseek) → 失败试 qwen → 再失败抛异常
     used_provider = None
     try:
         cfg = get_text_config()            # 默认优先 deepseek
         used_provider = cfg["provider"]
-        raw = _llm_call(deepseek_chat, SB_PROMPT + listing, cfg, timeout=90)
+        raw = _llm_call(deepseek_chat, prompt_tpl + listing, cfg, timeout=90)
     except Exception as e1:
         try:
             cfg = get_text_config(force_provider="qwen")
             used_provider = "qwen"
-            raw = _llm_call(deepseek_chat, SB_PROMPT + listing, cfg, timeout=90)
+            raw = _llm_call(deepseek_chat, prompt_tpl + listing, cfg, timeout=90)
         except Exception as e2:
             raise RuntimeError(f"LLM 分镜双模型均失败: {e1} | {e2}")
     print(f"  [分镜模型] 使用 {used_provider} 成功")
@@ -465,7 +479,7 @@ def llm_storyboard(sentences):
         idx = int(item.get("idx", -1))
         if 0 <= idx < len(sentences):
             vtype = str(item.get("visual_type", "scene"))
-            if vtype not in ("scene", "table", "list", "step", "number", "quote"):
+            if vtype not in ("scene", "table", "list", "step", "number", "quote", "dialog"):
                 vtype = "scene"
             if vtype == "compare":          # 对比句渲染层走 scene
                 vtype = "scene"
@@ -1157,10 +1171,23 @@ def main():
         dur, tl = build_dialogue_audio(segs, str(dlg_audio))
         args.audio = str(dlg_audio)
         sentences = [s["text"] for s in segs]
-        sb = [{"visual_type": "dialog", "role": s["role"],
-               "tone": "neutral", "keywords": None} for s in segs]
+        # 分镜：先走 LLM 叙事分镜（让"场景/情境"句产出 scene+image_prompt，接万相生图），
+        # 再给每一句补齐对话所需字段（role），渲染时 dialog 类型仍走上下分屏气泡台词。
+        # LLM 失败时回退纯 dialog 分镜（不阻塞出片）。
+        try:
+            sb = llm_storyboard(sentences, dialogue=True)
+            print("[2/6] 对话分镜(LLM 叙事 + 上下分屏 · 气泡台词)")
+        except Exception as e:
+            print(f"[2/6] LLM 分镜失败({e}), 回退纯对话分镜")
+            sb = [{"visual_type": "dialog", "role": s["role"],
+                   "tone": "neutral", "keywords": None} for s in segs]
+        # 补齐对话角色字段（渲染 dialog 类型需要 role）
+        for i, sc in enumerate(sb):
+            sc["role"] = segs[i]["role"]
+            # 对话句（无明确 scene 意象的）保持上下分屏气泡，避免 LLM 误判成 scene 后丢失台词感
+            if sc.get("visual_type") in ("scene", "step") and not sc.get("image_prompt"):
+                sc["visual_type"] = "dialog"
         print(f"[1/6] 对话 {len(segs)} 轮, 双声音频 {dur:.1f}s")
-        print("[2/6] 对话分镜(上下分屏 · 气泡台词)")
     elif args.storyboard:
         data = json.loads(Path(args.storyboard).read_text(encoding="utf-8"))
         sentences = [it.get("sentence", "") for it in data]
@@ -1215,10 +1242,10 @@ def main():
          for i in range(len(sentences))], ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"      分镜已存: {sb_path}")
 
-    # 生图(仅 scene 类型调万相)
+    # 生图(仅 scene 类型调万相; dialogue 模式经 LLM 分镜后 scene 句同样生图)
     imgs = []
     scene_n = sum(1 for sc in sb if sc.get("visual_type") == "scene")
-    if args.no_gen or args.dialogue:
+    if args.no_gen:
         print("[3/6] 跳过生图(渐变占位)")
         for sc in sb:
             imgs.append(None if sc.get("visual_type") != "scene" else fallback_img(sc.get("tone", "neutral")))

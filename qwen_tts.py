@@ -118,11 +118,16 @@ def _split_sentences(text):
 
 
 def _sentence_pace(sent, base_rate=0.92):
-    """返回 (speech_rate, pause_after_ms)。引导/结论/提醒句放慢并加长停顿, 列举密集句正常偏快。"""
+    """返回 (speech_rate, pause_after_ms, lead_ms)。
+    lead_ms = 句前吸气停顿（重点/警示句前留白，制造"先顿一下再说"的真人感）。
+    引导/结论/提醒句放慢并加长停顿, 列举密集句正常偏快。"""
     slow_kw = ["先说清楚", "再提醒", "比如", "其实", "要注意", "还要提醒",
-               "别", "不能", "不是", "红线", "谨慎", "务必", "别抱"]
+               "别", "不能", "不是", "红线", "谨慎", "务必", "别抱",
+               "记住", "注意", "重点", "关键", "一定"]
+    lead_ms = 0
     if any(k in sent for k in slow_kw):
         rate, base = 0.82, 600
+        lead_ms = 200                      # 警示/结论句前吸气停顿
     elif sent.count("、") >= 2:
         rate, base = 1.0, 320
     else:
@@ -130,7 +135,7 @@ def _sentence_pace(sent, base_rate=0.92):
     s = sent.rstrip()
     if s.endswith(("？", "！", "?", "!")):
         base += 150
-    return rate, base
+    return rate, base, lead_ms
 
 
 def synth_natural(text, voice, out_path, model=DEFAULT_MODEL, base_rate=0.92, retries=3):
@@ -147,7 +152,7 @@ def synth_natural(text, voice, out_path, model=DEFAULT_MODEL, base_rate=0.92, re
     tmp_files = []
     try:
         for i, s in enumerate(sents):
-            rate, pause = _sentence_pace(s, base_rate)
+            rate, pause, lead_ms = _sentence_pace(s, base_rate)
             tmp = out_path + f".part{i}.wav"
             synth(s, voice, tmp, model=model, speech_rate=rate,
                   pitch_rate=1.0, volume=50, retries=retries)
@@ -155,6 +160,11 @@ def synth_natural(text, voice, out_path, model=DEFAULT_MODEL, base_rate=0.92, re
                 if params is None:
                     params = (w.getnchannels(), w.getsampwidth(), w.getframerate())
                 data = w.readframes(w.getnframes())
+                # 重点/警示句前：先补一段"吸气停顿"再进本句（真人先顿一下再说）
+                if lead_ms > 0:
+                    sr = params[2]
+                    n_lead = int(lead_ms / 1000 * sr)
+                    buf += b"".join(b"\x00\x00" for _ in range(n_lead))
                 buf += data
                 if i < len(sents) - 1 and pause > 0:
                     sr = params[2]

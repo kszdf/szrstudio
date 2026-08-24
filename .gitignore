@@ -43,6 +43,7 @@ __pycache__/
 .cache/
 _tmp_pil/
 _tmp_motion_v4/
+_asset_cache/
 _test/
 _scratch/
 ab_test/
