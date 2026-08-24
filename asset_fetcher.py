@@ -175,16 +175,24 @@ def _search_tavily(policy_ref: dict, timeout: int = 30) -> list[dict]:
 
 
 def search_official(policy_ref: dict | str, timeout: int = 40) -> list[dict]:
-    """搜索政策官方原文 URL。先 DeepSeek 联网，再 Tavily，均失败返回空。"""
+    """搜索政策官方原文 URL。合并 DeepSeek 联网 + Tavily 两个来源（都收集、去重）。
+    修复：此前只取第一个有结果的来源就返回，DeepSeek 常给出已失效的旧链
+    （www.chinatax.gov.cn 旧 content.html 多已 404），导致所有候选全挂降级 L3；
+    合并后 Tavily 的实时活链可作为兜底候选。"""
     ref = parse_policy_ref(policy_ref) if isinstance(policy_ref, str) else policy_ref
+    out: list[dict] = []
+    seen: set[str] = set()
     for fn in (_search_deepseek, _search_tavily):
         try:
             hits = fn(ref, timeout)
-            if hits:
-                return hits
         except Exception:
             continue
-    return []
+        for h in hits or []:
+            url = (h or {}).get("url") or ""
+            if url and url not in seen:
+                seen.add(url)
+                out.append(h)
+    return out
 
 
 # ------------------------------------------------------------------ 抓取 + 正文提取
