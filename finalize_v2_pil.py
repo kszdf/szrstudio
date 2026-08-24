@@ -362,15 +362,25 @@ def render_graphic_card(kind, title, data, pal=None):
     return img
 
 
+_MV4_MOD = None
+
+
+def _get_motion_module():
+    """加载 make_motion_video_v4 模块（模块级缓存，只加载一次——此前每帧 exec 导致烧字幕卡死）。"""
+    global _MV4_MOD
+    if _MV4_MOD is None:
+        import importlib.util as _ilu
+        spec = _ilu.spec_from_file_location("mv4", str(BASE / "make_motion_video_v4.py"))
+        _MV4_MOD = _ilu.module_from_spec(spec)
+        spec.loader.exec_module(_MV4_MOD)
+    return _MV4_MOD
+
+
 def _motion_graphic_frame(kind, title, data, local, scdur, idx):
     """数字人图解段：复用 make_motion_video_v4 的成熟图解渲染（真图表/AI生图/流程），
     替代此前的简化大字卡。返回 RGB 帧。"""
     try:
-        import importlib.util as _ilu
-        spec = _ilu.spec_from_file_location(
-            "mv4", str(BASE / "make_motion_video_v4.py"))
-        mv = _ilu.module_from_spec(spec)
-        spec.loader.exec_module(mv)
+        mv = _get_motion_module()
     except Exception as e:  # noqa: BLE001
         print(f"  [WARN] motion 图解模块加载失败({e})，回退简化卡", file=sys.stderr)
         return render_graphic_card(kind, title, data)

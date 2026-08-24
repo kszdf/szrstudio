@@ -131,7 +131,7 @@ def annotate_face_positions(gfx, video_path, fps=30):
         print("  [WARN] cv2 不可用，图解浮层退化为固定底部位置")
         return gfx
     cascade = cv2.CascadeClassifier(
-        os.path.join(GPT_SOVITS, "haarcascade_frontalface_default.xml"))
+        str(Path(__file__).resolve().parent / "haarcascade_frontalface_default.xml"))
     import tempfile as _tf
     for g in gfx or []:
         sec = float(g.get("start", 0))
