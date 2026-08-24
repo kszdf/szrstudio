@@ -295,8 +295,20 @@ def main():
     print(f"[3] 生成结果: {result}  ({result.stat().st_size//1024} KB)")
     # 关键修复：HEYGEM 标 success 时文件可能尚未完全落盘，必须等真正写完再处理，
     # 否则 ffmpeg 读半截文件会报 "moov atom not found" 导致整任务失败。
-    if not wait_file_ready(result):
-        sys.exit(f"HEYGEM 产物 {result.name} 等待落盘超时（{WAIT_READY_TIMEOUT}s）——"
+    # 动态超时：按音频时长自适应（长口播 300s 音频 → 等 720s），短音频仍 180s 兜底。
+    audio_dur = 0.0
+    try:
+        _r = subprocess.run(
+            [FFPROBE, "-v", "error", "-show_entries", "format=duration", "-of",
+             "default=nw=1:nk=1", str(audio)],
+            capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=30)
+        audio_dur = float(_r.stdout.strip() or 0)
+    except Exception:  # noqa: BLE001
+        pass
+    ready_timeout = max(WAIT_READY_TIMEOUT, int(audio_dur * 2.4) + 120)
+    print(f"[3] 等待 HEYGEM 产物落盘（音频 {audio_dur:.0f}s → 超时 {ready_timeout}s）")
+    if not wait_file_ready(result, timeout=ready_timeout):
+        sys.exit(f"HEYGEM 产物 {result.name} 等待落盘超时（{ready_timeout}s）——"
                  f"文件未完整写入，可能容器卷同步延迟或渲染异常。"
                  f"请重试，或 `docker restart heygem-gen-video` 后重跑。")
     print("[3+] 文件已确认完整落盘，开始后期处理")
