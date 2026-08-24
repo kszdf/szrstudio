@@ -205,6 +205,17 @@ def main():
     if not ass.exists():
         sys.exit(f"字幕不存在: {ass}")
 
+    # 音频时长（提前算，供渲染轮询/落盘等待动态超时用）
+    audio_dur = 0.0
+    try:
+        _r = subprocess.run(
+            [FFPROBE, "-v", "error", "-show_entries", "format=duration", "-of",
+             "default=nw=1:nk=1", str(audio)],
+            capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=30)
+        audio_dur = float(_r.stdout.strip() or 0)
+    except Exception:  # noqa: BLE001
+        pass
+
     # 1) 复制音频到 face2face (容器可见)
     audio_in_face = FACE / f"audio_{args.name}.wav"
     # name 可能含子目录（如 batch1/001），必须确保父目录存在，否则 shutil.copy 报 No such file
@@ -260,7 +271,10 @@ def main():
     # 3) 轮询
     result = None
     start = time.time()
-    max_wait = 480
+    # 渲染等待按音频时长动态：HEYGEM 渲染速度约 10~12s 视频/分钟，
+    # 306s 口播需 30 分钟；短视频也有 8 分钟下限兜底（修复：长口播被 480s 掐死）
+    max_wait = max(480, int(audio_dur * 6) + 120)
+    print(f"    [轮询] 渲染等待上限 {max_wait}s（音频 {audio_dur:.0f}s）")
     while time.time() - start < max_wait:
         time.sleep(4)
         try:
@@ -296,15 +310,6 @@ def main():
     # 关键修复：HEYGEM 标 success 时文件可能尚未完全落盘，必须等真正写完再处理，
     # 否则 ffmpeg 读半截文件会报 "moov atom not found" 导致整任务失败。
     # 动态超时：按音频时长自适应（长口播 300s 音频 → 等 720s），短音频仍 180s 兜底。
-    audio_dur = 0.0
-    try:
-        _r = subprocess.run(
-            [FFPROBE, "-v", "error", "-show_entries", "format=duration", "-of",
-             "default=nw=1:nk=1", str(audio)],
-            capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=30)
-        audio_dur = float(_r.stdout.strip() or 0)
-    except Exception:  # noqa: BLE001
-        pass
     ready_timeout = max(WAIT_READY_TIMEOUT, int(audio_dur * 2.4) + 120)
     print(f"[3] 等待 HEYGEM 产物落盘（音频 {audio_dur:.0f}s → 超时 {ready_timeout}s）")
     if not wait_file_ready(result, timeout=ready_timeout):
