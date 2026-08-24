@@ -126,8 +126,8 @@ def _sentence_pace(sent, base_rate=0.92):
                "记住", "注意", "重点", "关键", "一定"]
     lead_ms = 0
     if any(k in sent for k in slow_kw):
-        rate, base = 0.82, 600
-        lead_ms = 200                      # 警示/结论句前吸气停顿
+        rate, base = 0.90, 550     # 放慢但不过分拖（0.82 叠加情绪后≈0.85 太慢）
+        lead_ms = 180              # 警示/结论句前吸气停顿
     elif sent.count("、") >= 2:
         rate, base = 1.0, 320
     else:
