@@ -413,6 +413,45 @@ def _motion_graphic_frame(kind, title, data, local, scdur, idx):
         return render_graphic_card(kind, title, data)
 
 
+def _overlay_graphic_card(base, card, gcard, local, g_dur):
+    """数字人图解浮层：数字人保持出镜，图表卡半透明叠加，位置/大小按人脸自适应。
+    - 人脸在左→浮层靠右；在右→靠左；居中→放下方；人脸大→浮层大（人近放大）
+    - 淡入淡出：段首 0.25s 淡入、段尾 0.25s 淡出，避免生硬闪现"""
+    W, H = base.size
+    face = gcard.get("face")
+    if face and len(face) == 4:
+        fx, fy, fw, fh = face
+        cx = fx + fw / 2
+        # 浮层尺寸随人脸大小自适应（人近=脸大=浮层大）
+        ow = int(fw * 1.15)
+        ow = max(340, min(ow, int(W * 0.46)))
+        oh = int(ow * 1.15)
+        if cx < W * 0.4:
+            ox, oy = W - ow - 60, int(H * 0.38)
+        elif cx > W * 0.6:
+            ox, oy = 60, int(H * 0.38)
+        else:
+            ox, oy = (W - ow) // 2, int(H * 0.52)
+    else:
+        # 无人脸信息：固定底部浮层（右下角，避开字幕区）
+        ow, oh = 460, 529
+        ox, oy = W - ow - 40, H - oh - 320
+    # 缩放图表卡
+    card_r = card.convert("RGBA").resize((ow, oh), Image.LANCZOS)
+    # 淡入淡出
+    fade = 1.0
+    if local < 0.25:
+        fade = local / 0.25
+    elif local > 1 - 0.25:
+        fade = (1 - local) / 0.25
+    fade = max(0.0, min(1.0, fade))
+    # 半透明叠加（alpha 通道控制整体透明度）
+    card_r.putalpha(card_r.split()[3].point(lambda a: int(a * fade * 0.82)))
+    base_rgba = base.convert("RGBA")
+    base_rgba.alpha_composite(card_r, (ox, oy))
+    return base_rgba.convert("RGB")
+
+
 def burn_frames(events, frames, karaoke=None, style="minimal", graphics=None):
     # 按 start 时间建立逐字高亮事件索引（与 parse_ass 事件同序同起止）
     kmap = {}
@@ -442,13 +481,14 @@ def burn_frames(events, frames, karaoke=None, style="minimal", graphics=None):
         if cur or gcard:
             img = Image.open(png).convert("RGB")
             if gcard:
-                # 图解段：复用 motion 完整图解（真图表/AI生图/流程），带运镜 local
+                # 图解浮层：数字人保持出镜，motion 图表卡半透明叠加（自适应避让人脸）
                 g_start = float(gcard.get("start", 0))
                 g_end = float(gcard.get("end", g_start + 3))
                 g_dur = max(0.5, g_end - g_start)
                 local = min(1.0, max(0.0, (t - g_start) / g_dur))
-                img = _motion_graphic_frame(gcard.get("kind", "scene"), gcard.get("title", ""),
-                                            gcard.get("data") or {}, local, g_dur, i)
+                card = _motion_graphic_frame(gcard.get("kind", "scene"), gcard.get("title", ""),
+                                             gcard.get("data") or {}, local, g_dur, i)
+                img = _overlay_graphic_card(img, card, gcard, local, g_dur)
             draw_subtitle(img, cur, style=style, karaoke_event=kev, t=t)
             img.save(png, "PNG")
         # 每 50 帧回报一次进度（后端解析 [3] 烧字幕 N%）

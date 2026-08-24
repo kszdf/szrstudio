@@ -119,6 +119,47 @@ def mux(video_noaudio, audio, dst):
     return dst
 
 
+def annotate_face_positions(gfx, video_path, fps=30):
+    """数字人图解浮层自适应：抽每段起始帧，Haar 检测数字人主脸位置，
+    写 face=[x,y,w,h] 进每段 graphics，finalize 叠加时避让/变尺寸。
+    cv2 不可用则跳过（finalize 退化为底部固定浮层）。"""
+    try:
+        import cv2  # noqa: F401
+        import numpy as np  # noqa: F401
+    except Exception:  # noqa: BLE001
+        print("  [WARN] cv2 不可用，图解浮层退化为固定底部位置")
+        return gfx
+    cascade = cv2.CascadeClassifier(
+        os.path.join(GPT_SOVITS, "haarcascade_frontalface_default.xml"))
+    import tempfile as _tf
+    for g in gfx or []:
+        sec = float(g.get("start", 0))
+        frame = os.path.join(_tf.gettempdir(), "face_%s.png" % uuid.uuid4().hex[:8])
+        try:
+            subprocess.run(
+                [FFMPEG, "-y", "-ss", str(max(0, sec - 0.3)), "-i", str(video_path),
+                 "-frames:v", "1", frame],
+                capture_output=True, timeout=30, check=True)
+            if os.path.exists(frame):
+                img = cv2.imread(frame)
+                if img is not None:
+                    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    faces = cascade.detectMultiScale(gray, scaleFactor=1.1,
+                                                    minNeighbors=5, minSize=(80, 80))
+                    big = [f for f in faces if f[2] >= 200]
+                    if big:
+                        fx, fy, fw, fh = max(big, key=lambda f: f[2] * f[3])
+                        g["face"] = [int(fx), int(fy), int(fw), int(fh)]
+        except Exception as e:  # noqa: BLE001
+            print(f"  [WARN] 人脸检测失败 @{sec}s: {e}")
+        finally:
+            try:
+                os.remove(frame)
+            except OSError:
+                pass
+    return gfx
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--audio", required=True, help="千问生成的音频 wav(宿主路径)")
@@ -273,6 +314,19 @@ def main():
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     print("[6] PIL 烧字幕 + 拼片头 ...")
+
+    # 6.1) 图解浮层自适应：渲染后抽各图解段起始帧，检测数字人主脸位置，
+    #      写回 graphics JSON，供 finalize 半透明叠加时避让/变尺寸（人动浮层跟着动）
+    if args.graphics and os.path.exists(args.graphics):
+        try:
+            import json as _json
+            gfx = _json.loads(Path(args.graphics).read_text(encoding="utf-8"))
+            gfx = annotate_face_positions(gfx, str(synced))
+            Path(args.graphics).write_text(_json.dumps(gfx, ensure_ascii=False), encoding="utf-8")
+            print(f"[6.1] 图解浮层定位完成: {len(gfx)} 段")
+        except Exception as e:  # noqa: BLE001
+            print(f"  [WARN] 人脸定位失败({e})，浮层退化为固定底部")
+
     # 关键：finalize_v2_pil 抽帧重编码会丢原音轨，必须 --replace-audio 重新注入千问音频
     fin_args = [sys.executable, str(FINALIZE), "--video", str(synced),
                 "--ass", str(ass), "--replace-audio", str(audio), "--out", str(out),
