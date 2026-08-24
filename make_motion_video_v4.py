@@ -169,6 +169,20 @@ def wrap(seg, n=15):
         return [seg]
     return [seg[i:i + n] for i in range(0, len(seg), n)]
 
+
+def _wrap_px(text, d, f, max_w):
+    """按像素宽度换行（中文按字），防标题溢出屏幕。"""
+    lines, cur = [], ""
+    for ch in text or "":
+        if d.textlength(cur + ch, font=f) > max_w and cur:
+            lines.append(cur)
+            cur = ch
+        else:
+            cur += ch
+    if cur:
+        lines.append(cur)
+    return lines
+
 # ============================== 万相生图 ==============================
 _WANX_LOCK = threading.Lock()
 def wanx_image(prompt, api_key, size="720*1280", regen=False):
@@ -245,10 +259,24 @@ def dark_overlay():
 
 # ============================== 文字浮层 ==============================
 def draw_title(img, text, cx, cy, size, fill, anchor="mm"):
+    """顶部标题渲染（带防溢出：按像素换行 + 超长自动缩字号，绝不溢出屏幕）。"""
     d = ImageDraw.Draw(img)
+    max_w = W - 120          # 左右各留 60px 安全边距
+    # 自适应字号：从 size 往下试，直到标题 ≤2 行且不超宽
     f = font(size, "serif")
-    d.text((cx + 4, cy + 4), text, font=f, fill=(0, 0, 0), anchor=anchor)
-    d.text((cx, cy), text, font=f, fill=fill, anchor=anchor)
+    lines = _wrap_px(text, d, f, max_w)
+    while (len(lines) > 2 or any(d.textlength(ln, font=f) > max_w for ln in lines)) and size > 40:
+        size -= 6
+        f = font(size, "serif")
+        lines = _wrap_px(text, d, f, max_w)
+    lines = lines[:2]        # 最多 2 行，超出截断
+    line_h = int(size * 1.15)
+    total_h = line_h * len(lines)
+    start_y = cy - total_h // 2
+    for i, ln in enumerate(lines):
+        y = start_y + i * line_h
+        d.text((cx + 4, y + 4), ln, font=f, fill=(0, 0, 0), anchor=anchor)
+        d.text((cx, y), ln, font=f, fill=fill, anchor=anchor)
 
 def draw_number(img, num, sub, cx, cy, accent, scale=1.0):
     d = ImageDraw.Draw(img)
