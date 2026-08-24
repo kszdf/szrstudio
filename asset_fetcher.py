@@ -413,9 +413,33 @@ class PolicyAsset:
 
 
 # ------------------------------------------------------------------ 主入口
+def _search_variants(ref: dict) -> list[dict]:
+    """从政策引用派生出多个搜索变体（提高命中活链概率）。
+    原始关键词可能太口语/太泛，DeepSeek 常回死链；用「文号/核心词+公告」等变体重搜。"""
+    variants: list[dict] = []
+    doc = ref.get("doc_no", "") or ""
+    kw = ref.get("keywords", "") or ""
+    cands: list[str] = []
+    if doc:
+        cands.append(doc)                      # 纯文号
+        cands.append(f"{doc} 公告")
+    core = [k for k in re.split(r"[\s，。；、]+", kw) if len(k) >= 2 and k not in _GENERIC_WORDS]
+    if core:
+        joined = " ".join(core)
+        cands.append(joined)
+        cands.append(f"{joined} 公告 原文")
+    seen: set[str] = set()
+    for c in cands:
+        if c and c not in seen:
+            seen.add(c)
+            variants.append({"doc_no": doc, "keywords": c})
+    return variants
+
+
 def fetch_policy_asset(policy_ref: str, size: tuple = (1080, 1920),
                        cache_dir: str | None = None, timeout: int = 40) -> PolicyAsset:
-    """根据政策引用抓取官方原文素材。三级降级，带缓存。"""
+    """根据政策引用抓取官方原文素材。三级降级，带缓存。
+    搜索失败/全部候选死链时，自动用变体关键词重搜（最多 4 轮），再降级 L3。"""
     ref = parse_policy_ref(policy_ref)
     cache_dir = Path(cache_dir) if cache_dir else tempfile_dir()
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -434,52 +458,62 @@ def fetch_policy_asset(policy_ref: str, size: tuple = (1080, 1920),
         except Exception:
             pass
 
-    # 搜索官方 URL
-    hits = search_official(ref, timeout)
-    if not hits:
-        return PolicyAsset(level="L3", note="未检索到官方原文链接，请提供政策文号或更准确名称",
-                           source_url="")
-
-    top = hits[0]
-    url, title = top["url"], top.get("title", "") or ref["keywords"]
-
-    asset = PolicyAsset(source_url=url, title=title, doc_no=ref.get("doc_no", ""))
+    queries = [ref] + _search_variants(ref)
     last_err = ""
 
-    # 逐个尝试候选 URL（搜索返回的 URL 可能已失效/404，依次降级到下一条）
-    for cand in hits:
-        url = cand.get("url", "")
-        if not url:
+    for qi, qref in enumerate(queries):
+        # 搜索官方 URL
+        hits = search_official(qref, timeout)
+        if not hits:
+            last_err = "未检索到官方原文链接，请提供政策文号或更准确名称"
             continue
-        asset.title = cand.get("title", "") or title
-        asset.source_url = url
 
-        # L1 尝试 playwright 真实截屏（可选依赖）
-        img = _try_playwright_capture(url, ref["keywords"], cache_dir, key)
-        if img:
-            asset.image_path = img
-            asset.level = "L1"
-            break
-        # L2 urllib 抓正文 + PIL 渲染
-        try:
-            html_text, final_url = _http_get(url, timeout)
-            art = extract_article(html_text)
-            if not _is_relevant(art["title"], ref):
-                last_err = f"页面不相关：{art['title'][:40]}"
+        top = hits[0]
+        url, title = top["url"], top.get("title", "") or qref["keywords"]
+
+        asset = PolicyAsset(source_url=url, title=title, doc_no=qref.get("doc_no", ""))
+
+        # 逐个尝试候选 URL（搜索返回的 URL 可能已失效/404，依次降级到下一条）
+        for cand in hits:
+            url = cand.get("url", "")
+            if not url:
                 continue
-            asset.title = art["title"] or asset.title
-            asset.source_url = final_url or url
-            clause = locate_clause(art["paragraphs"], ref["keywords"])
-            asset.clause = clause
-            if clause:
-                asset.image_path = render_clause_card(asset.title, ref.get("doc_no", ""),
-                                                      clause, asset.source_url, ref["keywords"],
-                                                      size=size, out_path=str(img_p))
-                asset.level = "L2"
+            asset.title = cand.get("title", "") or title
+            asset.source_url = url
+
+            # L1 尝试 playwright 真实截屏（可选依赖）
+            img = _try_playwright_capture(url, qref["keywords"], cache_dir, key)
+            if img:
+                asset.image_path = img
+                asset.level = "L1"
                 break
-        except Exception as e:
-            last_err = str(e)
-            continue
+            # L2 urllib 抓正文 + PIL 渲染
+            try:
+                html_text, final_url = _http_get(url, timeout)
+                art = extract_article(html_text)
+                if not _is_relevant(art["title"], qref):
+                    last_err = f"页面不相关：{art['title'][:40]}"
+                    continue
+                asset.title = art["title"] or asset.title
+                asset.source_url = final_url or url
+                clause = locate_clause(art["paragraphs"], qref["keywords"])
+                asset.clause = clause
+                if clause:
+                    asset.image_path = render_clause_card(asset.title, qref.get("doc_no", ""),
+                                                          clause, asset.source_url, qref["keywords"],
+                                                          size=size, out_path=str(img_p))
+                    asset.level = "L2"
+                    break
+            except Exception as e:
+                last_err = str(e)
+                continue
+
+        if asset.image_path:
+            break
+        # 本轮全部候选失败 → 换变体关键词重搜（最多 4 轮）
+        last_err = last_err or "全部候选 URL 失效/不相关"
+        if qi < len(queries) - 1:
+            last_err = f"第{qi + 1}轮搜索失败({last_err[:40]})，换关键词重试"
 
     if not asset.image_path:
         asset.level = "L3"
