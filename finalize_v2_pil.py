@@ -362,6 +362,57 @@ def render_graphic_card(kind, title, data, pal=None):
     return img
 
 
+def _motion_graphic_frame(kind, title, data, local, scdur, idx):
+    """数字人图解段：复用 make_motion_video_v4 的成熟图解渲染（真图表/AI生图/流程），
+    替代此前的简化大字卡。返回 RGB 帧。"""
+    try:
+        import importlib.util as _ilu
+        spec = _ilu.spec_from_file_location(
+            "mv4", str(BASE / "make_motion_video_v4.py"))
+        mv = _ilu.module_from_spec(spec)
+        spec.loader.exec_module(mv)
+    except Exception as e:  # noqa: BLE001
+        print(f"  [WARN] motion 图解模块加载失败({e})，回退简化卡", file=sys.stderr)
+        return render_graphic_card(kind, title, data)
+
+    tone = data.get("tone", "neutral")
+    pal = mv.get_palette(tone)
+    sc = {"visual_type": kind, "title": title[:14], "tone": tone,
+          "keywords": data.get("keywords") or []}
+    try:
+        if kind == "number":
+            sc["highlight_num"] = str(data.get("num", ""))
+            sc["num_sub"] = str(data.get("sub", ""))[:12]
+            img = mv._render_number(sc, pal, 1.0, 1.0)
+        elif kind == "table":
+            sc["table"] = data.get("table") or {"head": [], "rows": []}
+            img = mv._render_table(sc, pal, 1.0, 1.0)
+        elif kind == "step":
+            sc["steps"] = data.get("steps") or []
+            img = mv._render_step(sc, pal, idx, 0.5, scdur, None)
+        elif kind == "quote":
+            sc["quote_text"] = str(data.get("quote", ""))[:14]
+            img = mv._render_quote(sc, pal, 1.0, 1.0)
+        elif kind == "scene":
+            # AI 生图场景卡：用万相生图（带缓存）；失败回退渐变
+            import os as _os
+            try:
+                _os.environ.setdefault("DASHSCOPE_API_KEY", "")
+                from model_providers import ensure_env
+                ensure_env()
+                jpg = mv.wanx_image(str(data.get("prompt", title)), _os.getenv("DASHSCOPE_API_KEY"))
+                base = mv.cover_resize(mv.Image.open(jpg).convert("RGB"), mv.W, mv.H)
+            except Exception:  # noqa: BLE001
+                base = mv.fallback_img(tone)
+            img = mv._render_scene(sc, pal, idx, 0.5, scdur, base)
+        else:
+            img = render_graphic_card(kind, title, data)
+        return img.convert("RGB")
+    except Exception as e:  # noqa: BLE001
+        print(f"  [WARN] motion 图解渲染失败({e})，回退简化卡", file=sys.stderr)
+        return render_graphic_card(kind, title, data)
+
+
 def burn_frames(events, frames, karaoke=None, style="minimal", graphics=None):
     # 按 start 时间建立逐字高亮事件索引（与 parse_ass 事件同序同起止）
     kmap = {}
@@ -391,8 +442,13 @@ def burn_frames(events, frames, karaoke=None, style="minimal", graphics=None):
         if cur or gcard:
             img = Image.open(png).convert("RGB")
             if gcard:
-                img = render_graphic_card(gcard.get("kind", "scene"), gcard.get("title", ""),
-                                          gcard.get("data") or {})
+                # 图解段：复用 motion 完整图解（真图表/AI生图/流程），带运镜 local
+                g_start = float(gcard.get("start", 0))
+                g_end = float(gcard.get("end", g_start + 3))
+                g_dur = max(0.5, g_end - g_start)
+                local = min(1.0, max(0.0, (t - g_start) / g_dur))
+                img = _motion_graphic_frame(gcard.get("kind", "scene"), gcard.get("title", ""),
+                                            gcard.get("data") or {}, local, g_dur, i)
             draw_subtitle(img, cur, style=style, karaoke_event=kev, t=t)
             img.save(png, "PNG")
         # 每 50 帧回报一次进度（后端解析 [3] 烧字幕 N%）
