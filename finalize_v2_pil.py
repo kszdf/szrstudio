@@ -216,10 +216,11 @@ def draw_subtitle(img, text, style="minimal", karaoke_event=None, t=None):
             for ch in ln:
                 kflat.append(ch)
 
-    # ── 逐行出现（数字人出镜专用：区别于滚动字幕的一次性多行）──
-    # 按"已读到哪个字符"推算当前应显示到第几行：已读字符所在行及之前的行全显示，
-    # 未读到的行先不画（下一行等读到该行第一个字时才出现），像真人一句句讲。
-    # 无 karaoke 时退化为"前 N 行按时间均分逐行出现"（每行分配 (e-s)/行数 秒）。
+    # ── 逐行显示（数字人出镜专用，主流真人口播风格）──
+    # 只显示"当前正在读的那一行"：读到第 2 行时第 1 行消失，读到第 3 行时第 2 行消失，
+    # 永不累积堆叠。区别于滚动字幕的一次性多行堆叠。
+    # 无 karaoke 时退化为"按时间均分逐行切换"（每行分配 (e-s)/行数 秒）。
+    shown_start = 0
     shown_lines = len(lines)
     if karaoke_event and kflat and t is not None:
         # 找已读字符数（char 的 e 时间 <= 当前 t）
@@ -229,7 +230,7 @@ def draw_subtitle(img, text, style="minimal", karaoke_event=None, t=None):
                 read_n += 1
             else:
                 break
-        # 该字符落在第几行（按 karaoke lines 的行边界）
+        # 该字符落在第几行（按 karaoke lines 的行边界）→ 只显示这一行
         row = 0
         acc = 0
         klines = karaoke_event.get("lines", []) or []
@@ -238,13 +239,16 @@ def draw_subtitle(img, text, style="minimal", karaoke_event=None, t=None):
             if read_n <= acc:
                 row = ri
                 break
+        shown_start = row
         shown_lines = row + 1
     elif t is not None and karaoke_event and karaoke_event.get("start") is not None:
         ev_start = float(karaoke_event.get("start", 0))
         ev_end = float(karaoke_event.get("end", ev_start + 3))
         ev_dur = max(0.3, ev_end - ev_start)
         per_line = ev_dur / max(1, len(lines))
-        shown_lines = min(len(lines), int((t - ev_start) / per_line) + 1)
+        row = min(len(lines) - 1, int((t - ev_start) / per_line))
+        shown_start = row
+        shown_lines = row + 1
     # 行数上限保护（>2 行时等比例上移，避免顶到数字人下巴/画面中部）
     if len(lines) > 2:
         y0 = max(120, y0 - (len(lines) - 2) * line_h // 2)
@@ -252,12 +256,13 @@ def draw_subtitle(img, text, style="minimal", karaoke_event=None, t=None):
     char_idx = [0]
     ci = [0]   # 颜色索引（与 karaoke 的 char_idx 独立，映射 colors）
     for i, ln in enumerate(lines):
-        if i >= shown_lines:
-            break   # 逐行出现：未读到的行不画
+        if i < shown_start or i >= shown_lines:
+            continue   # 只显示当前行（口播逐行风格）
         widths = [_char_width(draw, ch) for ch in ln]
         tw = sum(widths)
         x = (W - tw) // 2
-        y = y0 + i * line_h
+        # 只显示当前行：固定在底部同一位置（行切换不跳动，口播字幕常见做法）
+        y = H - SUB_MARGIN_BOTTOM - line_h
         # 半透明圆角底衬（默认开启，提升低反差场景可读性与高级感）
         pad = 14
         bx, by = x - pad, y - 10
