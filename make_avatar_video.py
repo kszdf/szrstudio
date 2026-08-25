@@ -113,6 +113,58 @@ def check_container_health(timeout=8):
         return False
 
 
+def _derive_code(name, audio_in_face_name, model, audio_dur, audio_size):
+    """确定性派生 HEYGEM code：avatar_{name}_{md5(音频文件|模特|时长|大小)}。
+    name 是 --name 参数（ASCII 短名，如 hgt_201f7a），决定 code 前缀；
+    hash 部分由音频文件+模特+时长+大小派生 → 同一条稿+同音色重跑 → 同 code → 复用命中（机制A1）。"""
+    raw = (name or '').split('/')[-1] or 'proj'
+    ascii_tag = raw.encode('ascii', 'ignore').decode('ascii').strip() or 'proj'
+    _seed = "%s|%s|%s|%s" % (audio_in_face_name, model, str(audio_dur), audio_size)
+    _h = hashlib.md5(_seed.encode("utf-8")).hexdigest()[:6]
+    return f"avatar_{ascii_tag}_{_h}"
+
+
+def _post_process(result, audio, ass, args, code):
+    """后期阶段（去双声 → mux → 烧字幕+片头）。render/post/full 三模式共用。
+    result: 已就绪的 HEYGEM 产物（-r.mp4/-t.mp4）。"""
+    noa = TEMP / f"{code}_noa.mp4"
+    strip_audio(result, noa)
+    print("[4] 已剥离 HEYGEM 自带音轨 (去双声)")
+
+    synced = TEMP / f"{code}_synced.mp4"
+    mux(noa, audio, synced)
+    print(f"[5] 已合成嘴型对齐视频(音频=千问): {synced}")
+
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    print("[6] PIL 烧字幕 + 拼片头 ...")
+
+    # 6.1) 图解浮层自适应：渲染后抽各图解段起始帧，检测数字人主脸位置，
+    #      写回 graphics JSON，供 finalize 半透明叠加时避让/变尺寸（人动浮层跟着动）
+    if args.graphics and os.path.exists(args.graphics):
+        try:
+            import json as _json
+            gfx = _json.loads(Path(args.graphics).read_text(encoding="utf-8"))
+            gfx = annotate_face_positions(gfx, str(synced))
+            Path(args.graphics).write_text(_json.dumps(gfx, ensure_ascii=False), encoding="utf-8")
+            print(f"[6.1] 图解浮层定位完成: {len(gfx)} 段")
+        except Exception as e:  # noqa: BLE001
+            print(f"  [WARN] 人脸定位失败({e})，浮层退化为固定底部")
+
+    # 关键：finalize_v2_pil 抽帧重编码会丢原音轨，必须 --replace-audio 重新注入千问音频
+    fin_args = [sys.executable, str(FINALIZE), "--video", str(synced),
+                "--ass", str(ass), "--replace-audio", str(audio), "--out", str(out),
+                "--subtitle-style", args.subtitle_style]
+    if args.karaoke:
+        fin_args += ["--karaoke", str(args.karaoke)]
+    if args.graphics:
+        fin_args += ["--graphics", str(args.graphics)]
+    if args.font:
+        fin_args += ["--font", args.font]
+    run(fin_args)
+    print(f"\n✅ 成品: {out}  ({out.stat().st_size//1024} KB)")
+
+
 # HEYGEM 标 success 时 -r.mp4 常尚未完全 flush（moov 写在文件末尾）。
 # 若立即处理会读到半截文件 -> ffmpeg 报 "moov atom not found" 导致整任务失败。
 # 故取结果后必须等到文件真正落盘完整再继续。
@@ -215,6 +267,13 @@ def main():
                     help="逐字高亮时间轴 sidecar JSON（dynamic 风格使用）")
     ap.add_argument("--graphics", default=None,
                     help="智能图解时间轴 JSON（数字人出镜时按内容穿插图解卡）")
+    ap.add_argument("--stage", default="full", choices=["full", "render", "post"],
+                    help="full=渲染+后期(默认); render=只渲染到产物就绪并输出路径(--result-out); "
+                         "post=从 --result 已就绪产物开始只做后期（流水线并行用，不碰容器）")
+    ap.add_argument("--result", default=None,
+                    help="post 模式：已就绪的 HEYGEM 产物（-r.mp4/-t.mp4）路径")
+    ap.add_argument("--result-out", default=None,
+                    help="render 模式：产物就绪后把产物路径写入该文件（供流水线编排读取）")
     args = ap.parse_args()
 
     # —— 场景解析（安全接线：素材未就位时回退默认模特，绝不因未知参数崩溃）——
@@ -249,6 +308,19 @@ def main():
             f"      请检查 TTS 产物是否被临时目录清理，重新生成音频后再提交渲染，"
             f"      不要带病提交（否则 HEYGEM 会白跑 30 分钟）。")
     print(f"[B2] 音频自检通过: {audio.name} 时长 {audio_dur:.1f}s")
+
+    # —— 流水线拆分点：post 模式从已就绪产物直接做后期，不碰容器/不桥接 ——
+    if args.stage == "post":
+        if not args.result or not Path(args.result).exists():
+            sys.exit(f"[post] --result 产物不存在: {args.result}")
+        result = Path(args.result)
+        print(f"[post] 从已就绪产物开始后期: {result.name} "
+              f"({result.stat().st_size//1024} KB)")
+        # 兼容：post 模式无容器参与，但 code 用于中间文件命名，仍按确定性派生
+        audio_in_face_name = f"audio_{args.name}.wav"
+        code = _derive_code(args.name, audio_in_face_name, args.model, audio_dur, audio.stat().st_size)
+        _post_process(result, audio, ass, args, code)
+        return
 
     # 机制B2-2：提交 HEYGEM 前探测容器健康，未就绪立刻给出提示而非空等重试
     if not check_container_health():
@@ -287,11 +359,7 @@ def main():
     # 改成 ASCII 短名 + 确定性 hash（机制一：产物复用）
     # code 基于「音频内容+模特+时长」的 md5 —— 同一条稿重跑得到相同 code，
     # 渲染前检查同 code 产物是否完整，完整则跳过 HEYGEM 渲染直接后期（省 30 分钟）。
-    raw = (args.name or '').split('/')[-1] or 'proj'
-    ascii_tag = raw.encode('ascii', 'ignore').decode('ascii').strip() or 'proj'
-    _seed = "%s|%s|%s|%s" % (audio_in_face.name, args.model, str(audio_dur), audio.stat().st_size)
-    _h = hashlib.md5(_seed.encode("utf-8")).hexdigest()[:6]
-    code = f"avatar_{ascii_tag}_{_h}"
+    code = _derive_code(args.name, audio_in_face.name, args.model, audio_dur, audio.stat().st_size)
 
     # 2) 产物复用检查：同 code 的 -t.mp4 已完整可读（moov 完整 + 时长≈音频）→ 跳过渲染
     cand_t = TEMP / f"{code}-t.mp4"
@@ -413,45 +481,16 @@ def main():
                  f"请重试，或 `docker restart heygem-gen-video` 后重跑。")
     print("[3+] 文件已确认完整落盘，开始后期处理")
 
-    # 4) 去双声: 剥离自带音轨
-    noa = TEMP / f"{code}_noa.mp4"
-    strip_audio(result, noa)
-    print("[4] 已剥离 HEYGEM 自带音轨 (去双声)")
+    # —— 流水线拆分点：render 模式只到产物就绪，写路径后返回（后期由编排方并行做）——
+    if args.stage == "render":
+        if args.result_out:
+            Path(args.result_out).write_text(str(result), encoding="utf-8")
+            print(f"[render] 产物就绪路径已写入: {args.result_out}")
+        else:
+            print(f"[render] 产物就绪: {result}")
+        return
 
-    # 5) 用千问音频 mux
-    synced = TEMP / f"{code}_synced.mp4"
-    mux(noa, audio, synced)
-    print(f"[5] 已合成嘴型对齐视频(音频=千问): {synced}")
-
-    # 6) 烧字幕 + 片头
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    print("[6] PIL 烧字幕 + 拼片头 ...")
-
-    # 6.1) 图解浮层自适应：渲染后抽各图解段起始帧，检测数字人主脸位置，
-    #      写回 graphics JSON，供 finalize 半透明叠加时避让/变尺寸（人动浮层跟着动）
-    if args.graphics and os.path.exists(args.graphics):
-        try:
-            import json as _json
-            gfx = _json.loads(Path(args.graphics).read_text(encoding="utf-8"))
-            gfx = annotate_face_positions(gfx, str(synced))
-            Path(args.graphics).write_text(_json.dumps(gfx, ensure_ascii=False), encoding="utf-8")
-            print(f"[6.1] 图解浮层定位完成: {len(gfx)} 段")
-        except Exception as e:  # noqa: BLE001
-            print(f"  [WARN] 人脸定位失败({e})，浮层退化为固定底部")
-
-    # 关键：finalize_v2_pil 抽帧重编码会丢原音轨，必须 --replace-audio 重新注入千问音频
-    fin_args = [sys.executable, str(FINALIZE), "--video", str(synced),
-                "--ass", str(ass), "--replace-audio", str(audio), "--out", str(out),
-                "--subtitle-style", args.subtitle_style]
-    if args.karaoke:
-        fin_args += ["--karaoke", str(args.karaoke)]
-    if args.graphics:
-        fin_args += ["--graphics", str(args.graphics)]
-    if args.font:
-        fin_args += ["--font", args.font]
-    run(fin_args)
-    print(f"\n✅ 成品: {out}  ({out.stat().st_size//1024} KB)")
+    _post_process(result, audio, ass, args, code)
 
 
 if __name__ == "__main__":
