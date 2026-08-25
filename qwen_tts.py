@@ -84,7 +84,17 @@ def synth(text, voice, out_path, model=DEFAULT_MODEL, speech_rate=DEFAULT_SPEECH
                 raise box["err"]
             audio_bytes = box.get("audio")
             if not isinstance(audio_bytes, (bytes, bytearray)) or len(audio_bytes) < 1000:
-                raise RuntimeError(f"返回内容异常: type={type(audio_bytes).__name__}, len={len(audio_bytes) if hasattr(audio_bytes, '__len__') else '?'}")
+                import os as _os
+                _dbg = {
+                    "type": type(audio_bytes).__name__,
+                    "len": len(audio_bytes) if hasattr(audio_bytes, "__len__") else "?",
+                    "voice": (voice or "")[:20],
+                    "cwd": _os.getcwd(),
+                    "has_key": bool(_os.environ.get("DASHSCOPE_API_KEY")),
+                    "key_head": (_os.environ.get("DASHSCOPE_API_KEY") or "")[:8],
+                    "last_error": str(getattr(synth, "last_error", "") or ""),
+                }
+                raise RuntimeError(f"返回内容异常: type={type(audio_bytes).__name__}, len={len(audio_bytes) if hasattr(audio_bytes, '__len__') else '?'} DBG={_dbg}")
             Path(out_path).parent.mkdir(parents=True, exist_ok=True)
             with open(out_path, "wb") as f:
                 f.write(audio_bytes)

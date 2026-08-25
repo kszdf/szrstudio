@@ -143,5 +143,12 @@
 - 队列 seq1 status 已置为 `done`、`video_path` 回填；per-week `output/weekly/2026-W35/README.md` 已刷新（seq1 显示 done+成片路径）。脚本自动确保 ffmpeg 与模型 key 就绪，无异常。
 - 剩余下午档待渲染：seq3/5/7/9/11/13（day 1-6，周二至周日 15:00 自动化继续）。
 
+## 2026-08-25 (周二, 周号 2026-W35)
+- 执行 `weekly_pipeline.py render --slot afternoon`（EXIT=0）。
+- 结果：**成功渲染 1 条**（非跳过）。本周W35队列已生成（14选题，seq1 已 done）。当前周二(day=1)下午档命中 seq3（暂估成本千万，千万别乱冲，dialogue 双声）。
+- 产出：`output/weekly/2026-W35/videos/2026-W35-03-暂估成本千万_千万别乱冲.mp4`（24,607,152字节≈23.5MB，1080x1920竖屏 GIF动态背景大字逐字高亮）；同名 sidecar `videos/2026-W35-03-暂估成本千万_千万别乱冲.txt`（1595字节，含发布文案+口播稿）。
+- 队列 seq3 status 已置为 `done`、`video_path` 回填；per-week `output/weekly/2026-W35/README.md` 已刷新（14:58:48，seq3 显示 done+成片路径）。脚本自动确保 ffmpeg 与模型 key 就绪，无异常。
+- 剩余下午档待渲染：seq5/7/9/11/13（day 2-6，周三至周日 15:00 自动化继续）。
+
 ## 历史
 - （暂无更早记录）
