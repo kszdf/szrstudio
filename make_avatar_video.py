@@ -80,6 +80,39 @@ def strip_audio(src, dst):
     return dst
 
 
+def probe_audio(path, timeout=30):
+    """ffprobe 读取音频时长；失败/不可读返回 None。
+    机制B2-1：渲染提交前必须确认音频完整可读（时长>0），
+    否则 HEYGEM 会拿坏音频渲染 30 分钟才发现，昨晚「temp 清理丢音频」就是这样浪费的。"""
+    try:
+        r = subprocess.run(
+            [FFPROBE, "-v", "error", "-show_entries", "format=duration", "-of",
+             "default=nw=1:nk=1", str(path)],
+            capture_output=True, text=True, encoding="utf-8", errors="ignore",
+            timeout=timeout)
+        dur = float((r.stdout or "").strip() or 0)
+        if r.returncode == 0 and dur > 0:
+            return dur
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def check_container_health(timeout=8):
+    """机制B2-2：提交 HEYGEM 前探测容器是否活着（/easy/query 有响应即可）。
+    容器未就绪/崩溃时立刻报错并给出 docker restart 提示，而不是在提交重试里空等。"""
+    try:
+        r = requests.get(VIDEO_API + "/easy/query", params={"code": "health_probe"},
+                         timeout=timeout)
+        # 200 且能解析出 code 字段即视为容器活着（任务不存在=10004 也是正常响应）
+        r.raise_for_status()
+        r.json()
+        return True
+    except Exception as e:  # noqa: BLE001
+        print(f"  [B2] ⚠ HEYGEM 容器健康探测失败: {e}")
+        return False
+
+
 # HEYGEM 标 success 时 -r.mp4 常尚未完全 flush（moov 写在文件末尾）。
 # 若立即处理会读到半截文件 -> ffmpeg 报 "moov atom not found" 导致整任务失败。
 # 故取结果后必须等到文件真正落盘完整再继续。
@@ -206,24 +239,49 @@ def main():
     if not ass.exists():
         sys.exit(f"字幕不存在: {ass}")
 
-    # 音频时长（提前算，供渲染轮询/落盘等待动态超时用）
-    audio_dur = 0.0
-    try:
-        _r = subprocess.run(
-            [FFPROBE, "-v", "error", "-show_entries", "format=duration", "-of",
-             "default=nw=1:nk=1", str(audio)],
-            capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=30)
-        audio_dur = float(_r.stdout.strip() or 0)
-    except Exception:  # noqa: BLE001
-        pass
+    # 机制B2-1：渲染提交前自检 —— 音频必须完整可读（时长>0）
+    # 否则 HEYGEM 拿坏音频渲染 30 分钟才发现（昨晚「temp 清理丢音频」事故的根因）
+    audio_dur = probe_audio(audio)
+    if audio_dur is None:
+        sys.exit(
+            f"[B2] 音频完整性自检失败: {audio}\n"
+            f"      ffprobe 无法读取（文件缺失/半截/损坏）。"
+            f"      请检查 TTS 产物是否被临时目录清理，重新生成音频后再提交渲染，"
+            f"      不要带病提交（否则 HEYGEM 会白跑 30 分钟）。")
+    print(f"[B2] 音频自检通过: {audio.name} 时长 {audio_dur:.1f}s")
+
+    # 机制B2-2：提交 HEYGEM 前探测容器健康，未就绪立刻给出提示而非空等重试
+    if not check_container_health():
+        print("  [B2] ⚠ 容器探测失败——确认 Docker 容器 heygem-gen-video 处于 Up 状态，"
+              "启动后等待约 10~30 秒再重试，或执行 `docker restart heygem-gen-video`。")
+        # 网络级失败（连接被拒）直接终止；仅任务级 busy 走下方提交重试
+        try:
+            requests.get(VIDEO_API + "/easy/query", params={"code": "health_probe"}, timeout=5)
+        except requests.exceptions.RequestException:
+            sys.exit("[B2] HEYGEM 容器无响应（连接被拒）——请确认容器已启动。")
+        print("  [B2] 容器可达（可能正忙），继续提交重试逻辑...")
 
     # 1) 复制音频到 face2face (容器可见)
     audio_in_face = FACE / f"audio_{args.name}.wav"
     # name 可能含子目录（如 batch1/001），必须确保父目录存在，否则 shutil.copy 报 No such file
     audio_in_face.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy(audio, audio_in_face)
+    if os.path.abspath(audio) == os.path.abspath(audio_in_face):
+        print(f"[1] 音频已在 face2face（跳过复制）: {audio_in_face.name}")
+    else:
+        shutil.copy(audio, audio_in_face)
     audio_container = f"/code/data/audio_{args.name}.wav"
     print(f"[1] 音频已桥接: {audio_in_face.name} -> {audio_container}")
+
+    # 机制B2-3：桥接后校验复制产物完整（大小一致 + 时长可读），
+    # 防「temp 清理丢音频 / 复制半截」在渲染 30 分钟后才暴露
+    if audio_in_face.stat().st_size != audio.stat().st_size:
+        sys.exit(f"[B2] 音频桥接校验失败：大小不一致 "
+                 f"({audio.stat().st_size} -> {audio_in_face.stat().st_size})")
+    bridged_dur = probe_audio(audio_in_face)
+    if bridged_dur is None or abs(bridged_dur - audio_dur) > 0.5:
+        sys.exit(f"[B2] 音频桥接校验失败：容器侧时长不可读/不一致 "
+                 f"(源 {audio_dur:.1f}s -> 桥接 {bridged_dur}s)")
+    print(f"[B2] 音频桥接校验通过（{audio_in_face.stat().st_size} bytes, {bridged_dur:.1f}s）")
 
     # 关键修复：code 之前拼 args.name（含中文）→ 落到 PowerShell 5.1 终端被 GBK 解码成乱字符
     # 改成 ASCII 短名 + 确定性 hash（机制一：产物复用）
@@ -267,39 +325,39 @@ def main():
         # HEYGEM 的 TransDhTask.run_flag 是内存标志，偶发异常退出后没复位会一直 busy
         print(f"[2] 提交 HEYGEM 视频生成 (code={code}) ...")
         submit_data = None
-    # 提交阶段：对「HEYGEM 忙碌(10001)」与「网络中断/连接被拒」两类临时错误都做递增重试，
-    # 给刚启动或偶发崩溃的容器留出就绪时间，避免一上来就 rc=1 直接失败。
-    waits = [0, 5, 10, 15, 20, 25]
-    last_net_err = None
-    for attempt in range(1, len(waits) + 1):
-        wait_s = waits[attempt - 1]
-        if wait_s:
-            print("    等待 %ds 后重试（第 %d/%d 次）..." % (wait_s, attempt, len(waits)))
-            time.sleep(wait_s)
-        try:
-            r = requests.post(VIDEO_API + "/easy/submit", json={
-                "audio_url": audio_container,
-                "video_url": args.model,
-                "code": code,
-            }, timeout=30)
-            submit_data = r.json()
-        except requests.exceptions.RequestException as e:
-            last_net_err = e
-            print("    网络异常（连接中断/被拒）：%s — 视为临时错误，重试" % e)
-            continue
-        if submit_data.get("code") == 10000:
-            break
-        # 10001=忙碌中 → 重试；其它错（参数错等）→ 立即失败
-        if submit_data.get("code") != 10001:
-            sys.exit("提交失败: " + str(submit_data))
-    if not submit_data or submit_data.get("code") != 10000:
-        if last_net_err:
-            hint = ("\n    底层网络错误: " + str(last_net_err) +
-                    "\n    多半是 HEYGEM 容器刚启动未就绪或已崩溃——请确认 Docker 容器 heygem-gen-video 处于 Up，"
-                    "启动后等待约 10~30 秒再重试，或执行 `docker restart heygem-gen-video`。")
-            sys.exit("提交失败（%d 次重试后仍失败）：%s%s" % (len(waits), submit_data, hint))
-        sys.exit("提交失败（%d 次重试后仍忙碌）：%s。前面可能还有长任务在跑，请稍后手动重试，或执行 `docker restart heygem-gen-video` 清掉内存锁。" % (len(waits), submit_data))
-    print("    提交成功，开始渲染...")
+        # 提交阶段：对「HEYGEM 忙碌(10001)」与「网络中断/连接被拒」两类临时错误都做递增重试，
+        # 给刚启动或偶发崩溃的容器留出就绪时间，避免一上来就 rc=1 直接失败。
+        waits = [0, 5, 10, 15, 20, 25]
+        last_net_err = None
+        for attempt in range(1, len(waits) + 1):
+            wait_s = waits[attempt - 1]
+            if wait_s:
+                print("    等待 %ds 后重试（第 %d/%d 次）..." % (wait_s, attempt, len(waits)))
+                time.sleep(wait_s)
+            try:
+                r = requests.post(VIDEO_API + "/easy/submit", json={
+                    "audio_url": audio_container,
+                    "video_url": args.model,
+                    "code": code,
+                }, timeout=30)
+                submit_data = r.json()
+            except requests.exceptions.RequestException as e:
+                last_net_err = e
+                print("    网络异常（连接中断/被拒）：%s — 视为临时错误，重试" % e)
+                continue
+            if submit_data.get("code") == 10000:
+                break
+            # 10001=忙碌中 → 重试；其它错（参数错等）→ 立即失败
+            if submit_data.get("code") != 10001:
+                sys.exit("提交失败: " + str(submit_data))
+        if not submit_data or submit_data.get("code") != 10000:
+            if last_net_err:
+                hint = ("\n    底层网络错误: " + str(last_net_err) +
+                        "\n    多半是 HEYGEM 容器刚启动未就绪或已崩溃——请确认 Docker 容器 heygem-gen-video 处于 Up，"
+                        "启动后等待约 10~30 秒再重试，或执行 `docker restart heygem-gen-video`。")
+                sys.exit("提交失败（%d 次重试后仍失败）：%s%s" % (len(waits), submit_data, hint))
+            sys.exit("提交失败（%d 次重试后仍忙碌）：%s。前面可能还有长任务在跑，请稍后手动重试，或执行 `docker restart heygem-gen-video` 清掉内存锁。" % (len(waits), submit_data))
+        print("    提交成功，开始渲染...")
 
     if _skip_render:
         # 产物复用：跳过轮询/落盘等待，result 已就绪
