@@ -155,6 +155,8 @@ def _post_process(result, audio, ass, args, code):
     fin_args = [sys.executable, str(FINALIZE), "--video", str(synced),
                 "--ass", str(ass), "--replace-audio", str(audio), "--out", str(out),
                 "--subtitle-style", args.subtitle_style]
+    if getattr(args, "no_intro", False):
+        fin_args += ["--no-intro"]
     if args.karaoke:
         fin_args += ["--karaoke", str(args.karaoke)]
     if args.graphics:
@@ -274,6 +276,9 @@ def main():
                     help="post 模式：已就绪的 HEYGEM 产物（-r.mp4/-t.mp4）路径")
     ap.add_argument("--result-out", default=None,
                     help="render 模式：产物就绪后把产物路径写入该文件（供流水线编排读取）")
+    ap.add_argument("--no-intro", action="store_true",
+                    help="本段不拼品牌片头（分段流水线用：每段不拼片头，拼接后整片拼一次，"
+                         "否则段2 开头片头会在拼接处造成 3s 静音）")
     args = ap.parse_args()
 
     # —— 场景解析（安全接线：素材未就位时回退默认模特，绝不因未知参数崩溃）——
