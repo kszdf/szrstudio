@@ -304,7 +304,11 @@ def extract_frames(video, frames_dir):
     frames_dir.mkdir(parents=True, exist_ok=True)
     cmd = [FFMPEG, "-y", "-i", str(video), "-vf", f"fps={FPS}", str(frames_dir / "f_%05d.png")]
     run(cmd)
-    return sorted(frames_dir.glob("f_*.png"))
+    frames = sorted(frames_dir.glob("f_*.png"))
+    # 机制三：返回抽帧批次完成时间（烧帧后 mtime 更新 → 可识别已烧帧，续传跳过）
+    import time as _time
+    batch_mtime = max((p.stat().st_mtime for p in frames), default=_time.time())
+    return frames, batch_mtime
 
 
 def render_graphic_card(kind, title, data, pal=None):
@@ -467,7 +471,7 @@ def _overlay_graphic_card(base, card, gcard, local, g_dur):
     return base_rgba.convert("RGB")
 
 
-def burn_frames(events, frames, karaoke=None, style="minimal", graphics=None):
+def burn_frames(events, frames, karaoke=None, style="minimal", graphics=None, batch_mtime=None):
     # 按 start 时间建立逐字高亮事件索引（与 parse_ass 事件同序同起止）
     kmap = {}
     if karaoke and isinstance(karaoke, dict):
@@ -477,8 +481,20 @@ def burn_frames(events, frames, karaoke=None, style="minimal", graphics=None):
     gfx = graphics or []
     print(f"  共 {len(frames)} 帧，{len(events)} 条字幕，{len(gfx)} 段图解，字幕风格={style}")
     n = len(frames)
+    # 机制三：帧级续传——烧过的帧 mtime 晚于抽帧批次时间 → 跳过（中断重跑不重烧）
+    if batch_mtime is None:
+        import time as _t
+        batch_mtime = _t.time()
+    skipped = 0
     for i, png in enumerate(frames):
         t = i / FPS
+        # 帧级续传：已烧过的帧（mtime 更新）跳过
+        try:
+            if png.stat().st_mtime > batch_mtime:
+                skipped += 1
+                continue
+        except OSError:
+            pass
         # 找当前时间字幕
         cur = None
         kev = None
@@ -510,6 +526,8 @@ def burn_frames(events, frames, karaoke=None, style="minimal", graphics=None):
         if i % 50 == 0 or i == n - 1:
             pct = int(100 * (i + 1) / n)
             print(f"[3] 烧字幕 {pct}%")
+    if skipped:
+        print(f"[3] 帧级续传：跳过已烧 {skipped}/{n} 帧")
 
 
 def compose_video(frames, audio, out, with_audio=True):
@@ -597,7 +615,7 @@ def main():
     # 每轮独立帧目录，避免删旧帧触发安全删除 shim、也杜绝残留帧串味
     frames_dir = TMP / f"frames_{uuid.uuid4().hex[:8]}"
     print(f"\n[1/4] 抽帧 ...")
-    frames = extract_frames(video, frames_dir)
+    frames, batch_mtime = extract_frames(video, frames_dir)
 
     print(f"\n[2/4] 解析字幕 ...")
     events = parse_ass(ass)
@@ -606,7 +624,8 @@ def main():
         print(f"  时间范围: {events[0][0]:.2f}s - {events[-1][1]:.2f}s")
 
     print(f"\n[3/4] PIL 烧字幕 ...")
-    burn_frames(events, frames, karaoke=karaoke, style=args.subtitle_style, graphics=graphics)
+    burn_frames(events, frames, karaoke=karaoke, style=args.subtitle_style,
+                graphics=graphics, batch_mtime=batch_mtime)
 
     print(f"\n[4/4] 合成视频 ...")
     mid = TMP / "mid.mp4"

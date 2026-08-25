@@ -21,6 +21,7 @@
       --out output/avatar_001.mp4 --name 001
 """
 import argparse
+import hashlib
 import io
 import os
 import shutil
@@ -225,15 +226,47 @@ def main():
     print(f"[1] 音频已桥接: {audio_in_face.name} -> {audio_container}")
 
     # 关键修复：code 之前拼 args.name（含中文）→ 落到 PowerShell 5.1 终端被 GBK 解码成乱字符
-    # 改成 ASCII 短名+UUID：HEYGEM/容器/PowerShell/WebSocket 端到处都干净。
-    # 用 name 末段当"人类可读标识"（已经够用，不需要全名），不是英文时回退到 'proj'
+    # 改成 ASCII 短名 + 确定性 hash（机制一：产物复用）
+    # code 基于「音频内容+模特+时长」的 md5 —— 同一条稿重跑得到相同 code，
+    # 渲染前检查同 code 产物是否完整，完整则跳过 HEYGEM 渲染直接后期（省 30 分钟）。
     raw = (args.name or '').split('/')[-1] or 'proj'
     ascii_tag = raw.encode('ascii', 'ignore').decode('ascii').strip() or 'proj'
-    code = f"avatar_{ascii_tag}_{uuid.uuid4().hex[:6]}"
-    # 2) 提交 HEYGEM（遇到 code=10001「忙碌中」自动重试 3 次，间隔递增）
-    # HEYGEM 的 TransDhTask.run_flag 是内存标志，偶发异常退出后没复位会一直 busy
-    print(f"[2] 提交 HEYGEM 视频生成 (code={code}) ...")
-    submit_data = None
+    _seed = "%s|%s|%s|%s" % (audio_in_face.name, args.model, str(audio_dur), audio.stat().st_size)
+    _h = hashlib.md5(_seed.encode("utf-8")).hexdigest()[:6]
+    code = f"avatar_{ascii_tag}_{_h}"
+
+    # 2) 产物复用检查：同 code 的 -t.mp4 已完整可读（moov 完整 + 时长≈音频）→ 跳过渲染
+    cand_t = TEMP / f"{code}-t.mp4"
+    cand_r = TEMP / f"{code}-r.mp4"
+    reused = None
+    for cand in (cand_t, cand_r):
+        if cand.exists() and cand.stat().st_size > 1024 * 1024:
+            _pr = subprocess.run(
+                [FFPROBE, "-v", "error", "-show_entries", "format=duration", "-of",
+                 "default=nw=1:nk=1", str(cand)],
+                capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=30)
+            _dur = 0.0
+            try:
+                _dur = float(_pr.stdout.strip() or 0)
+            except ValueError:
+                pass
+            if _pr.returncode == 0 and _dur > 0 and abs(_dur - audio_dur) < 3.0:
+                reused = cand
+                break
+    if reused is not None:
+        print(f"[2] 命中产物复用: {reused.name}（时长 {reused.stat().st_size//1024//1024}MB，"
+              f"跳过 HEYGEM 渲染，直接后期）")
+        result = reused
+        # 跳到后期阶段（去双声前的产物就绪点）
+        print(f"[3] 生成结果: {result}  ({result.stat().st_size//1024} KB)")
+        print("[3+] 文件已确认完整落盘，开始后期处理")
+        _skip_render = True
+    else:
+        _skip_render = False
+        # 2b) 提交 HEYGEM（遇到 code=10001「忙碌中」自动重试 3 次，间隔递增）
+        # HEYGEM 的 TransDhTask.run_flag 是内存标志，偶发异常退出后没复位会一直 busy
+        print(f"[2] 提交 HEYGEM 视频生成 (code={code}) ...")
+        submit_data = None
     # 提交阶段：对「HEYGEM 忙碌(10001)」与「网络中断/连接被拒」两类临时错误都做递增重试，
     # 给刚启动或偶发崩溃的容器留出就绪时间，避免一上来就 rc=1 直接失败。
     waits = [0, 5, 10, 15, 20, 25]
@@ -268,43 +301,47 @@ def main():
         sys.exit("提交失败（%d 次重试后仍忙碌）：%s。前面可能还有长任务在跑，请稍后手动重试，或执行 `docker restart heygem-gen-video` 清掉内存锁。" % (len(waits), submit_data))
     print("    提交成功，开始渲染...")
 
-    # 3) 轮询
-    result = None
-    start = time.time()
-    # 渲染等待按音频时长动态：HEYGEM 渲染速度约 10~12s 视频/分钟，
-    # 306s 口播需 30 分钟；短视频也有 8 分钟下限兜底（修复：长口播被 480s 掐死）
-    max_wait = max(480, int(audio_dur * 6) + 120)
-    print(f"    [轮询] 渲染等待上限 {max_wait}s（音频 {audio_dur:.0f}s）")
-    while time.time() - start < max_wait:
-        time.sleep(4)
-        try:
-            q = requests.get(f"{VIDEO_API}/easy/query", params={"code": code}, timeout=10).json()
-        except Exception as e:
-            print(f"    query 异常: {e}")
-            continue
-        st = q.get("code")
-        if st == 10000:
-            d = q.get("data", {})
-            s = d.get("status")
-            print(f"    [{time.time()-start:.0f}s] status={s} progress={d.get('progress')}")
-            if s == "success":
+    if _skip_render:
+        # 产物复用：跳过轮询/落盘等待，result 已就绪
+        pass
+    else:
+        # 3) 轮询
+        result = None
+        start = time.time()
+        # 渲染等待按音频时长动态：HEYGEM 渲染速度约 10~12s 视频/分钟，
+        # 306s 口播需 30 分钟；短视频也有 8 分钟下限兜底（修复：长口播被 480s 掐死）
+        max_wait = max(480, int(audio_dur * 6) + 120)
+        print(f"    [轮询] 渲染等待上限 {max_wait}s（音频 {audio_dur:.0f}s）")
+        while time.time() - start < max_wait:
+            time.sleep(4)
+            try:
+                q = requests.get(f"{VIDEO_API}/easy/query", params={"code": code}, timeout=10).json()
+            except Exception as e:
+                print(f"    query 异常: {e}")
+                continue
+            st = q.get("code")
+            if st == 10000:
+                d = q.get("data", {})
+                s = d.get("status")
+                print(f"    [{time.time()-start:.0f}s] status={s} progress={d.get('progress')}")
+                if s == "success":
+                    result = TEMP / f"{code}-r.mp4"
+                    break
+                if s == "error":
+                    sys.exit(f"渲染失败: {d.get('msg')}")
+            elif st == 10004:
                 result = TEMP / f"{code}-r.mp4"
+                print(f"    [{time.time()-start:.0f}s] 任务已清理(完成)，取文件")
                 break
-            if s == "error":
-                sys.exit(f"渲染失败: {d.get('msg')}")
-        elif st == 10004:
-            result = TEMP / f"{code}-r.mp4"
-            print(f"    [{time.time()-start:.0f}s] 任务已清理(完成)，取文件")
-            break
-        else:
-            print(f"    [{time.time()-start:.0f}s] query code={st} (继续等)")
+            else:
+                print(f"    [{time.time()-start:.0f}s] query code={st} (继续等)")
 
-    if not result or not result.exists():
-        cands = sorted(TEMP.glob(f"{code}*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)
-        if cands:
-            result = cands[0]
-        else:
-            sys.exit(f"未找到生成结果: {TEMP}/{code}-r.mp4")
+        if not result or not result.exists():
+            cands = sorted(TEMP.glob(f"{code}*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)
+            if cands:
+                result = cands[0]
+            else:
+                sys.exit(f"未找到生成结果: {TEMP}/{code}-r.mp4")
 
     print(f"[3] 生成结果: {result}  ({result.stat().st_size//1024} KB)")
     # 关键修复：HEYGEM 标 success 时文件可能尚未完全落盘，必须等真正写完再处理，
