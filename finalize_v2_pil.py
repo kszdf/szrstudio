@@ -199,10 +199,20 @@ def draw_subtitle(img, text, style="minimal", karaoke_event=None, t=None):
     colors = _char_colors(text)   # 关键词颜色标记（数字金/风险词红）
     draw = ImageDraw.Draw(img)
     W, H = img.size
-    # 按实际帧宽度自动换行，防止长句溢出屏幕；karaoke 同步依赖字符顺序，换行不影响
-    max_line_width = max(W - SUB_HMARGIN * 2, int(W * 0.86))
-    text = _wrap_text_to_width(draw, text, max_line_width)
-    lines = text.split("\n")
+    # 有 karaoke 时：直接用 karaoke 的行边界（ass 换行已与 karaoke 对齐），
+    # 不重新 wrap —— 否则换行宽度不一致导致行边界错位、逐行显示失效。
+    # 无 karaoke 时：按实际帧宽度自动换行，防止长句溢出。
+    klines = []
+    if karaoke_event and isinstance(karaoke_event, dict):
+        kl = karaoke_event.get("lines") or []
+        klines = ["".join(ch.get("c", "") for ch in ln) for ln in kl if ln]
+    if klines:
+        text = "\n".join(klines)
+        lines = klines
+    else:
+        max_line_width = max(W - SUB_HMARGIN * 2, int(W * 0.86))
+        text = _wrap_text_to_width(draw, text, max_line_width)
+        lines = text.split("\n")
     line_h = SUB_SIZE + 8
     total_h = line_h * len(lines)
     y0 = H - SUB_MARGIN_BOTTOM - total_h
