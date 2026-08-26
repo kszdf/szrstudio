@@ -54,6 +54,10 @@ def _load_font(path, size):
 F_MAIN = _load_font(str(BASE / "fonts/simhei.ttf"), SUB_SIZE)
 F_EMOJI = _load_font("C:/Windows/Fonts/seguiemj.ttf", SUB_SIZE) or F_MAIN
 F_FALLBACK = _load_font("C:/Windows/Fonts/msyh.ttc", SUB_SIZE) or F_MAIN
+# 重点词放大字体（懒加载，见 draw_subtitle）
+_F_EMPH = None
+_F_EMPH_EMOJI = None
+_F_EMPH_FALLBACK = None
 if F_MAIN is None:
     F_MAIN = ImageFont.load_default()
 
@@ -111,10 +115,17 @@ def _is_emoji(ch):
         return True
     return False
 
-def _font_for(ch):
-    """逐字符选字体：emoji→Segoe；中文/符号→SimHei；缺字→雅黑兜底。"""
-    if _is_emoji(ch) and _has_glyph(F_EMOJI, ch):
-        return F_EMOJI
+def _font_for(ch, emph=False):
+    """逐字符选字体：重点词→大字号；emoji→Segoe；中文/符号→SimHei；缺字→雅黑兜底。"""
+    if _is_emoji(ch):
+        if emph and _F_EMPH_EMOJI is not None and _has_glyph(_F_EMPH_EMOJI, ch):
+            return _F_EMPH_EMOJI
+        if _has_glyph(F_EMOJI, ch):
+            return F_EMOJI
+    if emph and _F_EMPH is not None and _has_glyph(_F_EMPH, ch):
+        return _F_EMPH
+    if emph and _F_EMPH_FALLBACK is not None and _has_glyph(_F_EMPH_FALLBACK, ch):
+        return _F_EMPH_FALLBACK
     if _has_glyph(F_MAIN, ch):
         return F_MAIN
     for f in (F_FALLBACK, F_EMOJI):
@@ -133,8 +144,8 @@ def clean_subtitle_text(text):
     )
     return text.strip()
 
-def _char_width(draw, ch):
-    return draw.textlength(ch, font=_font_for(ch))
+def _char_width(draw, ch, emph=False):
+    return draw.textlength(ch, font=_font_for(ch, emph=emph))
 
 
 def _wrap_text_to_width(draw, text, max_width):
@@ -167,6 +178,36 @@ _RISK_WORDS = ["稽查", "虚开", "补税", "补缴", "追缴", "罚款", "滞�
                "刑责", "被查", "一查", "盯上", "查到", "补税", "风险"]
 _DIGIT_RE = __import__("re").compile(r"[0-9]+(?:[.,][0-9]+)?[%万亿]?[元]?")
 
+# 重点词放大（对标头部财税IP口播字幕：核心词加大加亮，一眼抓住）
+# 命中重点词的字符用放大字号渲染（SUB_SIZE + EMPH_BOOST），颜色更亮，
+# 让"库存虚高 / 稽查 / 偷税"这类高价值词从整句中跳出来。
+_EMPH_WORDS = [
+    "库存虚高", "账实不符", "虚增", "稽查", "偷税", "漏税", "补税", "罚款",
+    "滞纳金", "刑事", "刑责", "坐牢", "风险", "盘亏", "结转", "进销存",
+    "对账", "金税四期", "合规", "自查清单", "财产损失",
+]
+EMPH_BOOST = 10        # 重点词比正文大 10px（34→44，突出但不过分）
+# 重点词颜色：深橙红（比已读金(255,212,0)/数字金(255,200,60)更深更红，
+# 与正文白(255,255,255)、风险红(255,82,82)都有明显色差，一眼可辨）
+EMPH_FILL = (255, 120, 0)
+EMPH_SPACING = 3       # 重点词前后额外间距（px），放大字不与相邻字硬挤
+
+
+def _emph_ranges(text):
+    """返回 text 中命中重点词的位置集合（set of char index）。
+    与 _char_colors 独立：颜色按 数字金/风险红 走，字号按重点词放大。"""
+    emph = set()
+    for w in _EMPH_WORDS:
+        start = 0
+        while True:
+            i = text.find(w, start)
+            if i < 0:
+                break
+            for j in range(i, i + len(w)):
+                emph.add(j)
+            start = i + len(w)
+    return emph
+
 
 def _char_colors(text):
     """返回与 text 等长的颜色标记列表：'gold'=数字金额 / 'red'=风险词 / 'normal'=普通。"""
@@ -196,9 +237,14 @@ def draw_subtitle(img, text, style="minimal", karaoke_event=None, t=None):
     text = clean_subtitle_text(text)
     if not text:
         return
-    colors = _char_colors(text)   # 关键词颜色标记（数字金/风险词红）
     draw = ImageDraw.Draw(img)
     W, H = img.size
+    # 重点词放大字体（懒加载：全局缓存一份，避免每帧重建字体对象）
+    global _F_EMPH, _F_EMPH_EMOJI, _F_EMPH_FALLBACK
+    if _F_EMPH is None:
+        _F_EMPH = _load_font(str(BASE / "fonts/simhei.ttf"), SUB_SIZE + EMPH_BOOST)
+        _F_EMPH_EMOJI = _load_font("C:/Windows/Fonts/seguiemj.ttf", SUB_SIZE + EMPH_BOOST) or _F_EMPH
+        _F_EMPH_FALLBACK = _load_font("C:/Windows/Fonts/msyh.ttc", SUB_SIZE + EMPH_BOOST) or _F_EMPH
     # 有 karaoke 时：直接用 karaoke 的行边界（ass 换行已与 karaoke 对齐），
     # 不重新 wrap —— 否则换行宽度不一致导致行边界错位、逐行显示失效。
     # 无 karaoke 时：按实际帧宽度自动换行，防止长句溢出。
@@ -213,6 +259,13 @@ def draw_subtitle(img, text, style="minimal", karaoke_event=None, t=None):
         max_line_width = max(W - SUB_HMARGIN * 2, int(W * 0.86))
         text = _wrap_text_to_width(draw, text, max_line_width)
         lines = text.split("\n")
+    # 关键：colors/emph 必须基于【不含 \n 的纯字符序列】计算——
+    # 绘制循环用 line_offsets(无 \n 索引) 定位，若这里用含 \n 的整句文本，
+    # 索引会整体偏移（每个 \n 占一位），导致重点词/颜色标记错位：
+    # 如"金税四期"只放大"金四期"、首位字不放大。
+    flat_text = "".join(lines)
+    colors = _char_colors(flat_text)   # 关键词颜色标记（数字金/风险词红）
+    emph = _emph_ranges(flat_text)     # 重点词字符位置（放大显示）
     line_h = SUB_SIZE + 8
     total_h = line_h * len(lines)
     y0 = H - SUB_MARGIN_BOTTOM - total_h
@@ -263,41 +316,61 @@ def draw_subtitle(img, text, style="minimal", karaoke_event=None, t=None):
     if len(lines) > 2:
         y0 = max(120, y0 - (len(lines) - 2) * line_h // 2)
 
-    char_idx = [0]
-    ci = [0]   # 颜色索引（与 karaoke 的 char_idx 独立，映射 colors）
+    # 每行在整句中的全局字符偏移（修复逐字高亮错位：
+    # 逐行显示时只画当前行，但 kflat/colors/emph 都是整句索引，
+    # 必须用「行起始偏移 + 行内序号」定位，否则第 2 行起索引归零 → 整行误判已读 → 全部高亮）
+    line_offsets = []
+    _acc = 0
+    for _ln in lines:
+        line_offsets.append(_acc)
+        _acc += len(_ln)
+
     for i, ln in enumerate(lines):
         if i < shown_start or i >= shown_lines:
             continue   # 只显示当前行（口播逐行风格）
-        widths = [_char_width(draw, ch) for ch in ln]
-        tw = sum(widths)
+        off = line_offsets[i]   # 本行第一个字符在整句中的索引
+        # 重点词：字符级宽度用放大字体量（否则大字会溢出底衬/错位）
+        char_meta = []
+        for j, ch in enumerate(ln):
+            is_emph = (off + j) in emph
+            w = _char_width(draw, ch, emph=is_emph) + (EMPH_SPACING if is_emph else 0)
+            char_meta.append((ch, is_emph, w))
+        tw = sum(m[2] for m in char_meta)
         x = (W - tw) // 2
-        # 只显示当前行：固定在底部同一位置（行切换不跳动，口播字幕常见做法）
-        y = H - SUB_MARGIN_BOTTOM - line_h
-        # 半透明圆角底衬（默认开启，提升低反差场景可读性与高级感）
+        # 行高自适应：含重点词的行整体加高，避免大字被底衬/下一行截断
+        has_emph = any(m[1] for m in char_meta)
+        line_h_cur = line_h + (EMPH_BOOST if has_emph else 0)
+        # 垂直居中：大字比小字高 EMPH_BOOST，把大字上移一半、小字下移一半，
+        # 让两者中心线对齐，避免大字"顶"着相邻小字挤在一起
+        y_base = H - SUB_MARGIN_BOTTOM - line_h
+        y = y_base + (EMPH_BOOST // 2 if has_emph else 0)
+        # 半透明圆角底衬（按行实际高度自适应）
         pad = 14
-        bx, by = x - pad, y - 10
-        bw, bh = tw + pad * 2, line_h + 4
+        bx, by = x - pad, y_base - 10
+        bw, bh = tw + pad * 2, line_h_cur + 4
         try:
             draw.rounded_rectangle([bx, by, bx + bw, by + bh], radius=14,
                                    fill=(0, 0, 0, 120))
         except Exception:
             draw.rectangle([bx, by, bx + bw, by + bh], fill=(0, 0, 0, 120))
         cx = x
-        for ch, w in zip(ln, widths):
-            f = _font_for(ch)
+        for j, (ch, is_emph, w) in enumerate(char_meta):
+            gi = off + j   # 全局字符索引（修正逐字高亮定位）
+            f = _font_for(ch, emph=is_emph)
             spoken = False
-            if kflat and t is not None and char_idx[0] < len(kflat):
-                spoken = t >= kflat[char_idx[0]].get("e", 0)
-            char_idx[0] += 1
-            kw = colors[ci[0]] if ci[0] < len(colors) else "normal"
-            ci[0] += 1
-            # 黑边（多次偏移）
-            for dx in range(-SUB_BORDER, SUB_BORDER + 1):
-                for dy in range(-SUB_BORDER, SUB_BORDER + 1):
-                    if dx * dx + dy * dy <= SUB_BORDER * SUB_BORDER:
+            if kflat and t is not None and gi < len(kflat):
+                spoken = t >= kflat[gi].get("e", 0)
+            kw = colors[gi] if gi < len(colors) else "normal"
+            # 黑边（多次偏移，重点词黑边也按大字加粗）
+            border = SUB_BORDER + (1 if is_emph else 0)
+            for dx in range(-border, border + 1):
+                for dy in range(-border, border + 1):
+                    if dx * dx + dy * dy <= border * border:
                         draw.text((cx + dx, y + dy), ch, font=f, fill=(0, 0, 0))
-            # 填充色优先级：风险词红 > 数字金 > dynamic 已读金 > 白
-            if kw == "red":
+            # 填充色优先级：重点词橙 > 风险词红 > 数字金 > dynamic 已读金 > 白
+            if is_emph:
+                fill = EMPH_FILL
+            elif kw == "red":
                 fill = (255, 82, 82)
             elif kw == "gold":
                 fill = (255, 200, 60)
