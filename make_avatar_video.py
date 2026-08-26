@@ -47,7 +47,25 @@ FACE = BASE / "face2face"
 TEMP = FACE / "temp"
 OUT = BASE / "output"
 OUT.mkdir(parents=True, exist_ok=True)
-VIDEO_API = "http://localhost:8383"
+# 渲染后端可配置（云/本地一键切换）：
+#   HEYGEM_API     HEYGEM 容器地址。默认本机 localhost:8383；切云端设为
+#                  https://zmgen.cn:8383 或 云服务器IP:8383（经 frp/公网暴露）
+#   HEYGEM_SYNC    "scp" 时启用素材同步（音频上传 + 产物下载），需 HEYGEM_SYNC_HOST/USER/REMOTE_DIR
+#   HEYGEM_SYNC_HOST  云 GPU 服务器地址（如 124.222.33.233 或 1.2.3.4）
+#   HEYGEM_SYNC_USER  云 GPU SSH 用户（如 root）
+#   HEYGEM_SYNC_DIR   云端 face2face 目录（容器 /code/data 的宿主映射，如 /root/heygem_data/face2face）
+import os as _os
+VIDEO_API = _os.environ.get("HEYGEM_API", "http://localhost:8383").rstrip("/")
+_HEYGEM_SYNC = _os.environ.get("HEYGEM_SYNC", "").lower()
+_HEYGEM_SYNC_HOST = _os.environ.get("HEYGEM_SYNC_HOST", "")
+_HEYGEM_SYNC_USER = _os.environ.get("HEYGEM_SYNC_USER", "root")
+_HEYGEM_SYNC_DIR = _os.environ.get("HEYGEM_SYNC_DIR", "/root/heygem_data/face2face")
+if VIDEO_API != "http://localhost:8383":
+    print(f"[cfg] HEYGEM 渲染后端: {VIDEO_API}（云端模式）")
+    if _HEYGEM_SYNC == "scp":
+        print(f"[cfg] 素材同步: scp → {_HEYGEM_SYNC_USER}@{_HEYGEM_SYNC_HOST}:{_HEYGEM_SYNC_DIR}")
+else:
+    print(f"[cfg] HEYGEM 渲染后端: {VIDEO_API}（本机模式）")
 GATEWAY = BASE / "gpt_sovits"          # finalize_v2_pil.py 所在
 FINALIZE = GATEWAY / "finalize_v2_pil.py"
 
@@ -111,6 +129,49 @@ def check_container_health(timeout=8):
     except Exception as e:  # noqa: BLE001
         print(f"  [B2] ⚠ HEYGEM 容器健康探测失败: {e}")
         return False
+
+
+def _scp_push(local, remote_rel):
+    """云端模式：把本地文件 scp 上传到云 face2face/{remote_rel}。"""
+    if not _HEYGEM_SYNC_HOST:
+        raise RuntimeError("HEYGEM_SYNC=scp 但未设置 HEYGEM_SYNC_HOST")
+    import subprocess as _sp
+    dst = f"{_HEYGEM_SYNC_USER}@{_HEYGEM_SYNC_HOST}:{_HEYGEM_SYNC_DIR}/{remote_rel}"
+    r = _sp.run(["scp", "-o", "StrictHostKeyChecking=no", str(local), dst],
+                capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=120)
+    if r.returncode != 0:
+        raise RuntimeError(f"scp 上传失败 {local} -> {dst}: {(r.stderr or '')[-300:]}")
+    print(f"  [sync] 已上传 {local.name} -> {dst}")
+
+
+def _scp_pull(remote_rel, local):
+    """云端模式：把云 face2face/{remote_rel} 的 HEYGEM 产物下载回本地。"""
+    import subprocess as _sp
+    src = f"{_HEYGEM_SYNC_USER}@{_HEYGEM_SYNC_HOST}:{_HEYGEM_SYNC_DIR}/{remote_rel}"
+    r = _sp.run(["scp", "-o", "StrictHostKeyChecking=no", src, str(local)],
+                capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=600)
+    if r.returncode != 0:
+        raise RuntimeError(f"scp 下载失败 {src} -> {local}: {(r.stderr or '')[-300:]}")
+    print(f"  [sync] 已下载 {remote_rel} -> {local.name}")
+
+
+def sync_audio_to_remote(audio_in_face_name):
+    """云端模式：把已桥接的音频 scp 到云 face2face（容器可见）。
+    返回容器内路径 /code/data/{name}。"""
+    if _HEYGEM_SYNC != "scp":
+        return f"/code/data/{audio_in_face_name}"
+    _scp_push(FACE / audio_in_face_name, audio_in_face_name)
+    return f"/code/data/{audio_in_face_name}"
+
+
+def sync_result_back(code, result_name):
+    """云端模式：把云端渲染产物（temp/{result_name}）下载回本机 TEMP，
+    后续去双声/mux/烧字幕在本机做。返回本机产物路径。"""
+    if _HEYGEM_SYNC != "scp":
+        return TEMP / result_name
+    local = TEMP / result_name
+    _scp_pull(f"temp/{result_name}", local)
+    return local
 
 
 def _derive_code(name, audio_in_face_name, model, audio_dur, audio_size):
@@ -348,6 +409,9 @@ def main():
         shutil.copy(audio, audio_in_face)
     audio_container = f"/code/data/audio_{args.name}.wav"
     print(f"[1] 音频已桥接: {audio_in_face.name} -> {audio_container}")
+    # 云端模式：把音频 scp 到云 face2face（容器可见）；本机模式容器路径不变
+    if _HEYGEM_SYNC == "scp":
+        sync_audio_to_remote(audio_in_face.name)
 
     # 机制B2-3：桥接后校验复制产物完整（大小一致 + 时长可读），
     # 防「temp 清理丢音频 / 复制半截」在渲染 30 分钟后才暴露
@@ -369,6 +433,13 @@ def main():
     # 2) 产物复用检查：同 code 的 -t.mp4 已完整可读（moov 完整 + 时长≈音频）→ 跳过渲染
     cand_t = TEMP / f"{code}-t.mp4"
     cand_r = TEMP / f"{code}-r.mp4"
+    # 云端模式：先从云端拉取候选产物到本机再校验（云端有历史产物则复用命中，免重渲染）
+    if _HEYGEM_SYNC == "scp":
+        for _cand in (cand_t, cand_r):
+            try:
+                sync_result_back(code, _cand.name)
+            except Exception:  # noqa: BLE001
+                pass
     reused = None
     for cand in (cand_t, cand_r):
         if cand.exists() and cand.stat().st_size > 1024 * 1024:
@@ -473,6 +544,12 @@ def main():
                 result = cands[0]
             else:
                 sys.exit(f"未找到生成结果: {TEMP}/{code}-r.mp4")
+        # 云端模式：把云端渲染产物下载回本机（后续去双声/mux/烧字幕在本机做）
+        if _HEYGEM_SYNC == "scp":
+            try:
+                result = sync_result_back(code, result.name)
+            except Exception as e:  # noqa: BLE001
+                sys.exit(f"[sync] 云端产物下载失败: {e}")
 
     print(f"[3] 生成结果: {result}  ({result.stat().st_size//1024} KB)")
     # 关键修复：HEYGEM 标 success 时文件可能尚未完全落盘，必须等真正写完再处理，
