@@ -606,8 +606,8 @@ def _render_scene(sc, pal, idx, local, scdur, base_img, t_global=0.0):
     """场景主视觉(动态画面版): 底图(动态GIF / AI生图 / 动画渐变) + 呼吸运镜 + 扫光 + 粒子,
     每一幕都像动态 GIF 一样持续运动, 取代静态图解卡。"""
     np_ = min(1.0, local / scdur) if scdur and scdur > 0 else 1.0
-    # 底图优先级: gif_library 动态GIF → AI 生图 → 动画渐变占位
-    gif_path = _pick_gif(sc)
+    # 底图优先级: 内容匹配的动态GIF → AI 生图 → 动画渐变占位(通用色GIF不替代生图)
+    gif_path = _pick_gif(sc, content_only=True)
     if gif_path is not None:
         base = gif_frame_at(gif_path, t_global)
     elif base_img is not None:
@@ -697,8 +697,10 @@ def gif_frame_at(path, t, fps=12):
     i = int(t * fps) % len(frames)
     return frames[i]
 
-def _pick_gif(sc):
-    """按场景 tone/关键词/文案 从 gif_library 命中一张动态GIF(无库或未命中返回 None)。"""
+def _pick_gif(sc, content_only=False):
+    """按场景 tone/关键词/文案 从 gif_library 命中一张动态GIF(无库或未命中返回 None)。
+    content_only=True 时只认「内容匹配」(文件名语义段, 如 仓库/账本)——
+    通用色系GIF(risk/safe/neutral)不再替代AI生图, 保证每幕都有内容画面。"""
     if not GIF_ENABLED or not GIF_DIR.exists():
         return None
     cands = _GIF_CANDS if _GIF_CANDS is not None else sorted(GIF_DIR.glob("*.gif"))
@@ -707,11 +709,15 @@ def _pick_gif(sc):
     tone = sc.get("tone", "neutral")
     kw_text = (str(sc.get("title", "")) + " " + " ".join(sc.get("keywords") or []) + " " +
                str(sc.get("sentence", "")))
-    # 1) 文件名语义段(≥2字, 如 仓库/账本/稽查)命中文案 → 最贴合
+    # 1) 文件名语义段(≥2字)命中文案 → 内容匹配, 唯一可替代生图的GIF;
+    #    要求 ≥2 个语义段命中, 防止常见词(如"合规""安全")误判通用GIF为内容图
     for c in cands:
         segs = [s for s in c.stem.split("_") if len(s) >= 2]
-        if any(seg in kw_text for seg in segs):
+        hits = [s for s in segs if s in kw_text]
+        if len(hits) >= 2:
             return str(c)
+    if content_only:
+        return None
     # 2) tone 标签: risk→risk/红/警示, safe→safe/绿/合规, neutral→neutral/蓝/通用
     tag = {"risk": ("risk", "红", "警示"), "safe": ("safe", "绿", "合规"),
            "neutral": ("neutral", "蓝", "通用")}.get(tone, ("neutral", "蓝"))
@@ -1035,11 +1041,12 @@ def _render_one(i):
 # ============================== 对话模式(男女双声) ==============================
 def parse_dialogue(text):
     """解析剧本: 以 女：/男：(或 江：/张：) 开头的行识别角色, 其余行续接上一句。
-    返回 [{'role':'F'/'M','text':...}, ...]"""
+    返回 [{'role':'F'/'M','text':...}, ...]
+    BOM 免疫: 首行可能带 \ufeff(UTF-8 BOM), 先剥掉再匹配角色前缀。"""
     import re
     segs, cur = [], None
     for raw in text.splitlines():
-        line = raw.strip()
+        line = raw.strip().lstrip("\ufeff").strip()
         if not line:
             continue
         m = re.match(r"^(女|男|江|张)\s*[：:]\s*(.*)$", line)
@@ -1302,26 +1309,35 @@ def main():
         for i, sc in enumerate(sb):
             if sc.get("visual_type") != "scene":
                 imgs.append(None)   # 非 scene 用代码绘制, 不联网生图
-            elif _pick_gif({**sc, "sentence": sentences[i]}) is not None:
-                imgs.append(None)   # 已命中动态GIF底图, 不烧钱生图
+            elif _pick_gif({**sc, "sentence": sentences[i]}, content_only=True) is not None:
+                imgs.append(None)   # 内容匹配动态GIF(如 仓库/账本)作底, 不烧钱生图
             else:
                 style = IMG_STYLES[i % len(IMG_STYLES)]
                 prompt = sc["image_prompt"] + ("，" + style + "，低饱和商务配色，画面纯净无文字无字母无数字，竖版9:16构图")
                 need.append((i, prompt))
+                imgs.append(None)   # 占位, 保持 imgs 与 sb 等长(并行结果按索引回填)
         print(f"[3/6] 通义万相生图 {len(need)} 张(并行) ...")
 
         def _gen(ip):
             i, prompt = ip
-            try:
-                jpg = wanx_image(prompt, api_key, regen=args.regen)
-                return i, cover_resize(Image.open(jpg).convert("RGB"), W, H)
-            except Exception as e:
-                print(f"      [{i+1}] 生图失败({e}), 降级占位")
-                return i, fallback_img(sb[i].get("tone", "neutral"))
+            # 429 限流: 退避重试(最多3次), 避免 RateQuota 直接降级
+            for attempt in range(3):
+                try:
+                    jpg = wanx_image(prompt, api_key, regen=args.regen)
+                    return i, cover_resize(Image.open(jpg).convert("RGB"), W, H)
+                except Exception as e:
+                    if "429" in str(e) or "RateQuota" in str(e) or "rate limit" in str(e).lower():
+                        import time as _t
+                        _t.sleep(8 + attempt * 8)
+                        continue
+                    print(f"      [{i+1}] 生图失败({str(e)[:60]}), 降级占位")
+                    return i, fallback_img(sb[i].get("tone", "neutral"))
+            print(f"      [{i+1}] 生图失败(限流重试3次后仍失败), 降级占位")
+            return i, fallback_img(sb[i].get("tone", "neutral"))
 
         if need:
             import concurrent.futures
-            nw = min(3, len(need))   # 并发生图(留意 dashscope 限流)
+            nw = min(2, len(need))   # 并发生图(2路, 429 有退避重试, 防限流)
             done = 0
             with concurrent.futures.ThreadPoolExecutor(max_workers=nw) as ex:
                 for i, img in ex.map(_gen, need):
