@@ -183,6 +183,29 @@ def _wrap_px(text, d, f, max_w):
         lines.append(cur)
     return lines
 
+
+def _wrap_px_semantic(text, d, f, max_w):
+    """按像素宽度 + 语义标点换行：超宽时回退最近标点后断开，
+    不把句子腰斩成「上半句，/下半句」。无标点才按宽度硬断。"""
+    BREAK_AFTER = "，。；！？、：)）】》\"”"
+    lines, cur = [], ""
+    last_break = -1
+    for ch in text or "":
+        if d.textlength(cur + ch, font=f) > max_w and cur:
+            if last_break >= 0:
+                lines.append(cur[:last_break + 1])
+                cur = cur[last_break + 1:]
+                last_break = -1
+            else:
+                lines.append(cur)
+                cur = ""
+        cur += ch
+        if ch in BREAK_AFTER:
+            last_break = len(cur) - 1
+    if cur:
+        lines.append(cur)
+    return lines
+
 # ============================== 万相生图 ==============================
 _WANX_LOCK = threading.Lock()
 def wanx_image(prompt, api_key, size="720*1280", regen=False):
@@ -359,7 +382,12 @@ def draw_subtitle(img, text, pal, reveal=None, keywords=None, local=0.0, scdur=3
     pres = STYLE_PRESETS.get(STYLE_NAME, STYLE_PRESETS["财经严谨"])
     dual = pres.get("dual_line", True)
     d = ImageDraw.Draw(img)
-    lines = wrap(text, 15)
+    # 修复：按像素宽度换行（上限留边距），替代固定 15 字硬切——
+    # 15字×52px≈780px + 副行右错70px ≈ 850px 已贴 1080 右缘，QC 报「文字贴右边缘溢出」。
+    # 语义优先：超宽回退最近标点断开，不腰斩句子。
+    _SUB_MAX_W = int(W * 0.82)   # 1080*0.82≈885px，留足右缘边距
+    _f_sub = ImageFont.truetype(str(BASE / "fonts/simhei.ttf"), 52)
+    lines = _wrap_px_semantic(text, d, _f_sub, _SUB_MAX_W) if text else []
     cx = W // 2
     total_chars = sum(len(l) for l in lines) or 1
     shown = (max(0, min(total_chars, int(reveal * total_chars))) if reveal is not None
