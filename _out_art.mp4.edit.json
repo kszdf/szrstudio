@@ -1,9 +1,0 @@
-{
-  "input": "_sample.mp4",
-  "output": "_out_art.mp4",
-  "edit_style": "artistic",
-  "name_tag": "追梦 · 数字人",
-  "rc": 0,
-  "dry_run": false,
-  "log": []
-}

@@ -80,5 +80,5 @@ PROFILE = {
     "default_form": "scroll",           # 幕后音字幕卡为默认量产形式
     "default_visual_style": "deepnavy",  # 深海军蓝高级感背景
     "default_subtitle_style": "dynamic", # 金色卡拉OK字幕
-    "motion_style": "财经严谨",          # 智能图解主题
+    "motion_style": "财经严谨",          # 幕后音·动态画面主题(对标视频号「建筑财税张老师」风格)
 }

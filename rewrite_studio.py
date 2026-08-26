@@ -46,6 +46,7 @@ APP_FILE = BASE / "app.html"   # 商用化新前端（接真实接口，顶替�
 PY310 = r"D:/heygem/py310/Scripts/python.exe"      # 出片网关线用 py310
 MAKE_AVATAR = BASE / "make_avatar_video.py"
 MAKE_SCROLL = BASE / "make_scroll_video.py"          # 不出镜·滚动字幕卡（男女对话）
+MAKE_MOTION = BASE / "make_motion_video_v4.py"       # 幕后音·动态画面（男声/女声/男女对话, 动态GIF+中部滚动字幕）
 SCRIPT_EDIT = BASE / "auto_edit.py"                  # 成片后自动剪辑包装（fast/artistic/vlog/pip）
 PY313 = r"C:/Users/lenovo/.workbuddy/binaries/python/versions/3.13.12/python.exe"  # 滚动字幕卡用 3.13（自带 dashscope+Pillow+numpy）
 SCROLL_DEFAULT_GIF = r"C:/Users/lenovo/WorkBuddy/2026-07-27-09-14-15/videos/ocean_rolling_9x16_deepblue.gif"   # 用户默认 GIF 海景背景（已清理旧 20260721TP.gif 引用）
@@ -447,6 +448,49 @@ def qc_report(video_path: Path) -> dict:
 JOBS = {}
 JOB_LOCK = threading.Lock()
 
+# ---- 每日热点·双题材（daily_hot）后台任务状态 ----
+_HOT_STATE = {"running": False, "error": None, "done_at": None}
+
+
+def _run_hot_daily():
+    try:
+        import daily_hot
+        daily_hot.run_daily(finance_top=4, event_top=4, per_source=30)
+        with JOB_LOCK:
+            _HOT_STATE.update({"running": False, "error": None,
+                               "done_at": time.strftime("%Y-%m-%d %H:%M:%S")})
+    except Exception as e:  # noqa
+        with JOB_LOCK:
+            _HOT_STATE.update({"running": False, "error": str(e)[:300]})
+
+
+def start_hot_daily() -> dict:
+    """触发每日热点·双题材后台刷新（2-4 分钟）；已在跑则直接返回。"""
+    with JOB_LOCK:
+        if _HOT_STATE.get("running"):
+            return {"ok": True, "running": True, "error": None}
+        _HOT_STATE.update({"running": True, "error": None})
+    threading.Thread(target=_run_hot_daily, daemon=True).start()
+    return {"ok": True, "running": True, "error": None}
+
+
+def hot_daily_result() -> dict:
+    """读取最近一次每日热点结果（daily_hot.json）。"""
+    import json as _json
+    p = Path(os.environ.get("HOT_DAILY_OUT", r"D:\heygem_data\runtime-logs\daily_hot.json"))
+    with JOB_LOCK:
+        state = dict(_HOT_STATE)
+    result = None
+    if p.exists():
+        try:
+            result = _json.loads(p.read_text(encoding="utf-8"))
+        except Exception:  # noqa
+            result = None
+    return {"running": state.get("running", False),
+            "error": state.get("error"),
+            "done_at": state.get("done_at"),
+            "result": result}
+
 
 def start_render(name: str, model_id: str = "", provider: str = "heygem",
                  avatar_id: str | None = None, voice_mode: str = "official",
@@ -455,12 +499,16 @@ def start_render(name: str, model_id: str = "", provider: str = "heygem",
                  subtitle_style: str = "dynamic", subtitle_size: int | None = None,
                  subtitle_outline: int | None = None, subtitle_position: str = "bottom",
                  subtitle_lines: int | None = None, edit_style: str | None = None,
-                 bgm: str | None = None, tenant_id: int | None = None) -> dict:
+                 bgm: str | None = None, tenant_id: int | None = None,
+                 motion_style: str = "财经严谨") -> dict:
     """出片入口。provider 默认 heygem（原本地流程，零改动）；
     provider=thirdparty 走第三方官方数字人，不动 HEYGEM 任何逻辑；
-    provider=scroll 走不出镜·滚动字幕卡（男女对话），输出同一 VIDEO_DIR/<name>.mp4，下游无缝复用。"""
+    provider=scroll 走不出镜·滚动字幕卡（男女对话），输出同一 VIDEO_DIR/<name>.mp4，下游无缝复用；
+    provider=motion 走幕后音·动态画面（男声/女声/男女对话 + 动态GIF/生图 + 中部滚动字幕）。"""
     if provider == "thirdparty":
         return _start_render_thirdparty(name, avatar_id, voice_mode)
+    if provider == "motion":
+        return _start_render_motion(name, title, motion_style=motion_style, tenant_id=tenant_id)
     if provider == "scroll":
         return _start_render_scroll(name, bg, title, subtitle, bg_fit=bg_fit,
                                      tenant_id=tenant_id, subtitle_style=subtitle_style,
@@ -684,6 +732,73 @@ def _run_render_scroll(job_id: str, cmd: list, out: Path, edit_style=None, title
                                      "video_url": f"/api/video/{rel}"})
         else:
             err = "\n".join(tail[-20:])
+            with JOB_LOCK:
+                JOBS[job_id].update({"status": "error",
+                                     "error": f"出片失败(rc={rc}): {err[:400]}"})
+    except Exception as e:  # noqa
+        with JOB_LOCK:
+            JOBS[job_id].update({"status": "error", "error": str(e)[:400]})
+
+
+def _start_render_motion(name: str, title: str | None = None,
+                         motion_style: str = "财经严谨",
+                         tenant_id: int | None = None) -> dict:
+    """幕后音·动态画面出片：调 make_motion_video_v4.py（--dialogue 自动双声TTS + 动态GIF/生图 + 中部滚动字幕）。
+    输出 VIDEO_DIR/<name>.mp4，下游（预览/字幕/质检/发布/队列）与数字人/滚动字幕卡零差别复用。"""
+    p = project_path(name)
+    dlg = p / "dialogue.txt"
+    if not dlg.exists() or not dlg.read_text(encoding="utf-8-sig").strip():
+        md = p / "03_逐字稿定稿.md"
+        if not md.exists():
+            return {"ok": False, "error": "请先在「改写」步骤填写内容（独白或男女对话稿）"}
+        clean = fw.clean_script(md.read_text(encoding="utf-8"))
+        if not clean.strip():
+            return {"ok": False, "error": "定稿为空，无法出片"}
+        dlg = p / "_auto_dialogue.txt"
+        dlg.write_text(clean.replace("\n", " ") + "\n", encoding="utf-8")
+    out = VIDEO_DIR / f"{name}.mp4"
+    tid = tenant_id if tenant_id is not None else studio_db.get_default_tenant().get("id")
+    female_v = studio_db.get_tenant_voice_id(tid, "female")
+    male_v = studio_db.get_tenant_voice_id(tid, "male")
+    cmd = [PY310, "-u", str(MAKE_MOTION), "--script", str(dlg), "--out", str(out),
+           "--style", motion_style or "财经严谨", "--dialogue",
+           "--male-voice", male_v, "--female-voice", female_v]
+    if title and title.strip():
+        cmd += ["--title", title.strip()[:20]]
+    job_id = "job_" + os.urandom(4).hex()
+    with JOB_LOCK:
+        JOBS[job_id] = {"status": "running", "step": "幕后音·动态画面渲染中（并行TTS+动态画面）",
+                        "progress": 10, "video_url": None, "error": None,
+                        "provider": "motion"}
+    threading.Thread(target=_run_render_motion, args=(job_id, cmd, out),
+                     daemon=True).start()
+    return {"ok": True, "job_id": job_id,
+            "hint": "幕后音·动态画面（男声/女声/男女对话），无需 Docker 与模特，约 2-4 分钟"}
+
+
+def _run_render_motion(job_id: str, cmd: list, out: Path):
+    """运行 make_motion_video_v4.py，解析「成品」行标记完成。"""
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True,
+                                encoding="utf-8", errors="replace")
+        tail: list[str] = []
+        for line in proc.stdout:
+            line = line.strip()
+            if line:
+                tail.append(line)
+                if len(tail) > 80:
+                    tail.pop(0)
+                if "成品" in line:
+                    _update_job(job_id, "✅ 幕后音·动态画面已生成", 100)
+        rc = proc.wait()
+        if rc == 0 and out.exists():
+            rel = out.relative_to(VIDEO_DIR).as_posix()
+            with JOB_LOCK:
+                JOBS[job_id].update({"status": "done", "progress": 100,
+                                     "video_url": f"/api/video/{rel}"})
+        else:
+            err = "\n".join(tail[-25:])
             with JOB_LOCK:
                 JOBS[job_id].update({"status": "error",
                                      "error": f"出片失败(rc={rc}): {err[:400]}"})
@@ -1219,6 +1334,8 @@ class Handler(BaseHTTPRequestHandler):
         # P0-1 数据面鉴权：仅 gate /api/*，放行首页与静态资源
         if path.startswith("/api/") and not _auth_gate(self):
             return
+        if path == "/api/hot_daily_result":
+            return self._send_json(hot_daily_result())
         if path in ("/", "/index.html"):
             return self._send_html()
         # 静态资源（LOGO 等）
@@ -1327,15 +1444,95 @@ class Handler(BaseHTTPRequestHandler):
             "tenant_id": u["tenant_id"], "username": u["username"], "role": u["role"]
         }, ensure_ascii=False).encode("utf-8"))
 
+    # —— 商用 SaaS：自助注册（试用租户）——
+    _REG_IP = {}
+    def _handle_register(self):
+        """POST /api/register {username,password,company?} → 新建试用租户+账号，并自动登录。"""
+        import ipaddress as _ipa
+        ip = self.client_address[0] if self.client_address else "?"
+        now = int(time.time())
+        hit = self._REG_IP.get(ip, [])
+        hit = [t for t in hit if now - t < 3600]      # 1 小时窗口
+        if len(hit) >= 8:
+            return self._send_json({"ok": False, "error": "注册过于频繁，请稍后再试"}, 429)
+        hit.append(now); self._REG_IP[ip] = hit
+        body = self._body()
+        r = studio_db.register_trial(body.get("username", ""),
+                                     body.get("password", ""),
+                                     body.get("company", ""))
+        if not r.get("ok"):
+            return self._send_json(r, 400)
+        # 自动登录
+        u = studio_db.verify_user(body.get("username", "").strip(), body.get("password", ""))
+        if not u:
+            return self._send_json({"ok": False, "error": "注册成功但登录失败，请手动登录"}, 200)
+        token = studio_db.create_session(u["tenant_id"], u["id"])
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Set-Cookie",
+            f"hgtv2_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            "ok": True, "token": token, "trial": True,
+            "tenant_id": u["tenant_id"], "username": u["username"], "role": u["role"],
+            "hint": "试用账号已创建，可直接使用"
+        }, ensure_ascii=False).encode("utf-8"))
+
+    def _session_role(self) -> str | None:
+        """当前会话用户的角色（超管判断用）。"""
+        tok = _session_token_from(self)
+        if not tok:
+            return None
+        s = studio_db.get_session(tok)
+        if not s:
+            return None
+        u = studio_db.get_user_by_id(s["user_id"])
+        return u["role"] if u else None
+
+    def _handle_admin(self, action: str, body: dict | None = None):
+        """超管管理：users/tenants 列表 + 建试用号/重置密码/禁用启用。仅 role=super。"""
+        if self._session_role() != "super":
+            return self._send_json({"ok": False, "error": "仅超级管理员可操作"}, 403)
+        body = body or {}
+        if action == "users":
+            return self._send_json({"ok": True, "users": studio_db.list_users_all()})
+        if action == "tenants":
+            return self._send_json({"ok": True, "tenants": studio_db.list_tenants()})
+        if action == "user_create":
+            r = studio_db.register_trial(body.get("username", ""),
+                                         body.get("password", ""),
+                                         body.get("company", ""))
+            return self._send_json(r, 200 if r.get("ok") else 400)
+        if action == "user_reset":
+            try:
+                uid = int(body.get("user_id", 0))
+            except (TypeError, ValueError):
+                return self._send_json({"ok": False, "error": "user_id 非法"}, 400)
+            if not body.get("password") or len(str(body.get("password"))) < 6:
+                return self._send_json({"ok": False, "error": "新密码至少 6 位"}, 400)
+            r = studio_db.set_user_password(uid, str(body.get("password")))
+            return self._send_json(r, 200 if r.get("ok") else 400)
+        if action == "user_status":
+            try:
+                uid = int(body.get("user_id", 0))
+            except (TypeError, ValueError):
+                return self._send_json({"ok": False, "error": "user_id 非法"}, 400)
+            r = studio_db.set_user_status(uid, str(body.get("status", "")))
+            return self._send_json(r, 200 if r.get("ok") else 400)
+        return self._send_json({"ok": False, "error": "未知操作"}, 400)
+
     def do_POST(self):
         u = urlparse(self.path)
         path = u.path
         # P0-1 数据面鉴权：仅 gate /api/*，放行首页与静态资源
-        # 登录接口本身免网关（否则永远登不进）
-        if path.startswith("/api/") and path != "/api/login" and not _auth_gate(self):
+        # 登录/注册接口本身免网关（否则永远登不进）
+        if path.startswith("/api/") and path not in ("/api/login", "/api/register") and not _auth_gate(self):
             return
         if path == "/api/login":
             return self._handle_login()
+        if path == "/api/register":
+            return self._handle_register()
         # 上传模特（multipart/form-data，需在 _body 之前直接读流）
         if path == "/api/models/upload":
             try:
@@ -1486,6 +1683,21 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json(generate_title_for_video(
                 body.get("opening", ""), body.get("body", ""),
                 body.get("ending", ""), body.get("dialogue", "")))
+        if path == "/api/hot_daily":
+            return self._send_json(start_hot_daily())
+        # ---- 商用 SaaS 账号体系：自助注册 + 超管管理 ----
+        if path == "/api/register":
+            return self._handle_register()
+        if path == "/api/admin/users":
+            return self._handle_admin("users")
+        if path == "/api/admin/tenants":
+            return self._handle_admin("tenants")
+        if path == "/api/admin/user_create":
+            return self._handle_admin("user_create", body)
+        if path == "/api/admin/user_reset":
+            return self._handle_admin("user_reset", body)
+        if path == "/api/admin/user_status":
+            return self._handle_admin("user_status", body)
         m = re.match(r"^/api/project/(.+?)/(save|tts|tts_dialogue|publish-check|render|publish|account)$", path)
         if m:
             name = unquote(m.group(1))
@@ -1523,6 +1735,7 @@ class Handler(BaseHTTPRequestHandler):
                     subtitle_lines=body.get("subtitle_lines"),
                     edit_style=body.get("edit_style") or None,
                     bgm=body.get("bgm"),
+                    motion_style=body.get("motion_style", "财经严谨"),
                     tenant_id=tid))
             if action == "publish":
                 return self._send_json(do_publish(name, generate=True))

@@ -139,6 +139,12 @@ def init_db() -> dict:
     CREATE INDEX IF NOT EXISTS idx_proj_tenant ON projects_index(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_proj_cat   ON projects_index(tenant_id, categories);
     """)
+    # 迁移：users 增加 status(active/disabled) 列
+    try:
+        cx.execute("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'")
+        cx.commit()
+    except sqlite3.OperationalError:
+        pass
     row = cx.execute("SELECT * FROM tenants WHERE slug=?", (DEFAULT_TENANT_SLUG,)).fetchone()
     if not row:
         tok = _gen_token()
@@ -803,7 +809,13 @@ def _seed_default_avatar_voice(tenant_id) -> None:
     ucnt = _ucx.execute("SELECT COUNT(*) c FROM users WHERE tenant_id=?", (tenant_id,)).fetchone()["c"]
     _ucx.close()
     if ucnt == 0:
-        create_user(tenant_id, "admin", "admin888", role="admin")
+        create_user(tenant_id, "admin", "admin888", role="super")
+    else:
+        # 幂等升级: 默认租户的 admin 账号提升为 超级管理员(super)
+        cx = _conn()
+        cx.execute("UPDATE users SET role='super' WHERE username='admin' AND tenant_id=? AND role!='super'",
+                   (tenant_id,))
+        cx.commit(); cx.close()
 
 
 # ───────────────────────── 账号 / 会话（多租户鉴权） ─────────────────────────
@@ -816,11 +828,78 @@ def _hash_pw(pw: str) -> str:
 def create_user(tenant_id, username, password, role="editor") -> dict:
     cx = _conn()
     try:
-        cx.execute("INSERT INTO users(tenant_id,username,password_hash,role,created_at) VALUES(?,?,?,?,?)",
-                   (tenant_id, username, _hash_pw(password), role, int(time.time())))
-        cx.commit(); cx.close(); return {"ok": True}
+        cur = cx.execute("INSERT INTO users(tenant_id,username,password_hash,role,created_at) VALUES(?,?,?,?,?)",
+                         (tenant_id, username, _hash_pw(password), role, int(time.time())))
+        cx.commit()
+        uid = cur.lastrowid
+        cx.close()
+        return {"ok": True, "user_id": uid}
     except sqlite3.IntegrityError as e:
         cx.rollback(); cx.close(); return {"ok": False, "error": str(e)}
+
+
+def register_trial(username: str, password: str, company: str = "") -> dict:
+    """自助注册: 新建『试用』租户 + editor 账号（商用 SaaS 标准：一租户一空间）。"""
+    username = (username or "").strip()
+    if len(username) < 2 or len(username) > 20:
+        return {"ok": False, "error": "用户名需 2-20 个字符"}
+    if len(password or "") < 6:
+        return {"ok": False, "error": "密码至少 6 位"}
+    import secrets
+    slug = "trial_" + secrets.token_hex(4)
+    r = create_tenant(slug, (company or username).strip()[:40] or username, plan="trial")
+    if not r.get("ok"):
+        return r
+    u = create_user(r["id"], username, password, role="editor")
+    if not u.get("ok"):
+        return u
+    return {"ok": True, "tenant_id": r["id"], "user_id": u.get("user_id")}
+
+
+def list_users_all() -> list:
+    """跨租户账号列表（超管用）。"""
+    cx = _conn()
+    rows = cx.execute(
+        "SELECT u.id, u.tenant_id, u.username, u.role, u.status, u.created_at, "
+        "t.slug AS tenant_slug, t.name AS tenant_name, t.plan AS tenant_plan, t.status AS tenant_status "
+        "FROM users u LEFT JOIN tenants t ON t.id = u.tenant_id ORDER BY u.id").fetchall()
+    cx.close()
+    return [dict(r) for r in rows]
+
+
+def set_user_status(user_id: int, status: str) -> dict:
+    if status not in ("active", "disabled"):
+        return {"ok": False, "error": "status 必须为 active/disabled"}
+    cx = _conn()
+    cur = cx.execute("UPDATE users SET status=? WHERE id=?", (status, user_id))
+    cx.commit()
+    n = cur.rowcount
+    cx.close()
+    return {"ok": n > 0, "updated": n}
+
+
+def set_user_role(user_id: int, role: str) -> dict:
+    if role not in ("super", "admin", "editor"):
+        return {"ok": False, "error": "role 必须为 super/admin/editor"}
+    cx = _conn()
+    cur = cx.execute("UPDATE users SET role=? WHERE id=?", (role, user_id))
+    cx.commit()
+    n = cur.rowcount
+    cx.close()
+    return {"ok": n > 0, "updated": n}
+
+
+def set_user_password(user_id: int, new_password: str) -> dict:
+    if len(new_password or "") < 6:
+        return {"ok": False, "error": "新密码至少 6 位"}
+    cx = _conn()
+    cur = cx.execute("UPDATE users SET password_hash=? WHERE id=?",
+                     (_hash_pw(new_password), user_id))
+    cx.commit()
+    n = cur.rowcount
+    cx.close()
+    return {"ok": n > 0, "updated": n}
+
 
 def verify_user(username: str, password: str) -> dict | None:
     cx = _conn()
@@ -829,6 +908,8 @@ def verify_user(username: str, password: str) -> dict | None:
     if not row:
         return None
     if row["password_hash"] != _hash_pw(password):
+        return None
+    if row["status"] == "disabled":
         return None
     return dict(row)
 

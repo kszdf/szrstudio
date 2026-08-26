@@ -64,3 +64,6 @@ server_std.log
 studio.err.log
 studio.log
 audit_shots/
+
+studio.db
+.access_token

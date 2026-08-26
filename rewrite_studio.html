@@ -700,9 +700,11 @@
             <span id="hotSecHint" style="font-size:12px;color:var(--muted);white-space:nowrap;">≈ 252 字</span>
           </div>
           <button id="findHotBtn" class="primary">🔍 联网找爆款</button>
+          <button id="hotDailyBtn" class="secondary" style="padding:8px 12px;font-size:13px;">📊 每日热点·双题材（财税+大事）</button>
         </div>
         <div class="tip">按上面"类别 + 时间段"自动联网检索最近财税爆款话题，列出与主题高度相关的候选（最多 10 条，素材不足或相关度不够时自动减少）。点选某条卡片 → 按其角度生成二创稿 → 自动填入「② 改写」三段。</div>
         <div id="hotList" style="margin-top:12px;"></div>
+        <div id="hotDailyBox" style="margin-top:16px;border-top:1px dashed var(--border);padding-top:12px;"></div>
       </div>
 
       <!-- Pane 2：直接生成二创稿（不联网） -->
@@ -898,6 +900,7 @@
         <label style="margin-right:18px;cursor:pointer;font-size:13.5px;"><input type="radio" name="renderMode" value="heygem" checked> 🧑 本地数字人（主播形象/声 · 需 Docker）</label>
         <label style="margin-right:18px;cursor:pointer;font-size:13.5px;"><input type="radio" name="renderMode" value="thirdparty"> 🤖 第三方官方数字人（不出主播面 · 广告/营销类）</label>
         <label style="cursor:pointer;font-size:13.5px;"><input type="radio" name="renderMode" value="scroll"> 📜 不出镜·滚动字幕卡（男女对话）</label>
+        <label style="cursor:pointer;font-size:13.5px;"><input type="radio" name="renderMode" value="motion"> 🎬 幕后音·动态画面（男/女/对话 · 动态GIF+中部滚动字幕）</label>
         <div id="tpBox" style="display:none;margin-top:12px;padding-top:10px;border-top:1px dashed #cbd5e1;">
           <div style="font-size:12.5px;color:#475569;margin-bottom:6px;">选官方形象（平台提供，不用你出镜）：</div>
           <select id="tpAvatar" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;min-width:220px;max-width:100%;"></select>
@@ -933,6 +936,15 @@
           <div style="font-size:12px;color:#475569;margin:0 0 4px;">副标题（标题下方一行小字，可留空）：</div>
           <input id="scrollSubtitle" type="text" maxlength="40" placeholder="如：建筑财税·避坑指南" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;width:320px;">
           <div id="scrollNote" class="tip" style="margin-top:8px;">不出镜、不用模特、不用 Docker；自动男女双声 + 滚动字幕，约 1–2 分钟。成品与数字人出片走同一预览/字幕/质检/发布链路。</div>
+        </div>
+        <div id="motionBox" style="display:none;margin-top:12px;padding-top:10px;border-top:1px dashed #cbd5e1;">
+          <div style="font-size:12.5px;color:#475569;margin-bottom:6px;">包装主题（配色/动效）：</div>
+          <select id="motionStyle" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;">
+            <option value="财经严谨" selected>财经严谨（深色专业 · 金点缀 · 风险红/合规绿）</option>
+            <option value="带货活力">带货活力</option>
+            <option value="简约高级">简约高级</option>
+          </select>
+          <div id="motionNote" class="tip" style="margin-top:8px;">幕后音·动态画面：男声/女声/男女对话配音 + 动态GIF/生图场景 + 屏幕中部逐行滚动字幕（对标视频号「建筑财税张老师」）。无需 Docker 与模特，约 2–4 分钟，成品与数字人出片走同一预览/质检/发布链路。</div>
         </div>
       </div>
 
@@ -1275,7 +1287,8 @@ const $ = id => document.getElementById(id);
       + '<label style="font-size:12px;color:rgba(255,255,255,.7)">密码</label>'
       + '<input id="lgPwd" type="password" autocomplete="current-password" placeholder="密码" style="margin:6px 0 18px;width:100%;padding:11px 13px;border:1px solid rgba(255,255,255,.18);border-radius:11px;font-size:14px;box-sizing:border-box;background:rgba(255,255,255,.06);color:#fff;outline:none">'
       + '<button id="lgBtn" style="width:100%;padding:12px;border:0;border-radius:11px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:.2s">登 录</button>'
-      + '<p id="lgErr" style="margin:12px 0 0;font-size:12px;color:#fca5a5;display:none;text-align:center"></p></div>';
+      + '<p id="lgErr" style="margin:12px 0 0;font-size:12px;color:#fca5a5;display:none;text-align:center"></p>'
+      + '<p style="margin:16px 0 0;font-size:12.5px;color:rgba(255,255,255,.55);text-align:center">没有账号？<a id="lgRegLink" style="color:#a5b4fc;cursor:pointer;text-decoration:underline">注册试用账号</a></p></div>';
     document.body.appendChild(overlay);
     function tryLogin(){
       const u = document.getElementById('lgUser').value.trim();
@@ -1296,12 +1309,52 @@ const $ = id => document.getElementById(id);
     document.getElementById('lgPwd').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
     document.getElementById('lgUser').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('lgPwd').focus(); });
     document.getElementById('lgUser').focus();
+    const rl=document.getElementById('lgRegLink');
+    if(rl) rl.addEventListener('click', showAccountRegister);
+  }
+
+  /* 注册试用账号（自助注册，商用 SaaS 标准：一租户一空间） */
+  function showAccountRegister(){
+    const ov=document.getElementById('gateOverlay');
+    ov.innerHTML = '<div style="width:380px;padding:36px 34px;border-radius:20px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);box-shadow:0 30px 80px rgba(0,0,0,.4);backdrop-filter:blur(20px) saturate(160%)">'
+      + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><div style="width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:20px">🎬</div><h3 style="margin:0;font-size:19px;color:#fff;font-weight:700">注册试用账号</h3></div>'
+      + '<p style="margin:0 0 20px;font-size:13px;color:rgba(255,255,255,.6);line-height:1.6">注册即开通独立试用空间（账号、选题、素材、成片互不干扰）。</p>'
+      + '<label style="font-size:12px;color:rgba(255,255,255,.7)">账号（2-20位）</label>'
+      + '<input id="rgUser" type="text" placeholder="用户名" style="margin:6px 0 12px;width:100%;padding:11px 13px;border:1px solid rgba(255,255,255,.18);border-radius:11px;font-size:14px;box-sizing:border-box;background:rgba(255,255,255,.06);color:#fff;outline:none">'
+      + '<label style="font-size:12px;color:rgba(255,255,255,.7)">密码（至少6位）</label>'
+      + '<input id="rgPwd" type="password" placeholder="密码" style="margin:6px 0 12px;width:100%;padding:11px 13px;border:1px solid rgba(255,255,255,.18);border-radius:11px;font-size:14px;box-sizing:border-box;background:rgba(255,255,255,.06);color:#fff;outline:none">'
+      + '<label style="font-size:12px;color:rgba(255,255,255,.7)">公司/称呼（可选）</label>'
+      + '<input id="rgCompany" type="text" placeholder="如：XX财税事务所" style="margin:6px 0 18px;width:100%;padding:11px 13px;border:1px solid rgba(255,255,255,.18);border-radius:11px;font-size:14px;box-sizing:border-box;background:rgba(255,255,255,.06);color:#fff;outline:none">'
+      + '<button id="rgBtn" style="width:100%;padding:12px;border:0;border-radius:11px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:.2s">注 册 并 登 录</button>'
+      + '<p id="rgErr" style="margin:12px 0 0;font-size:12px;color:#fca5a5;display:none;text-align:center"></p>'
+      + '<p style="margin:16px 0 0;font-size:12.5px;color:rgba(255,255,255,.55);text-align:center">已有账号？<a id="rgBackLink" style="color:#a5b4fc;cursor:pointer;text-decoration:underline">返回登录</a></p></div>';
+    function doReg(){
+      const u=document.getElementById('rgUser').value.trim(), p=document.getElementById('rgPwd').value;
+      if(u.length<2||p.length<6){const e=document.getElementById('rgErr');e.textContent='账号≥2位、密码≥6位';e.style.display='block';return;}
+      const btn=document.getElementById('rgBtn'); btn.textContent='注册中…';
+      fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
+           body:JSON.stringify({username:u,password:p,company:document.getElementById('rgCompany').value.trim()})})
+        .then(r=>r.json().then(d=>({ok:r.ok,d})))
+        .then(({ok,d})=>{
+          if(ok&&d.ok){ ov.remove(); location.reload(); }
+          else { btn.textContent='注 册 并 登 录';
+                 const e=document.getElementById('rgErr'); e.textContent=(d&&d.error)||'注册失败'; e.style.display='block'; }
+        }).catch(()=>{ btn.textContent='注 册 并 登 录';
+                       const e=document.getElementById('rgErr'); e.textContent='网络错误，请重试'; e.style.display='block'; });
+    }
+    document.getElementById('rgBtn').addEventListener('click', doReg);
+    document.getElementById('rgPwd').addEventListener('keydown', e=>{ if(e.key==='Enter') doReg(); });
+    document.getElementById('rgBackLink').addEventListener('click', showAccountLogin);
+    document.getElementById('rgUser').focus();
   }
 
   /* 先问后端当前鉴权模式，再决定走哪条门禁 */
   fetch('/api/auth/state').then(r=>r.json()).then(s=>{
     if(s.auth_enabled){
-      if(s.authenticated){ return; }   // 已有会话，直接进
+      if(s.authenticated){
+        if(s.role==='super') ensureAdminUI(s.role);   // 超管显示账号管理入口
+        return;
+      }
       showAccountLogin();
     } else {
       if(getCookie(TOK)){ return; }     // 已有局域网令牌，直接进
@@ -1312,6 +1365,93 @@ const $ = id => document.getElementById(id);
     showTokenPrompt();                   // 兜底：原有令牌模式
   });
 })();
+
+/* ===== 超管账号管理（商用 SaaS：建试用号/重置/禁用/租户列表）===== */
+let ME_ROLE = null;
+function ensureAdminUI(role){ ME_ROLE=role; if(role!=='super') return;
+  if(document.getElementById('adminFabBtn')) return;
+  const b=document.createElement('button');
+  b.id='adminFabBtn'; b.textContent='🛠 账号管理';
+  b.style.cssText='position:fixed;right:18px;bottom:18px;z-index:9000;padding:10px 16px;border:0;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;font-size:13.5px;font-weight:600;cursor:pointer;box-shadow:0 8px 24px rgba(109,40,217,.35)';
+  b.addEventListener('click', openAdminPanel);
+  document.body.appendChild(b);
+}
+function adminFetch(path, data){
+  return fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
+    body: JSON.stringify(data||{})}).then(r=>r.json());
+}
+function openAdminPanel(){
+  if(ME_ROLE!=='super'){toast('仅超级管理员可管理账号');return;}
+  const ov=document.createElement('div');
+  ov.id='adminPanel';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;z-index:9500;font-family:system-ui,"Microsoft YaHei",sans-serif';
+  ov.innerHTML='<div style="width:760px;max-width:94vw;max-height:86vh;overflow:auto;padding:26px 28px;border-radius:18px;background:#fff;box-shadow:0 30px 80px rgba(0,0,0,.35)">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">'
+    +'<h3 style="margin:0;font-size:18px;color:#1e293b;">🛠 账号管理（超级管理员）</h3>'
+    +'<button onclick="document.getElementById(\'adminPanel\').remove()" style="border:0;background:#f1f5f9;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;">✕ 关闭</button></div>'
+    +'<div style="display:flex;gap:12px;margin-bottom:16px;">'
+    +'<input id="adU" placeholder="新账号用户名（≥2位）" style="flex:1;padding:9px 11px;border:1px solid #cbd5e1;border-radius:8px;font-size:13.5px;">'
+    +'<input id="adP" type="password" placeholder="密码（≥6位）" style="flex:1;padding:9px 11px;border:1px solid #cbd5e1;border-radius:8px;font-size:13.5px;">'
+    +'<input id="adC" placeholder="公司/称呼（可选）" style="flex:1;padding:9px 11px;border:1px solid #cbd5e1;border-radius:8px;font-size:13.5px;">'
+    +'<button onclick="adCreateUser()" style="padding:9px 16px;border:0;border-radius:8px;background:#7c3aed;color:#fff;cursor:pointer;font-size:13.5px;">＋ 建试用账号</button></div>'
+    +'<div id="adMsg" style="font-size:12.5px;color:#059669;margin-bottom:8px;"></div>'
+    +'<div style="font-weight:700;color:#334155;margin:4px 0 6px;">账号列表</div><div id="adUsers" style="font-size:13px;"></div>'
+    +'<div style="font-weight:700;color:#334155;margin:16px 0 6px;">租户列表</div><div id="adTenants" style="font-size:13px;"></div>'
+    +'</div>';
+  document.body.appendChild(ov);
+  adRefresh();
+}
+function adCreateUser(){
+  const u=document.getElementById('adU').value.trim(), p=document.getElementById('adP').value,
+        c=document.getElementById('adC').value.trim();
+  if(u.length<2||p.length<6){document.getElementById('adMsg').textContent='账号≥2位、密码≥6位';return;}
+  adminFetch('/api/admin/user_create',{username:u,password:p,company:c}).then(d=>{
+    document.getElementById('adMsg').textContent=(d.ok?'✅ 已创建试用账号 '+u+'（含独立空间）':'❌ '+(d.error||''));
+    adRefresh();
+  });
+}
+function adRefresh(){
+  adminFetch('/api/admin/users').then(d=>{
+    const box=document.getElementById('adUsers'); if(!box) return;
+    if(!d.ok){box.innerHTML='<span class="tip">加载失败</span>';return;}
+    box.innerHTML='<table style="width:100%;border-collapse:collapse">'
+      +'<tr style="color:#64748b;font-size:12px;text-align:left"><th style="padding:4px 6px">账号</th><th>租户</th><th>套餐</th><th>角色</th><th>状态</th><th>操作</th></tr>'
+      +d.users.map(u=>'<tr style="border-top:1px solid #eef2f7">'
+        +`<td style="padding:6px">${esc(u.username)}</td>`
+        +`<td style="padding:6px;font-size:12.5px">${esc(u.tenant_name||u.tenant_slug||('#'+u.tenant_id))}</td>`
+        +`<td style="padding:6px;font-size:12.5px">${esc(u.tenant_plan||'free')}</td>`
+        +`<td style="padding:6px;font-size:12.5px">${esc(u.role)}</td>`
+        +`<td style="padding:6px;font-size:12.5px;color:${u.status==='disabled'?'#dc2626':'#16a34a'}">${u.status==='disabled'?'已禁用':'正常'}</td>`
+        +'<td style="padding:6px;white-space:nowrap">'
+        +`<button onclick="adResetPw(${u.id},'${esc(u.username)}')" style="border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:12px;margin-right:4px">重置密码</button>`
+        +`<button onclick="adToggle(${u.id},'${u.status==='disabled'?'active':'disabled'}','${esc(u.username)}')" style="border:1px solid ${u.status==='disabled'?'#16a34a':'#dc2626'};background:#fff;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:12px">${u.status==='disabled'?'启用':'禁用'}</button>`
+        +'</td></tr>').join('')+'</table>';
+  });
+  adminFetch('/api/admin/tenants').then(d=>{
+    const box=document.getElementById('adTenants'); if(!box) return;
+    if(!d.ok){box.innerHTML='<span class="tip">加载失败</span>';return;}
+    box.innerHTML='<table style="width:100%;border-collapse:collapse">'
+      +'<tr style="color:#64748b;font-size:12px;text-align:left"><th style="padding:4px 6px">ID</th><th>租户</th><th>套餐</th><th>状态</th></tr>'
+      +d.tenants.map(t=>'<tr style="border-top:1px solid #eef2f7">'
+        +`<td style="padding:6px">${t.id}</td>`
+        +`<td style="padding:6px">${esc(t.name)} <span style="color:#94a3b8;font-size:11.5px">(${esc(t.slug)})</span></td>`
+        +`<td style="padding:6px;font-size:12.5px">${esc(t.plan||'free')}</td>`
+        +`<td style="padding:6px;font-size:12.5px">${esc(t.status||'active')}</td></tr>`).join('')+'</table>';
+  });
+}
+function adResetPw(uid,uname){
+  const np=prompt(`重置「${uname}」的密码（至少6位）：`);
+  if(!np||np.length<6){toast('密码至少6位');return;}
+  adminFetch('/api/admin/user_reset',{user_id:uid,password:np}).then(d=>{
+    toast(d.ok?'✅ 密码已重置':'❌ '+(d.error||'')); if(d.ok) adRefresh();
+  });
+}
+function adToggle(uid,status,uname){
+  if(!confirm(`确认${status==='disabled'?'禁用':'启用'}账号「${uname}」？`)) return;
+  adminFetch('/api/admin/user_status',{user_id:uid,status:status}).then(d=>{
+    toast(d.ok?'✅ 已更新':'❌ '+(d.error||'')); if(d.ok) adRefresh();
+  });
+}
 
 /* ===== 统一操作引导系统（点击左侧步骤按钮时弹出，降低新用户学习成本）===== */
 let guideNoMore = false;
@@ -2154,6 +2294,10 @@ $("renderBtn").addEventListener("click",async()=>{
     body.bg_fit=document.querySelector('input[name="bgFit"]:checked').value;
     body.title=$("scrollTitle")?($("scrollTitle").value||""):"";
     body.subtitle=$("scrollSubtitle")?($("scrollSubtitle").value||""):"";
+  } else if(mode==="motion"){
+    body.provider="motion";
+    body.motion_style=$("motionStyle")?($("motionStyle").value||"财经严谨"):"财经严谨";
+    body.title=$("scrollTitle")?($("scrollTitle").value||""):"";
   }
   // 字幕与剪辑设置透传
   body.subtitle_style=$("subStyle")?($("subStyle").value||"dynamic"):"dynamic";
@@ -2206,7 +2350,8 @@ async function pollJob(jobId){
 function toggleRenderMode(){
   const mode=document.querySelector('input[name="renderMode"]:checked').value;
   $("tpBox").style.display = mode==="thirdparty" ? "block":"none";
-  $("scrollBox").style.display = mode==="scroll" ? "block":"none";
+  $("scrollBox").style.display = (mode==="scroll"||mode==="motion") ? "block":"none";
+  $("motionBox").style.display = mode==="motion" ? "block":"none";
   updateRenderPrereq();
 }
 function updateRenderPrereq(){
@@ -2218,6 +2363,8 @@ function updateRenderPrereq(){
     else txt=`⚠️ 尚未选择模特，请先到「④ 选模特」点选一张，或切到「📜 滚动字幕卡」模式（无需模特）。`;
   }else if(mode==="thirdparty"){
     txt=`🤖 第三方数字人模式：选择官方形象 + 声音模式后，点「开始出片」。`;
+  }else if(mode==="motion"){
+    txt=`🎬 幕后音·动态画面模式：无需模特 / 无需 Docker，男声/女声/男女对话配音 + 动态GIF/生图场景 + 中部滚动字幕，约 2–4 分钟。`;
   }else if(mode==="scroll"){
     txt=`📜 滚动字幕卡模式：无需模特 / 无需 Docker，系统将用男女对话稿（或独白）+ 背景图直接出片。`;
   }
@@ -2544,6 +2691,7 @@ async function addToQueue(){
   const mode=document.querySelector('input[name="renderMode"]:checked').value;
   if(mode==="thirdparty"){toast("批量队列仅支持本地数字人，请切回「本地数字人」或直接点一键出片");return;}
   if(mode==="scroll"){toast("滚动字幕卡暂走「一键出片」（不入批量队列）");return;}
+  if(mode==="motion"){toast("幕后音·动态画面暂走「一键出片」（不入批量队列）");return;}
   if(!selModel){toast("请先在「选模特」步骤选一个模特");gotoStep("model");return;}
   // 关键修复：先查队列是否已有该项目，避免重复入队
   const r0=await fetch("/api/queue"); const d0=await r0.json();
@@ -2774,8 +2922,62 @@ $("findHotBtn").addEventListener("click",async()=>{
   $("findHotBtn").disabled=false;$("findHotBtn").textContent="🔍 联网找爆款";
 });
 
-// —— 入口 2：✍️ 直接生成二创稿（不联网，AI 直接改写粘贴的素材）——
-$("directCreateBtn").addEventListener("click",async()=>{
+// —— 每日热点·双题材（daily_hot）：平台热榜汇总 → 财税/大事 双题材 + 爆款方案 ——
+let hotDailyTimer=null;
+function renderHotDaily(d){
+  const box=$("hotDailyBox"); if(!box) return;
+  const res=d&&d.result;
+  if(d.running){box.innerHTML='<div class="tip">📊 每日热点生成中（抓取微博/百度/头条热榜 → 双题材过滤 → 爆款方案，约 2–4 分钟）…</div>';return;}
+  if(d.error){box.innerHTML='<div class="warn">⚠️ 每日热点失败：'+esc(d.error)+'</div>';return;}
+  if(!res||!res.date){box.innerHTML='<div class="tip">还没有每日热点数据，点上方「📊 每日热点·双题材」按钮生成。</div>';return;}
+  const secs=(cat,title,items)=>{
+    if(!items||!items.length) return '';
+    const cards=items.map((it,i)=>{
+      const p=it.plan||{};
+      return `<div class="topic-card" style="border-left:3px solid ${cat==='finance'?'#16a34a':'#2563eb'};">
+        <div class="tt">${cat==='finance'?'💰':'🔥'} ${esc(it.title)} <span class="tip">· ${esc(it.source)}</span></div>
+        <div class="tx">${(it.angle?`<b>财税切入：</b>${esc(it.angle)}<br>`:'')}`+
+        `${(p.title?`<b>爆款标题：</b>${esc(p.title)}<br>`:'')}`+
+        `${(p.hook_line?`<b>钩子：</b>${esc(p.hook_line)}<br>`:'')}`+
+        `${(p.structure&&p.structure.length?`<b>结构：</b>${esc(p.structure.slice(0,4).join(' → '))}<br>`:'')}`+
+        `${(p.cta?`<b>留资：</b>${esc(p.cta)}`:'')}</div>
+        <button class="primary use-topic-btn" data-src="${esc(it.title)}|${esc(it.angle||'')}">✍ 用此选题生成二创稿</button>
+      </div>`;
+    }).join('');
+    return `<div style="font-weight:700;margin:10px 0 6px;color:#334155;">${title} · ${items.length} 条</div>${cards}`;
+  };
+  box.innerHTML=`<div class="topic-label">📊 每日热点 · ${esc(res.date)}（微博/百度/头条热榜汇总 ${res.raw_count||''} 条 → 仅保留 财税直接相关 + 重大热点事件 两类）</div>`+
+    secs('finance','💰 财税直接相关',res.finance)+secs('event','🔥 重大热点事件（附财税切入）',res.event);
+  box.querySelectorAll(".use-topic-btn").forEach(btn=>{
+    btn.addEventListener("click",async()=>{
+      const [title,angle]=btn.dataset.src.split("|");
+      const src=`选题：${title}\n财税切入角度：${angle||'（按专业财税视角）'}\n要求：围绕该选题生成一条 60 秒左右的财税口播二创稿，口语化、戳老板痛点、结尾留资。`;
+      $("srcText").value=src;switchTopicTab("direct");toast("已填入选题要点，点「✨ 直接生成二创稿」完成二创");
+    });
+  });
+}
+function loadHotDaily(showRunning){
+  fetch("/api/hot_daily_result").then(r=>r.json()).then(d=>{renderHotDaily(d);});
+}
+$("hotDailyBtn").addEventListener("click",async()=>{
+  $("hotDailyBtn").disabled=true;
+  renderHotDaily({running:true});
+  try{
+    const r=await fetch("/api/hot_daily",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});
+    const d=await r.json().catch(()=>({}));
+    if(d.error&&!d.running){toast("触发失败："+d.error.slice(0,90));}
+  }catch(e){toast("触发异常："+e.message);}
+  if(hotDailyTimer) clearInterval(hotDailyTimer);
+  hotDailyTimer=setInterval(()=>{
+    fetch("/api/hot_daily_result").then(r=>r.json()).then(d=>{
+      renderHotDaily(d);
+      if(!d.running){clearInterval(hotDailyTimer);$("hotDailyBtn").disabled=false;
+        if(d.result) toast("📊 每日热点已更新（"+d.result.date+"）");}
+    }).catch(()=>{});
+  },5000);
+});
+loadHotDaily();
+// —— 入口 2：✍️ 直接生成二创稿（不联网，AI 直接改写粘贴的素材）——$("directCreateBtn").addEventListener("click",async()=>{
   const source=$("srcText").value.trim();
   if(!source){toast("请先在文本框粘贴爆款链接 / 原文逐字稿 / 创作提示词");return;}
   $("directCreateBtn").disabled=true;$("directCreateBtn").textContent="AI 改写中…";
