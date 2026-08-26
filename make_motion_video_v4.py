@@ -69,13 +69,14 @@ TRANS_TYPES = ["wipe_lr", "wipe_tb", "zoom", "fade", "slide_lr", "iris",
                "blur_fade", "flash", "push", "soft_rotate", "glitch", "luma"]
 # 插画风格轮替(每幕换一种观感, 但保持财税专业家族感, 不撞款)
 # 统一约束：真实摄影写实风(杜绝插画/卡通/扁平矢量), 深色专业底 + 自然光影
+# v5 定稿：背景一律「无人物风景/城市景观」(用户要求不要人物出镜背景)
 IMG_STYLES = [
-    "真实摄影照片风格，真实商业场景实拍，自然光线，电影级画质，专业纪实",
-    "写实摄影，真实办公环境，柔和自然光，浅景深，高清质感，纪实",
-    "真实照片，现代都市金融氛围，自然光影，纪实摄影，专业",
-    "写实摄影，真实企业场景，明亮自然光，清晰细节，新闻纪实风格",
-    "真实场景摄影，自然色调，专业摄影质感，无夸张滤镜",
-    "写实摄影风格，真实人物与场景，自然光，纪实感，高端质感",
+    "真实风景摄影，海边沙滩与蓝天白云，自然光线，电影级画质，无人物",
+    "真实风景摄影，城市天际线，蓝天白云，自然光，高清质感，无人物",
+    "真实风景摄影，森林湖泊，晨光薄雾，自然光影，纪实摄影，无人物",
+    "真实风景摄影，绿色草原远山，明亮自然光，清晰细节，无人物",
+    "真实风景摄影，湖面倒影，自然色调，专业摄影质感，无人物",
+    "真实风景摄影，青山云海，自然光，纪实感，高端质感，无人物",
 ]
 
 # ============================== 字体 ==============================
@@ -268,10 +269,12 @@ _DARK_BOT = None
 def dark_overlay():
     global _DARK_TOP, _DARK_BOT
     if _DARK_TOP is None:
+        # v5 定稿：暗化强度下调(210→130 / 220→140)，保证风景底图清晰可见，
+        # 仅在中部字幕上下留适度压暗提升可读性，不再让顶部/底部整片发黑。
         top = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         ga = Image.new("L", (1, 680))
         for y in range(680):
-            ga.putpixel((0, y), int(210 * (1 - y / 680) ** 1.3))
+            ga.putpixel((0, y), int(130 * (1 - y / 680) ** 1.3))
         band = Image.new("RGBA", (W, 680), (0, 0, 0, 255))
         band.putalpha(ga.resize((W, 680)))
         top.paste(band, (0, 0))
@@ -279,7 +282,7 @@ def dark_overlay():
         bot = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         gb = Image.new("L", (1, 680))
         for y in range(680):
-            gb.putpixel((0, y), int(220 * (y / 680) ** 1.4))
+            gb.putpixel((0, y), int(140 * (y / 680) ** 1.4))
         bandb = Image.new("RGBA", (W, 680), (0, 0, 0, 255))
         bandb.putalpha(gb.resize((W, 680)))
         bot.paste(bandb, (0, H - 680))
@@ -457,7 +460,7 @@ SB_PROMPT = """你是财税口播短视频的分镜导演。下面是一段口�
 
 核心原则（已取消"智能图解"卡片：表格/清单/步骤/数字/金句信息卡一律不用）:
 1. 一律用 "scene"（场景画面），画面 = 动态底图 + 字幕，绝不出现代码绘制的生硬信息卡。
-2. 每句给 image_prompt：与句子内容强相关的**真实摄影描述**（写实照片、真实场景、自然光、无文字无数字无字母，禁止插画、禁止卡通、禁止扁平矢量）。
+2. 每句给 image_prompt：与句子内容强相关的**无人物风景/城市景观真实摄影描述**（海滩、湖泊、森林、草原、城市天际线等自然或城市场景；写实照片、自然光、无文字无数字无字母，禁止出现人物，禁止插画、禁止卡通、禁止扁平矢量）。
 
 visual_type 取值:
 - "scene": 讲「场景/情境/故事/人物/对比/流程/数据」, 一律 scene, 给 image_prompt(真实摄影写实照片描述)。
@@ -706,11 +709,15 @@ def _real_bg_photo(sc, t_global=0.0):
         cands = sorted(list(REAL_BG_DIR.glob("*.jpg")) + list(REAL_BG_DIR.glob("*.png")))
         if cands:
             tone = sc.get("tone", "neutral")
-            tags = {"risk": ("risk", "dark", "night"),
-                    "safe": ("safe", "sea", "bright"),
-                    "neutral": ("neutral", "finance", "city", "office")}.get(tone, ("neutral",))
-            picked = next((c for c in cands if any(t in c.stem for t in tags)), None)
-            if picked is None:
+            # v5 定稿：real_bg 全部为明亮风景/城市景观照(无人物)，按 tone 命中对应文件；
+            # 同 tone 多张时按标题哈希轮换，避免同一条视频内问答句背景重复单调。
+            tags = {"risk": ("risk", "storm", "night", "dark"),
+                    "safe": ("safe", "sea", "beach", "lake", "mountain", "bright"),
+                    "neutral": ("neutral", "city", "forest", "grass", "lake")}.get(tone, ("neutral",))
+            matched = [c for c in cands if any(t in c.stem for t in tags)]
+            if matched:
+                picked = matched[hash(sc.get("title", "") or "x") % len(matched)]
+            else:
                 picked = cands[hash(sc.get("title", "")) % len(cands)]
             img = Image.open(picked).convert("RGB")
             return cover_resize(img, W, H)
@@ -880,11 +887,8 @@ def render_scene_frame(idx, local, sentences, tl, sb, imgs, trans=False):
     a = ease(p)
     scdur = (tl[idx][1] - tl[idx][0]) if idx < len(tl) else 3.0
     t_global = (tl[idx][0] if idx < len(tl) else 0.0) + local
-    if vtype == "dialog":
-        # 对话模式: 上下分屏 + 气泡台词, 字幕已在 _render_dialog 内绘制
-        role = sc.get("role", "M")
-        return _render_dialog(sc, pal, idx, local, scdur, role, sentences[idx]).convert("RGB")
-    # 已取消"智能图解"卡片(table/list/step/number/quote), 一律 scene 动态画面
+    # v5 定稿：dialog(问答句)与 scene 统一走「动态画面」——风景/城市底图 + 中部滚动字幕。
+    # 取消原「上下分屏头像气泡」设计：用户要求背景不要人物(头像/人像)，问答句同样用风景底图。
     img = _render_scene(sc, pal, idx, local, scdur, imgs[idx], t_global)
     # 统一入场(转场进行中时跳过, 交给转场)
     if not trans:
@@ -1352,7 +1356,7 @@ def main():
                 imgs.append(None)   # 内容匹配动态GIF(如 仓库/账本)作底, 不烧钱生图
             else:
                 style = IMG_STYLES[i % len(IMG_STYLES)]
-                prompt = sc["image_prompt"] + ("，" + style + "，画面纯净无文字无字母无数字，竖版9:16构图，真实摄影写实风格，禁止插画、禁止卡通、禁止扁平矢量")
+                prompt = sc["image_prompt"] + ("，" + style + "，画面纯净无人物无文字无字母无数字，竖版9:16构图，真实摄影写实风格，禁止插画、禁止卡通、禁止扁平矢量")
                 need.append((i, prompt))
                 imgs.append(None)   # 占位, 保持 imgs 与 sb 等长(并行结果按索引回填)
         print(f"[3/6] 通义万相生图 {len(need)} 张(并行) ...")
