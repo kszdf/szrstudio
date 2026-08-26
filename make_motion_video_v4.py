@@ -68,15 +68,14 @@ ENTR = 0.6           # 入场动画时长(秒)
 TRANS_TYPES = ["wipe_lr", "wipe_tb", "zoom", "fade", "slide_lr", "iris",
                "blur_fade", "flash", "push", "soft_rotate", "glitch", "luma"]
 # 插画风格轮替(每幕换一种观感, 但保持财税专业家族感, 不撞款)
-# 统一约束：深色专业底 + 金色点缀 + 写实/数据化，杜绝卡通化、低幼感
+# 统一约束：真实摄影写实风(杜绝插画/卡通/扁平矢量), 深色专业底 + 自然光影
 IMG_STYLES = [
-    "写实金融办公场景插画，深色专业背景，暖色台灯光影，景深虚实，商务权威",
-    "财经数据可视化信息图，深蓝底色配金色数据图表与折线，克制专业",
-    "半色调双色 duotone 财经插画，深蓝金双色，现代克制",
-    "写实电影感插画，深色背景景深与明暗光影，金融氛围",
-    "深色商务剪影插画，金色描边，沉稳大气，低饱和",
-    "商务极简扁平插画，深灰蓝底大量留白，低饱和高级灰，克制专业",
-    "3D 等距财经数据插画，深蓝金配色，专业立体，简洁",
+    "真实摄影照片风格，真实商业场景实拍，自然光线，电影级画质，专业纪实",
+    "写实摄影，真实办公环境，柔和自然光，浅景深，高清质感，纪实",
+    "真实照片，现代都市金融氛围，自然光影，纪实摄影，专业",
+    "写实摄影，真实企业场景，明亮自然光，清晰细节，新闻纪实风格",
+    "真实场景摄影，自然色调，专业摄影质感，无夸张滤镜",
+    "写实摄影风格，真实人物与场景，自然光，纪实感，高端质感",
 ]
 
 # ============================== 字体 ==============================
@@ -458,15 +457,15 @@ SB_PROMPT = """你是财税口播短视频的分镜导演。下面是一段口�
 
 核心原则（已取消"智能图解"卡片：表格/清单/步骤/数字/金句信息卡一律不用）:
 1. 一律用 "scene"（场景画面），画面 = 动态底图 + 字幕，绝不出现代码绘制的生硬信息卡。
-2. 每句给 image_prompt：与句子内容强相关的扁平矢量商务插画描述（干净克制专业，无文字无数字无字母）。
+2. 每句给 image_prompt：与句子内容强相关的**真实摄影描述**（写实照片、真实场景、自然光、无文字无数字无字母，禁止插画、禁止卡通、禁止扁平矢量）。
 
 visual_type 取值:
-- "scene": 讲「场景/情境/故事/人物/对比/流程/数据」, 一律 scene, 给 image_prompt。
+- "scene": 讲「场景/情境/故事/人物/对比/流程/数据」, 一律 scene, 给 image_prompt(真实摄影写实照片描述)。
 
 每句还要给: title(顶部精炼主标题≤12字, 口语化抓人, 不要千篇一律写"财税干货")、tone("risk"风险/"safe"合规/"neutral"中性")、keywords(本句最该强调的 1-3 个词, 每词≤4字, 用于字幕高亮, 如["暂估","成本"]; 没有给 [])。
 
 输出: 严格 JSON 数组, 每句一个元素, 不要解释或代码块:
-[{"idx":0,"visual_type":"scene","image_prompt":"企业仓库空空如也的俯拍插画, 货架稀疏, 账本堆满数字","title":"账实不符","tone":"risk","keywords":["库存虚高","账实不符"]},
+[{"idx":0,"visual_type":"scene","image_prompt":"企业仓库空空如也的俯拍真实照片, 货架稀疏, 账本堆满数字","title":"账实不符","tone":"risk","keywords":["库存虚高","账实不符"]},
  {"idx":1,"visual_type":"scene","image_prompt":"会计在电脑前整理进销存台账, 数据图表环绕","title":"三步处理","tone":"neutral","keywords":["盘点","台账"]}]
 
 句子列表:
@@ -536,7 +535,7 @@ def llm_storyboard(sentences, dialogue=False):
                 "visual_type": vtype,
                 "title": str(item.get("title", ""))[:14] or sentences[idx][:12],
                 "tone": item.get("tone", "neutral"),
-                "image_prompt": str(item.get("image_prompt", ""))[:200] or "专业财经扁平插画, 简洁商务",
+                "image_prompt": str(item.get("image_prompt", ""))[:200] or "专业财经真实照片, 商务场景, 写实摄影",
                 "keywords": [str(x)[:4] for x in (item.get("keywords") or [])][:3],
             }
             out[idx] = sc
@@ -562,7 +561,7 @@ VISUAL_IMG = {
     "税局": ("税务局办公大楼, 庄重权威建筑", "税局在看着"),
     "风险": ("暗色背景中红色警示光束, 风险预警感", "这有风险"),
 }
-DEFAULT_IMG = ("专业财经内容写实插画, 沉稳商务氛围, 电影质感", "财税干货")
+DEFAULT_IMG = ("专业财经内容真实照片, 商务场景实拍, 自然光, 写实摄影", "财税干货")
 
 def rule_one(idx, sent, total):
     """规则兜底(取消智能图解卡片后): 一律 scene 场景画面, 按关键词选画面意象。"""
@@ -606,14 +605,14 @@ def _render_scene(sc, pal, idx, local, scdur, base_img, t_global=0.0):
     """场景主视觉(动态画面版): 底图(动态GIF / AI生图 / 动画渐变) + 呼吸运镜 + 扫光 + 粒子,
     每一幕都像动态 GIF 一样持续运动, 取代静态图解卡。"""
     np_ = min(1.0, local / scdur) if scdur and scdur > 0 else 1.0
-    # 底图优先级: 内容匹配的动态GIF → AI 生图 → 动画渐变占位(通用色GIF不替代生图)
+    # 底图优先级: 内容匹配的动态GIF → AI 写实生图 → 真实照片库(实景动态) → 动画渐变
     gif_path = _pick_gif(sc, content_only=True)
     if gif_path is not None:
         base = gif_frame_at(gif_path, t_global)
     elif base_img is not None:
         base = base_img
     else:
-        base = _animated_gradient(pal, t_global)
+        base = _real_bg_photo(sc, t_global)
     # 呼吸运镜(慢速振荡, 破解静态感) + 肯·伯恩斯漂移轮替
     breathe = 1.0 + 0.045 * math.sin(2 * math.pi * t_global / 7.0)
     kb = idx % 5
@@ -631,6 +630,7 @@ def _render_scene(sc, pal, idx, local, scdur, base_img, t_global=0.0):
     # 动态化: 扫光 + 上浮粒子(仿动态GIF的流动高光/光点)
     img = _light_sweep(img, t_global)
     img = _particles(img, t_global, pal)
+    img = _edge_vignette(img)
     dt, db = dark_overlay()
     img = Image.alpha_composite(img, dt)
     img = Image.alpha_composite(img, db)
@@ -697,6 +697,26 @@ def gif_frame_at(path, t, fps=12):
     i = int(t * fps) % len(frames)
     return frames[i]
 
+REAL_BG_DIR = BASE / "real_bg"      # 真实照片兜底库: 文件名含 tone 标签(safe/neutral/risk)与场景词
+
+def _real_bg_photo(sc, t_global=0.0):
+    """从 real_bg 照片库按 tone 挑一张真实照片作底(实景, 配呼吸运镜即成动态视频);
+    无库/无图时回退动画渐变。杜绝卡通插画与空渐变。"""
+    if REAL_BG_DIR.exists():
+        cands = sorted(list(REAL_BG_DIR.glob("*.jpg")) + list(REAL_BG_DIR.glob("*.png")))
+        if cands:
+            tone = sc.get("tone", "neutral")
+            tags = {"risk": ("risk", "dark", "night"),
+                    "safe": ("safe", "sea", "bright"),
+                    "neutral": ("neutral", "finance", "city", "office")}.get(tone, ("neutral",))
+            picked = next((c for c in cands if any(t in c.stem for t in tags)), None)
+            if picked is None:
+                picked = cands[hash(sc.get("title", "")) % len(cands)]
+            img = Image.open(picked).convert("RGB")
+            return cover_resize(img, W, H)
+    return _animated_gradient(get_palette(sc.get("tone", "neutral")), t_global)
+
+
 def _pick_gif(sc, content_only=False):
     """按场景 tone/关键词/文案 从 gif_library 命中一张动态GIF(无库或未命中返回 None)。
     content_only=True 时只认「内容匹配」(文件名语义段, 如 仓库/账本)——
@@ -759,6 +779,18 @@ def _particles(img, t, pal):
         col = pal["accent2"] if i % 2 == 0 else (255, 255, 255)
         d.ellipse([xx - r, yy - r, xx + r, yy + r], fill=col + (max(0, int(a)),))
     return Image.alpha_composite(img, layer)
+
+def _edge_vignette(img, edge=90, alpha=95):
+    """左右边缘柔和暗角: 压低照片两侧高光(提升字幕可读性, 避免QC误判图内容为文字溢出)。"""
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    for x in range(min(edge, W // 2)):
+        a = int(alpha * (1 - x / edge) ** 1.2)
+        if a > 0:
+            d.line([(x, 0), (x, H)], fill=(0, 0, 0, a))
+            d.line([(W - 1 - x, 0), (W - 1 - x, H)], fill=(0, 0, 0, a))
+    return Image.alpha_composite(img, layer)
+
 
 def _animated_gradient(pal, t):
     """动画渐变底图: 慢速流动的径向光晕 + 呼吸明暗, 替代静态渐变(无生图时用)。"""
@@ -1313,7 +1345,7 @@ def main():
                 imgs.append(None)   # 内容匹配动态GIF(如 仓库/账本)作底, 不烧钱生图
             else:
                 style = IMG_STYLES[i % len(IMG_STYLES)]
-                prompt = sc["image_prompt"] + ("，" + style + "，低饱和商务配色，画面纯净无文字无字母无数字，竖版9:16构图")
+                prompt = sc["image_prompt"] + ("，" + style + "，画面纯净无文字无字母无数字，竖版9:16构图，真实摄影写实风格，禁止插画、禁止卡通、禁止扁平矢量")
                 need.append((i, prompt))
                 imgs.append(None)   # 占位, 保持 imgs 与 sb 等长(并行结果按索引回填)
         print(f"[3/6] 通义万相生图 {len(need)} 张(并行) ...")
@@ -1330,10 +1362,10 @@ def main():
                         import time as _t
                         _t.sleep(8 + attempt * 8)
                         continue
-                    print(f"      [{i+1}] 生图失败({str(e)[:60]}), 降级占位")
-                    return i, fallback_img(sb[i].get("tone", "neutral"))
-            print(f"      [{i+1}] 生图失败(限流重试3次后仍失败), 降级占位")
-            return i, fallback_img(sb[i].get("tone", "neutral"))
+                    print(f"      [{i+1}] 生图失败({str(e)[:60]}), 降级真实照片")
+                    return i, _real_bg_photo(sb[i])
+            print(f"      [{i+1}] 生图失败(限流重试3次后仍失败), 降级真实照片")
+            return i, _real_bg_photo(sb[i])
 
         if need:
             import concurrent.futures
