@@ -67,3 +67,6 @@ audit_shots/
 
 studio.db
 .access_token
+
+auto_push.log
+.workbuddy/

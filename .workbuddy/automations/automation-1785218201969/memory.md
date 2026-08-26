@@ -150,5 +150,11 @@
 - 队列 seq3 status 已置为 `done`、`video_path` 回填；per-week `output/weekly/2026-W35/README.md` 已刷新（14:58:48，seq3 显示 done+成片路径）。脚本自动确保 ffmpeg 与模型 key 就绪，无异常。
 - 剩余下午档待渲染：seq5/7/9/11/13（day 2-6，周三至周日 15:00 自动化继续）。
 
+## 2026-08-26 (周三, 周号 2026-W35)
+- 执行 `weekly_pipeline.py render --slot afternoon`（EXIT=0）。
+- 结果：**跳过**。脚本打印「未找到 2026-W35 队列」后正常返回，未触发 TTS/ffmpeg，无异常。
+- ⚠️ **异常数据丢失（需用户排查）**：本次运行时 `output/` 整个目录为空（无 `weekly/`、无 `_archive/`），全盘搜不到任何 `queue.json` 或 W35 成片。而 08-24/08-25 的渲染记录明确在 `output/weekly/2026-W35/` 生成了队列并渲染了 seq1/seq3 成片。清理非流水线所致（git_auto_push.sh 无 `git clean`；`cmd_archive` 仅移旧周到 `_archive`，不删当前周）；`output/` 被 `.gitignore` 忽略、从未进每日 git 备份 → 无法从备份恢复。疑似系统清理/误删外部操作。
+- 处置：按任务指令"无待渲染选题则跳过"，本次正确跳过；**未擅自 re-run gen-topics**（会重生成 14 条新选题、覆盖已发布的 seq1/seq3，风险高越权）。建议用户：①确认 output/ 是否被系统/手动清理；②若需恢复本周流水线，手动 `gen-topics --week 2026-W35` 重建队列（注意已发布内容可能被新选题替换），或若有外部备份则还原 `output/weekly/2026-W35/`。
+
 ## 历史
 - （暂无更早记录）
