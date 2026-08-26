@@ -62,17 +62,23 @@
   .status.warn{background:var(--amber-l);color:var(--amber);}
   .status.danger{background:var(--red-l);color:var(--red);}
 
-  /* —— 两栏布局（顶部节点导航 + 工作区 + 预览） —— */
-  main{display:grid;grid-template-columns:1fr 344px;gap:16px;
+  /* —— 左栏布局（左侧步骤菜单 + 内容区 + 右侧预览） —— */
+  main{display:grid;grid-template-columns:218px 1fr 344px;gap:16px;
        max-width:min(1600px,calc(100vw - 32px));margin:18px auto;padding:0 20px 64px;align-items:start;}
-  /* 顶部节点导航栏：横向展示完整流程，高亮当前步，sticky 常驻 */
-  .node-nav{grid-column:1 / -1;background:var(--panel);border:1px solid var(--border);
-            border-radius:var(--radius);padding:10px 14px;box-shadow:var(--shadow-sm);
-            position:sticky;top:64px;z-index:20;}
-  .node-nav .steps{display:flex;flex-wrap:wrap;gap:8px;}
-  .node-nav .steps li{margin-bottom:0;}
-  .col-mid{min-width:0;min-height:260px;}
-  .col-right{position:sticky;top:16px;}
+  /* 左侧步骤菜单：深蓝渐变「菜单块」，纵向展示 ①~⑨ */
+  .node-nav{grid-column:1;grid-row:1 / span 3;position:sticky;top:16px;align-self:start;
+            background:linear-gradient(180deg,#0b1f47 0%,#1b2f7a 100%);
+            border:1px solid rgba(255,255,255,.12);border-radius:var(--radius);
+            padding:14px 12px;box-shadow:var(--shadow-md);}
+  .node-nav .steps{display:flex;flex-direction:column;gap:3px;}
+  .node-nav .steps li{margin-bottom:0;color:#cbd5e1;background:rgba(255,255,255,.05);
+                      padding:9px 12px;border-radius:8px;}
+  .node-nav .steps li:hover{background:rgba(255,255,255,.16);color:#fff;}
+  .node-nav .steps li.active{background:linear-gradient(90deg,#06b6d4,#2563eb);color:#fff;
+                      box-shadow:0 4px 12px rgba(37,99,235,.4);}
+  .node-nav .steps li.done{color:#86efac;}
+  .col-mid{grid-column:2;grid-row:1 / span 3;min-width:0;min-height:260px;}
+  .col-right{grid-column:3;grid-row:1 / span 3;position:sticky;top:16px;}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
         box-shadow:var(--shadow-sm);
         padding:18px 20px;margin-bottom:16px;

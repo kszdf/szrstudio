@@ -1071,32 +1071,38 @@ def _render_one(i):
 
 
 # ============================== 对话模式(男女双声) ==============================
-def parse_dialogue(text):
+def parse_dialogue(text, default_role="M"):
     """解析剧本: 以 女：/男：(或 江：/张：) 开头的行识别角色, 其余行续接上一句。
-    返回 [{'role':'F'/'M','text':...}, ...]
-    BOM 免疫: 首行可能带 \ufeff(UTF-8 BOM), 先剥掉再匹配角色前缀。"""
+    支持行内角色标记(同一行出现 女：...男：... 也会切分); 无角色标记的文本归 default_role。
+    BOM 免疫: 首行可能带 \ufeff(UTF-8 BOM), 先剥掉再匹配。
+    返回 [{'role':'F'/'M','text':...}, ...]"""
     import re
-    segs, cur = [], None
+    segs = []
+
+    def add(role, txt):
+        t = (txt or "").strip()
+        if not t:
+            return
+        if segs and segs[-1]["role"] == role:
+            segs[-1]["text"] += t
+        else:
+            segs.append({"role": role, "text": t})
+
     for raw in text.splitlines():
-        line = raw.strip().lstrip("\ufeff").strip()
+        line = raw.strip().lstrip("\ufeff")
         if not line:
             continue
-        m = re.match(r"^(女|男|江|张)\s*[：:]\s*(.*)$", line)
-        if m:
-            who, content = m.group(1), m.group(2).strip()
-            role = "F" if who in ("女", "江") else "M"
-            if cur and cur["role"] == role:
-                cur["text"] += content
+        parts = re.split(r"(?=(?:女|男|江|张)\s*[：:])", line)
+        for part in parts:
+            p = part.strip()
+            if not p:
+                continue
+            m = re.match(r"^(女|男|江|张)\s*[：:]\s*(.*)$", p)
+            if m:
+                add("F" if m.group(1) in ("女", "江") else "M", m.group(2))
             else:
-                cur = {"role": role, "text": content}
-                segs.append(cur)
-        else:
-            if cur:
-                cur["text"] += line
-            else:
-                cur = {"role": "M", "text": line}
-                segs.append(cur)
-    return [s for s in segs if s["text"].strip()]
+                add(default_role, p)
+    return segs
 
 
 def _synth_segment_subprocess(text, voice, out_path, timeout=90, retries=3):
@@ -1218,6 +1224,7 @@ def main():
     ap.add_argument("--dialogue", action="store_true", help="对话模式: 脚本含 女：/男： 前缀, 自动双声拼接+上下分屏")
     ap.add_argument("--male-voice", default="", help="覆盖男声音色 voice_id(默认 zhangc2)")
     ap.add_argument("--female-voice", default="", help="覆盖女声音色 voice_id(默认 jiangnv3)")
+    ap.add_argument("--default-role", default="M", help="无角色前缀文本的默认声线: M男 / F女")
     ap.add_argument("--gif-dir", default="", help="动态GIF底图库目录(默认 gif_library/; 传 none 关闭)")
     ap.add_argument("--workers", type=int, default=0, help="并行渲染进程数(0=自动: min(12, CPU核数-2); 1=串行)")
     ap.add_argument("--tts-workers", type=int, default=4, help="并行TTS段数(1=串行; 默认4, 留意API限流)")
@@ -1257,7 +1264,7 @@ def main():
         from model_providers import ensure_env
         ensure_env()
         raw = Path(args.script).read_text(encoding="utf-8")
-        segs = parse_dialogue(raw)
+        segs = parse_dialogue(raw, default_role=args.default_role)
         if not segs:
             sys.exit("对话模式未解析到对话(需以 女：/男： 开头)")
         dlg_audio = out.with_suffix(".dialogue.wav")
