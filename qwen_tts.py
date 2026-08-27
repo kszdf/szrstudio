@@ -131,33 +131,38 @@ def _split_sentences(text):
     return [s for s in sents if s.strip()]
 
 
-def _sentence_pace(sent, base_rate=0.88):
-    """返回 (speech_rate, pause_after_ms, lead_ms)。
-    lead_ms = 句前吸气停顿（重点/警示句前留白，制造"先顿一下再说"的真人感）。
-    引导/结论/提醒句放慢并加长停顿, 列举密集句正常偏快。
-    v3(2026-08-27): 0.85 太慢像读稿 → 回调 0.88; 停顿适度(480→420/600→520)"""
+def _sentence_pace(sent, base_rate=0.94):
+    """返回 (speech_rate, pause_after_ms, lead_ms, pitch_rate)。
+    v4(2026-08-27 用户反馈"男声一字一句读、偏慢"): 语速 0.88→0.94, 停顿大幅缩短,
+    按句类加音调起伏(警示低沉加重/疑问上扬/普通平稳) → 像讲课的抑扬顿挫。"""
     slow_kw = ["先说清楚", "再提醒", "比如", "其实", "要注意", "还要提醒",
                "别", "不能", "不是", "红线", "谨慎", "务必", "别抱",
                "记住", "注意", "重点", "关键", "一定"]
     lead_ms = 0
-    if any(k in sent for k in slow_kw):
-        rate, base = 0.86, 520     # 警示/结论句: 略放慢 + 适度停顿
-        lead_ms = 170              # 警示/结论句前吸气停顿
-    elif sent.count("、") >= 2:
-        rate, base = 0.98, 330     # 列举密集句: 正常略快
-    else:
-        rate, base = base_rate, 420
+    pitch = 1.0
     s = sent.rstrip()
-    if s.endswith(("？", "！", "?", "!")):
-        base += 150
-    return rate, base, lead_ms
+    if any(k in sent for k in slow_kw):
+        rate, base = 0.90, 420     # 警示/结论句: 稍放慢加重 + 音调低沉一点
+        lead_ms = 150              # 句前吸气停顿(先顿一下再说)
+        pitch = 0.97               # 低沉=权威感
+    elif sent.count("、") >= 2:
+        rate, base = 1.02, 260     # 列举密集句: 正常偏快, 不停顿拖沓
+    else:
+        rate, base = base_rate, 320
+    if s.endswith(("？", "?", "？")):
+        base += 100
+        pitch = 1.03               # 疑问句音调上扬, 有问有答的交流感
+    elif s.endswith(("！", "!")):
+        base += 120
+        pitch = 1.02               # 感叹句微扬, 强调
+    return rate, base, lead_ms, pitch
 
 
 # 注意: CosyVoice v3-plus 当前接口不接受 instruction 风格指令(实测返回 None, 2026-08-27),
-# 自然度靠: 语速 + 句间停顿 + 警示句前吸气停顿 实现。
-def synth_natural(text, voice, out_path, model=DEFAULT_MODEL, base_rate=0.88, retries=3):
-    """分句合成 + 逐句语速 + 句间静音, 解决'机械匀速无停顿'的 AI 痕迹。
-    引导/结论句 0.86, 列举密集句 0.98, 其余 0.88。"""
+# 自然度/抑扬顿挫靠: 语速 + 停顿 + 警示前吸气 + 按句类音调起伏 实现。
+def synth_natural(text, voice, out_path, model=DEFAULT_MODEL, base_rate=0.94, retries=3):
+    """分句合成 + 逐句语速/音调 + 句间静音, 解决'机械匀速无停顿'的 AI 痕迹。
+    警示句 0.90 低沉, 疑问句 1.03 上扬, 列举 1.02, 其余 0.94。"""
     import wave, os
     if not voice:
         raise ValueError(
@@ -169,10 +174,10 @@ def synth_natural(text, voice, out_path, model=DEFAULT_MODEL, base_rate=0.88, re
     tmp_files = []
     try:
         for i, s in enumerate(sents):
-            rate, pause, lead_ms = _sentence_pace(s, base_rate)
+            rate, pause, lead_ms, pitch = _sentence_pace(s, base_rate)
             tmp = out_path + f".part{i}.wav"
             synth(s, voice, tmp, model=model, speech_rate=rate,
-                  pitch_rate=1.0, volume=50, retries=retries)
+                  pitch_rate=pitch, volume=50, retries=retries)
             with wave.open(tmp, "rb") as w:
                 if params is None:
                     params = (w.getnchannels(), w.getsampwidth(), w.getframerate())

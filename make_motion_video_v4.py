@@ -1312,7 +1312,7 @@ def _synth_segment_subprocess(text, voice, out_path, timeout=90, retries=3):
     return False
 
 
-def build_dialogue_audio(segments, out_wav, gap_ms=300, tts_workers=4):
+def build_dialogue_audio(segments, out_wav, gap_ms=250, tts_workers=4):
     """逐轮用对应音色合成(子进程带超时, 支持并行) + 轮间静音, ffmpeg 拼接为单轨。
     断点续传: 已合成的 tN.wav 跳过(目录按 out 名确定, 重跑不重复烧额度)。
     tts_workers>1 时并行合成多段(每段独立子进程, 互不阻塞; 留意 dashscope 限流)。
