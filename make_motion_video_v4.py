@@ -746,7 +746,8 @@ def _stock_enabled():
     if STOCK_ENABLED is None:
         try:
             import stock_footage
-            STOCK_ENABLED = stock_footage.is_enabled()
+            # 在线 key 或 本地手动素材库(零注册) 任一可用即启用
+            STOCK_ENABLED = stock_footage.is_enabled() or stock_footage.has_local()
         except Exception:
             STOCK_ENABLED = False
     return STOCK_ENABLED
@@ -1442,7 +1443,7 @@ def main():
         api_key = os.getenv("DASHSCOPE_API_KEY")
         stock_on = _stock_enabled()
         if stock_on:
-            print("[3/6] 真实素材库已启用(Pexels/Pixabay), 优先真实视频背景, 生图仅兜底")
+            print("[3/6] 真实素材库已启用(在线/本地), 优先真实视频背景, 生图仅兜底")
         need = []
         for i, sc in enumerate(sb):
             if sc.get("visual_type") != "scene":

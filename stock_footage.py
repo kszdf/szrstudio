@@ -20,6 +20,7 @@ Key 配置: model_keys.env 里填（留空 = 不启用，引擎自动回退万�
 import hashlib
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -29,7 +30,8 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
 ENV_FILE = BASE / "model_keys.env"
-CACHE_DIR = BASE / "storage" / "stock_videos"
+CACHE_DIR = BASE / "storage" / "stock_videos"          # 在线素材下载缓存
+LOCAL_DIR = BASE / "storage" / "stock_videos_local"    # 手动素材库(零注册): 文件名用英文关键词
 
 _PROC_CACHE = {}          # query -> clip_path  (进程内缓存, 同次渲染不重复下载)
 _FETCH_LOCK = threading.Lock()   # 多进程渲染时同进程内串行化下载, 防并发写同一缓存文件
@@ -216,16 +218,59 @@ def shutil_copyfileobj(r, f):
 
 
 # ============================================================
-# 对外主入口：按查询词取本地缓存素材文件（无 key / 失败 → None，引擎自动降级）
+# 本地素材库（零注册方案）: 手动下载素材放进 storage/stock_videos_local/
+# 文件名/子目录名用英文关键词(下划线分词), 如 beach_waves.mp4 / invoice_documents/
+# 引擎按查询词分词取交集匹配。在线 key 可用时仍优先在线(素材更全), 本地作为兜底。
+# ============================================================
+_VIDEO_SUFFIXES = (".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v")
+
+def has_local():
+    """本地素材目录是否已有可用视频文件。"""
+    try:
+        return LOCAL_DIR.exists() and any(
+            f.is_file() and f.suffix.lower() in _VIDEO_SUFFIXES for f in LOCAL_DIR.rglob("*"))
+    except Exception:
+        return False
+
+
+def _local_match(query):
+    """按查询词在本地素材目录匹配: 文件名+各级父目录名 分词后与查询词分词取交集,
+    选交集命中词数最多的文件；完全无交集返回 None。"""
+    if not has_local():
+        return None
+    q_tokens = set(re.findall(r"[a-z0-9]+", query.lower()))
+    if not q_tokens:
+        return None
+    best, best_hits = None, 0
+    for f in sorted(LOCAL_DIR.rglob("*")):
+        if not f.is_file() or f.suffix.lower() not in _VIDEO_SUFFIXES:
+            continue
+        parts = [f.stem] + [p.name for p in f.parents if p != LOCAL_DIR]
+        name_tokens = set()
+        for part in parts:
+            name_tokens |= set(re.findall(r"[a-z0-9]+", part.lower()))
+        hits = len(q_tokens & name_tokens)
+        if hits > best_hits:
+            best, best_hits = f, hits
+    return str(best) if best else None
+
+
+# ============================================================
+# 对外主入口：按查询词取本地素材 / 在线缓存素材文件（全程不抛异常，引擎自动降级）
 # ============================================================
 def fetch_clip(query):
-    """返回素材视频本地路径（已下载缓存）；失败返回 None。全程不抛异常。
+    """返回素材视频本地路径；失败返回 None。
+    优先级: 本地素材目录(手动, 零注册) → 在线下载缓存(Pexels/Pixabay)。
     进程内加锁串行化：多进程渲染时各 worker 独立进程，跨进程靠文件缓存+原子替换兜底。"""
-    if not is_enabled():
-        return None
     with _FETCH_LOCK:
         if query in _PROC_CACHE:
             return _PROC_CACHE[query]
+        local = _local_match(query)
+        if local:
+            _PROC_CACHE[query] = local
+            return local
+        if not is_enabled():
+            return None
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         dest = CACHE_DIR / (hashlib.md5(query.encode("utf-8")).hexdigest() + ".mp4")
         if dest.exists() and dest.stat().st_size > 50 * 1024:
