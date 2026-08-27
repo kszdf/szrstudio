@@ -355,14 +355,17 @@ def draw_text_fragments(d, text, cx, y, sz, pal, reveal=None, keywords=None,
                 seg = seg[:vis]; seg_w = d.textlength(seg, font=f)
         if is_kw:
             appear = (pos / total_chars) * min(scdur, 0.5) if total_chars else 0
-            scale = _pop(local, appear) if kwpop else 1.0
+            # 重点词: 放大 1.22x + accent 亮色文字(区别于常规白字) + 浅色描边胶囊
+            scale = (_pop(local, appear) if kwpop else 1.0) * 1.22
             kf = font(int(sz * scale), "hei")
             kw_w = d.textlength(seg, font=kf)
-            pad_x, pad_y = sz * 0.16, sz * 0.14
+            pad_x, pad_y = sz * 0.18, sz * 0.16
             box = [x - pad_x, y - sz * 0.60 - pad_y, x + kw_w + pad_x, y + sz * 0.60 + pad_y]
-            d.rounded_rectangle(box, radius=sz * 0.42, fill=pal["accent"])
-            d.text((x, y), seg, font=kf, fill=WHITE, anchor="ls",
-                   stroke_width=2, stroke_fill=(0, 0, 0))
+            d.rounded_rectangle(box, radius=sz * 0.42,
+                                fill=pal["accent"] + (40,),
+                                outline=pal["accent"] + (170,), width=3)
+            d.text((x, y), seg, font=kf, fill=pal["accent"], anchor="ls",
+                   stroke_width=4, stroke_fill=(0, 0, 0))
             x += kw_w
         else:
             d.text((x, y), seg, font=f, fill=WHITE, anchor="ls",
