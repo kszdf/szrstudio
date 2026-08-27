@@ -21,6 +21,7 @@ import hashlib
 import json
 import os
 import sys
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -31,6 +32,7 @@ ENV_FILE = BASE / "model_keys.env"
 CACHE_DIR = BASE / "storage" / "stock_videos"
 
 _PROC_CACHE = {}          # query -> clip_path  (进程内缓存, 同次渲染不重复下载)
+_FETCH_LOCK = threading.Lock()   # 多进程渲染时同进程内串行化下载, 防并发写同一缓存文件
 _ENABLED = None           # 惰性判定: 是否任一 key 可用
 
 # ============================================================
@@ -188,7 +190,8 @@ def _pixabay_search(query):
 
 def _download(url, dest, timeout=60):
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    tmp = dest.with_suffix(dest.suffix + ".part")
+    # 唯一临时名: 多进程/多线程并发下载同一缓存文件时互不冲突, 原子替换
+    tmp = dest.parent / (dest.stem + "." + uuid_hex() + ".part")
     with urllib.request.urlopen(req, timeout=timeout) as r, open(tmp, "wb") as f:
         shutil_copyfileobj(r, f)
     if tmp.stat().st_size < 50 * 1024:
@@ -196,6 +199,11 @@ def _download(url, dest, timeout=60):
         return False
     tmp.replace(dest)
     return True
+
+
+def uuid_hex():
+    import uuid
+    return uuid.uuid4().hex
 
 
 def shutil_copyfileobj(r, f):
@@ -211,39 +219,41 @@ def shutil_copyfileobj(r, f):
 # 对外主入口：按查询词取本地缓存素材文件（无 key / 失败 → None，引擎自动降级）
 # ============================================================
 def fetch_clip(query):
-    """返回素材视频本地路径（已下载缓存）；失败返回 None。全程不抛异常。"""
+    """返回素材视频本地路径（已下载缓存）；失败返回 None。全程不抛异常。
+    进程内加锁串行化：多进程渲染时各 worker 独立进程，跨进程靠文件缓存+原子替换兜底。"""
     if not is_enabled():
         return None
-    if query in _PROC_CACHE:
-        return _PROC_CACHE[query]
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    dest = CACHE_DIR / (hashlib.md5(query.encode("utf-8")).hexdigest() + ".mp4")
-    if dest.exists() and dest.stat().st_size > 50 * 1024:
-        _PROC_CACHE[query] = str(dest)
-        return str(dest)
-    # 1) Pexels → 2) Pixabay，各自失败静默继续
-    url = None
-    try:
-        url = _pexels_search(query)
-    except Exception as e:
-        print(f"      [stock] Pexels 搜索失败({str(e)[:80]})")
-    if not url:
+    with _FETCH_LOCK:
+        if query in _PROC_CACHE:
+            return _PROC_CACHE[query]
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        dest = CACHE_DIR / (hashlib.md5(query.encode("utf-8")).hexdigest() + ".mp4")
+        if dest.exists() and dest.stat().st_size > 50 * 1024:
+            _PROC_CACHE[query] = str(dest)
+            return str(dest)
+        # 1) Pexels → 2) Pixabay，各自失败静默继续
+        url = None
         try:
-            url = _pixabay_search(query)
+            url = _pexels_search(query)
         except Exception as e:
-            print(f"      [stock] Pixabay 搜索失败({str(e)[:80]})")
-    if not url:
-        print(f"      [stock] 无可用素材({query}), 本次回退兜底底图")
-        return None
-    try:
-        if not _download(url, dest):
+            print(f"      [stock] Pexels 搜索失败({str(e)[:80]})")
+        if not url:
+            try:
+                url = _pixabay_search(query)
+            except Exception as e:
+                print(f"      [stock] Pixabay 搜索失败({str(e)[:80]})")
+        if not url:
+            print(f"      [stock] 无可用素材({query}), 本次回退兜底底图")
             return None
-    except Exception as e:
-        print(f"      [stock] 素材下载失败({str(e)[:80]})")
-        return None
-    _PROC_CACHE[query] = str(dest)
-    print(f"      [stock] 素材就绪: {query} -> {dest.name}")
-    return str(dest)
+        try:
+            if not _download(url, dest):
+                return None
+        except Exception as e:
+            print(f"      [stock] 素材下载失败({str(e)[:80]})")
+            return None
+        _PROC_CACHE[query] = str(dest)
+        print(f"      [stock] 素材就绪: {query} -> {dest.name}")
+        return str(dest)
 
 
 if __name__ == "__main__":
