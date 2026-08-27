@@ -149,8 +149,8 @@ def _make_intro_card(path, title="追梦", subtitle="短视频智能生产平台
     img.convert("RGB").save(path)
 
 
-def _make_outro_card(path, title="昆山老张讲财税", subtitle="评论区扣「方案」，清单发你"):
-    """片尾卡：留资 CTA（品牌 + 行动引导）。"""
+def _make_outro_card(path, title="关注 昆山老张讲财税", subtitle="评论区扣「方案」，清单发你"):
+    """片尾卡：关注账号 + 留资 CTA。"""
     from PIL import Image, ImageDraw
     img = _make_gradient((W, H), (15, 23, 42), (30, 41, 59))
     d = ImageDraw.Draw(img)
