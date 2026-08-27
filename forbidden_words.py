@@ -174,6 +174,23 @@ def _cat_of(e: dict) -> str:
 
 
 # ------------------------------------------------------------------ 机械筛查
+# 法条刑期白名单(2026-08-27): 广告法"最"字弱约束会误伤法律刑期引用(如"最高十年有期徒刑"),
+# 财税口播常引法条 → 命中"最"且满足"最高/最重+N年"+法律语境时放行, 广告宣传场景照拦
+_LAW_CTX = ("刑法", "有期徒刑", "徒刑", "罪", "罚金", "刑期", "拘役", "处罚", "判", "量刑", "刑")
+_LAW_YEAR = re.compile(r"(?:[一二三四五六七八九十两\d]+年|\d+年)")
+
+def _is_law_sentence_quota(match, text):
+    """判断"最"字命中的是否为法律刑期引用(如'最高十年有期徒刑''最重可判X年')。"""
+    s = match.start()
+    tail = text[s:s + 10]
+    if not tail.startswith(("最高", "最重")):
+        return False
+    if not _LAW_YEAR.search(tail[2:]):
+        return False
+    ctx = text[max(0, s - 30): s + 30]
+    return any(k in ctx for k in _LAW_CTX)
+
+
 def scan(text: str, platform: str | None = None) -> list[dict]:
     """扫描文本，返回命中列表。每条：word/level/platforms/suggest/note/context/pos/need_human"""
     hits: list[dict] = []
@@ -189,6 +206,9 @@ def scan(text: str, platform: str | None = None) -> list[dict]:
         else:
             # 弱约束单字/词：仅提示，需人工核对语境
             for m in re.finditer(re.escape(w), text):
+                # 法条刑期引用白名单(如"最高十年有期徒刑"): 放行, 不误报
+                if w == "最" and _is_law_sentence_quota(m, text):
+                    continue
                 s, en = m.start(), m.end()
                 ctx = text[max(0, s - 12): en + 12].replace("\n", " ")
                 hits.append({**e, "context": ctx, "pos": s, "need_human": True})
