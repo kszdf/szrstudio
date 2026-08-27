@@ -264,9 +264,68 @@ def compose_cover(frame_bgr, out_path, title, subtitle, aspect="4:5",
     return out_path, 0, 0
 
 
+def _gradient_text(img, cx, y, text, font, c_top, c_bot, stroke_w=0, stroke_c=(10, 14, 22)):
+    """高级感文字：白→金竖向渐变填充 + 深色描边 + 轻微阴影，居中绘制。"""
+    from PIL import Image as _PIL, ImageDraw
+    W, H = img.size
+    d = ImageDraw.Draw(img, "RGBA")
+    tw = d.textlength(text, font=font)
+    bbox = font.getbbox(text)
+    th = bbox[3] - bbox[1]
+    pad = stroke_w * 2 + 8
+    mask = _PIL.new("L", (int(tw) + pad, th + pad), 0)
+    md = ImageDraw.Draw(mask)
+    md.text((pad // 2, pad // 2 - bbox[1]), text, font=font, fill=255)
+    gw, gh = mask.size
+    grad = _PIL.new("RGB", (gw, gh))
+    gd = ImageDraw.Draw(grad)
+    for yy in range(gh):
+        t = yy / max(1, gh - 1)
+        c = tuple(int(a + (b - a) * t) for a, b in zip(c_top, c_bot))
+        gd.line([(0, yy), (gw, yy)], fill=c)
+    ox = int(cx - tw / 2 - pad / 2)
+    oy = int(y - th / 2 - pad / 2)
+    # 轻阴影（向下偏移 3px 半透明黑）
+    sh = _PIL.new("RGBA", (gw, gh), (0, 0, 0, 0))
+    sh.paste((0, 0, 0, 90), (0, 0), mask)
+    img.paste(sh, (ox, oy + 3), sh)
+    # 描边（深色，先画）
+    if stroke_w > 0:
+        st = _PIL.new("RGBA", (gw, gh), (0, 0, 0, 0))
+        std = ImageDraw.Draw(st)
+        std.text((pad // 2, pad // 2 - bbox[1]), text, font=font, fill=stroke_c + (255,),
+                 stroke_width=stroke_w, stroke_fill=stroke_c)
+        img.paste(st, (ox, oy), st)
+    grad.putalpha(mask)
+    img.paste(grad, (ox, oy), grad)
+
+
+def _spaced_text(img, cx, y, text, font, fill, spacing=8, max_w=None):
+    """字距拉开的高级小字（逐字绘制，支持省略超出 max_w 的部分）。"""
+    from PIL import ImageDraw
+    d = ImageDraw.Draw(img, "RGBA")
+    chars = list(text)
+    widths = [d.textlength(ch, font=font) for ch in chars]
+    total = sum(widths) + spacing * (len(chars) - 1)
+    if max_w and total > max_w:
+        # 截断到 max_w 内
+        keep, acc = [], 0
+        for ch, cw in zip(chars, widths):
+            if acc + cw + spacing > max_w and keep:
+                break
+            keep.append(ch)
+            acc += cw + spacing
+        chars, widths, total = keep, [d.textlength(c, font=font) for c in keep], acc - spacing
+    x = cx - total / 2
+    for ch, cw in zip(chars, widths):
+        d.text((x, y), ch, font=font, fill=fill)
+        x += cw + spacing
+
+
 def _apply_panel(img, title, subtitle):
-    """底部标题面板（共用）：深色渐变 + 金线 + 副标题(上) + 主标题(下)。
-    面板从 54% 高度起，人脸构图区(上 1/3)保持干净。"""
+    """底部标题面板（共用，高级黑金排版）：
+    面板深色渐变 + 顶部金线 → 副标题(字距拉开金灰) → 主标题(白→金渐变衬线大字)
+    → 标题下金色短渐变线锚点 → 底部品牌小字。"""
     from PIL import ImageDraw
     W, H = img.size
     d = ImageDraw.Draw(img, "RGBA")
@@ -276,32 +335,44 @@ def _apply_panel(img, title, subtitle):
         t = (y - panel_top) / max(1, H - panel_top)
         a = int(60 + 120 * t)
         d.line([(0, y), (W, y)], fill=(8, 10, 16, a))
-    d.line([(60, panel_top), (W - 60, panel_top)], fill=gold, width=3)   # 顶部金线
+    # 顶部金线（两端渐隐：分段透明度）
+    for i in range(0, 120, 4):
+        a = int(200 * (i / 120))
+        d.line([(60 + i, panel_top), (60 + i + 4, panel_top)], fill=(212, 175, 92, a), width=3)
+        d.line([(W - 60 - i, panel_top), (W - 60 - i - 4, panel_top)], fill=(212, 175, 92, a), width=3)
+    d.line([(180, panel_top), (W - 180, panel_top)], fill=(212, 175, 92, 255), width=3)
 
-    # 副标题（浅灰，限 2 行，放主标题上方作引导）
+    # 副标题（字距拉开，金灰，限 2 行）
     sub_lines = []
     if subtitle:
-        sf = _load_font(44)
-        sub_lines = _wrap(subtitle, d, sf, W - 200)[:2]
-    sy = int(H * 0.585)
+        sf = _load_font(42)
+        sub_lines = _wrap(subtitle, d, sf, W - 240)[:2]
+    sy = int(H * 0.578)
     for ln in sub_lines:
-        w = d.textlength(ln, font=sf)
-        d.text((W // 2 - w / 2, sy), ln, font=sf, fill=(208, 212, 222))
-        sy += int(sf.getbbox("测")[3] * 1.25)
+        _spaced_text(img, W // 2, sy, ln, sf, (196, 186, 158), spacing=7, max_w=W - 220)
+        sy += int(sf.getbbox("测")[3] * 1.22)
 
-    # 主标题（自适应大字，≤2 行，居中，白字+深描边）
-    tf, title_lines, lh = _fit_title(d, title or "", W - 160, int(H * 0.30))
-    ty = int(H * 0.66)
-    sw = max(2, tf.getbbox("测")[3] // 13)
+    # 主标题（白→浅金渐变衬线大字，≤2 行）
+    tf, title_lines, lh = _fit_title(d, title or "", W - 150, int(H * 0.28))
+    ty = int(H * 0.655)
+    sw = max(2, tf.getbbox("测")[3] // 14)
     for i, ln in enumerate(title_lines):
         y = ty + i * lh
-        w = d.textlength(ln, font=tf)
-        x = W // 2 - w / 2
-        d.text((x, y), ln, font=tf, fill=(255, 255, 255), stroke_width=sw, stroke_fill=(10, 14, 22))
+        _gradient_text(img, W // 2, y, ln, tf, (255, 255, 255), (235, 214, 160),
+                       stroke_w=sw, stroke_c=(12, 16, 26))
 
-    # 底部小字（品牌域提示，极浅）
-    bf2 = _load_font(34)
-    d.text((W // 2, H - 88), "追梦财税 · 每日干货", font=bf2, fill=(120, 128, 142), anchor="mm")
+    # 标题下金色渐变短锚线（宽度随标题，两端渐隐）
+    title_w = max(120.0, min(0.55 * W, d.textlength(title or "", font=tf)))
+    line_y = ty + lh * len(title_lines) + int(H * 0.045)
+    for i in range(0, int(title_w), 4):
+        t = i / max(1, title_w - 4)
+        edge = min(i, title_w - i) / 120.0
+        a = int(220 * min(1.0, edge) * (0.75 + 0.25 * (1 - abs(t - 0.5) * 2)))
+        d.line([(W // 2 - title_w / 2 + i, line_y), (W // 2 - title_w / 2 + i + 4, line_y)],
+               fill=(212, 175, 92, a), width=3)
+
+    # 底部品牌小字（字距拉开，极浅）
+    _spaced_text(img, W // 2, H - 92, "追梦财税 · 每日干货", _load_font(32), (118, 126, 142), spacing=10)
 
 
 def compose_from_photo(photo_path, out_path, title, subtitle, aspect="9:16", brand=BRAND):
