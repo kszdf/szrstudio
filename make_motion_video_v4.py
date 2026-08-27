@@ -611,10 +611,17 @@ def _render_scene(sc, pal, idx, local, scdur, base_img, t_global=0.0):
     """场景主视觉(动态画面版): 底图(内容GIF / 真实素材库视频 / AI生图 / 真实照片 / 渐变) + 呼吸运镜 + 扫光 + 粒子,
     每一幕都像动态 GIF 一样持续运动, 取代静态图解卡。"""
     np_ = min(1.0, local / scdur) if scdur and scdur > 0 else 1.0
-    # 底图优先级: 内容匹配的动态GIF → 真实素材库视频(动态) → AI 写实生图 → 真实照片库 → 动画渐变
+    # 底图优先级: 内容匹配的动态GIF → AI生成动态视频 → 真实素材库视频 → AI生图 → 真实照片库 → 动画渐变
     gif_path = _pick_gif(sc, content_only=True)
     if gif_path is not None:
         base, base_kind = gif_frame_at(gif_path, t_global), "gif"
+    elif isinstance(base_img, str):
+        # AI 文生视频背景(imgs 里存的是 mp4 路径): 抽帧循环当动态底图
+        frames = _frames_from_path(base_img)
+        if frames:
+            base, base_kind = frames[int(t_global * 10) % len(frames)], "video"
+        else:
+            base, base_kind = _real_bg_photo(sc, t_global), "still"
     else:
         stock_base = _stock_bg(sc, t_global)
         if stock_base is not None:
@@ -739,7 +746,19 @@ def _real_bg_photo(sc, t_global=0.0):
 # 配置 model_keys.env 的 PEXELS_API_KEY / PIXABAY_API_KEY 后自动启用；
 # 无 key / 断网 / 无命中时静默回退(万相生图 / real_bg 照片)，绝不阻塞出片。
 STOCK_ENABLED = None        # None=未判定; False=显式关闭(--no-stock)或无key
-_STOCK_FRAMES = {}          # query -> [RGBA帧...]（单槽缓存, 只留最近一段, 控内存）
+AI_VIDEO_ENABLED = None     # None=未判定; False=显式关闭(--no-ai-video)或无阿里key
+_STOCK_FRAMES = {}          # query/path -> [RGBA帧...]（单槽缓存, 只留最近一段, 控内存）
+
+def _ai_video_enabled():
+    """AI 动态视频背景(万相文生视频): 有阿里 DashScope key 即启用(复用配音/生图同一把key)。"""
+    global AI_VIDEO_ENABLED
+    if AI_VIDEO_ENABLED is None:
+        try:
+            import wanx_video
+            AI_VIDEO_ENABLED = wanx_video.is_available()
+        except Exception:
+            AI_VIDEO_ENABLED = False
+    return AI_VIDEO_ENABLED
 
 def _stock_enabled():
     global STOCK_ENABLED
@@ -775,22 +794,17 @@ def _video_frames(path, fps=10, max_sec=3.0):
     finally:
         shutil.rmtree(d, ignore_errors=True)
 
-def _stock_frames(query):
-    """按查询词取素材帧序列(下载+抽帧, 文件级/进程级缓存)。"""
-    if query in _STOCK_FRAMES:
-        return _STOCK_FRAMES[query]
+def _frames_from_path(path):
+    """按视频路径取帧序列(抽帧+单槽缓存, 控内存)。返回 None 表示失败。"""
+    if path in _STOCK_FRAMES:
+        return _STOCK_FRAMES[path]
     try:
-        import stock_footage
-        clip = stock_footage.fetch_clip(query)
-        if not clip:
-            _STOCK_FRAMES[query] = None
-            return None
-        frames = _video_frames(clip)
+        frames = _video_frames(path)
         if not frames:
-            _STOCK_FRAMES[query] = None
+            _STOCK_FRAMES[path] = None
             return None
         _STOCK_FRAMES.clear()          # 单槽: 只保留最近一段, 控内存峰值
-        _STOCK_FRAMES[query] = frames
+        _STOCK_FRAMES[path] = frames
         return frames
     except Exception as e:
         print(f"      [stock] 素材帧失败: {str(e)[:120]}")
@@ -805,7 +819,10 @@ def _stock_bg(sc, t_global=0.0):
         q = stock_footage.scene_query(sc)
         if not q:
             return None
-        frames = _stock_frames(q)
+        clip = stock_footage.fetch_clip(q)
+        if not clip:
+            return None
+        frames = _frames_from_path(clip)
         if not frames:
             return None
         i = int(t_global * 10) % len(frames)
@@ -1322,11 +1339,14 @@ def main():
     ap.add_argument("--gif-dir", default="", help="动态GIF底图库目录(默认 gif_library/; 传 none 关闭)")
     ap.add_argument("--workers", type=int, default=0, help="并行渲染进程数(0=自动: min(12, CPU核数-2); 1=串行)")
     ap.add_argument("--tts-workers", type=int, default=4, help="并行TTS段数(1=串行; 默认4, 留意API限流)")
-    ap.add_argument("--no-stock", action="store_true", help="关闭真实素材库(Pexels/Pixabay), 回到万相生图/照片库底图")
+    ap.add_argument("--no-stock", action="store_true", help="关闭真实素材库(Pexels/Pixabay/本地), 回到万相生图/照片库底图")
+    ap.add_argument("--no-ai-video", action="store_true", help="关闭AI动态视频背景(万相文生视频), 回到生图/素材库底图")
     args = ap.parse_args()
-    global STYLE_NAME, GIF_DIR, GIF_ENABLED, MALE_VOICE, FEMALE_VOICE, STOCK_ENABLED
+    global STYLE_NAME, GIF_DIR, GIF_ENABLED, MALE_VOICE, FEMALE_VOICE, STOCK_ENABLED, AI_VIDEO_ENABLED
     if args.no_stock:
         STOCK_ENABLED = False
+    if args.no_ai_video:
+        AI_VIDEO_ENABLED = False
     if args.style in STYLE_PRESETS:
         STYLE_NAME = args.style
     else:
@@ -1441,15 +1461,22 @@ def main():
         from model_providers import ensure_env
         ensure_env()
         api_key = os.getenv("DASHSCOPE_API_KEY")
+        ai_video_on = _ai_video_enabled()
         stock_on = _stock_enabled()
-        if stock_on:
+        if ai_video_on:
+            print("[3/6] AI 动态视频背景已启用(万相文生视频, 复用阿里key, 零注册)")
+        elif stock_on:
             print("[3/6] 真实素材库已启用(在线/本地), 优先真实视频背景, 生图仅兜底")
-        need = []
+        need = []        # 生图任务 (i, prompt)
+        vneed = []       # AI视频任务 (i, image_prompt, title)
         for i, sc in enumerate(sb):
             if sc.get("visual_type") != "scene":
                 imgs.append(None)   # 非 scene 用代码绘制, 不联网生图
             elif _pick_gif({**sc, "sentence": sentences[i]}, content_only=True) is not None:
                 imgs.append(None)   # 内容匹配动态GIF(如 仓库/账本)作底, 不烧钱生图
+            elif ai_video_on and sc.get("image_prompt"):
+                vneed.append((i, sc["image_prompt"], sc.get("title", "")))
+                imgs.append(None)   # AI视频占位, 成功后 imgs[i] 存 mp4 路径
             elif stock_on:
                 imgs.append(None)   # 真实素材库优先: 渲染期取视频帧; 失败自动降级 real_bg
             else:
@@ -1457,6 +1484,25 @@ def main():
                 prompt = sc["image_prompt"] + ("，" + style + "，画面纯净无人物无文字无字母无数字，竖版9:16构图，真实摄影写实风格，禁止插画、禁止卡通、禁止扁平矢量")
                 need.append((i, prompt))
                 imgs.append(None)   # 占位, 保持 imgs 与 sb 等长(并行结果按索引回填)
+        # 1) AI 动态视频背景(并行2路, 单段约30-90s; 失败幕自动补生图兜底, 不阻塞出片)
+        if vneed:
+            import concurrent.futures
+            import wanx_video
+            print(f"[3/6] AI 动态视频背景 {len(vneed)} 段(万相文生视频, 2路并行, 约30-90s/段) ...")
+            done = 0
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+                for i, path in ex.map(lambda it: (it[0], wanx_video.gen_video(it[1], it[2])), vneed):
+                    imgs[i] = path
+                    done += 1
+                    print(f"      [{done}/{len(vneed)}] AI视频{'OK' if path else '失败, 补生图'}: {sb[i]['title']}")
+            for i, _, _ in vneed:
+                sc = sb[i]
+                if imgs[i] is not None or not sc.get("image_prompt"):
+                    continue
+                style = IMG_STYLES[i % len(IMG_STYLES)]
+                prompt = sc["image_prompt"] + ("，" + style + "，画面纯净无人物无文字无字母无数字，竖版9:16构图，真实摄影写实风格，禁止插画、禁止卡通、禁止扁平矢量")
+                need.append((i, prompt))
+        # 2) 静态生图(兜底: AI视频失败幕 / 未启用AI视频的scene幕)
         print(f"[3/6] 通义万相生图 {len(need)} 张(并行) ...")
 
         def _gen(ip):
