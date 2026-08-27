@@ -206,8 +206,11 @@ def scan(text: str, platform: str | None = None) -> list[dict]:
         else:
             # 弱约束单字/词：仅提示，需人工核对语境
             for m in re.finditer(re.escape(w), text):
-                # 法条刑期引用白名单(如"最高十年有期徒刑"): 放行, 不误报
+                # 白名单1: 法条刑期引用(如"最高十年有期徒刑") → 放行
                 if w == "最" and _is_law_sentence_quota(m, text):
+                    continue
+                # 白名单2: "最近"是时间副词, 非广告最高级修饰(如"最便宜/最好") → 放行
+                if w == "最" and text[m.start():m.start() + 2] == "最近":
                     continue
                 s, en = m.start(), m.end()
                 ctx = text[max(0, s - 12): en + 12].replace("\n", " ")
