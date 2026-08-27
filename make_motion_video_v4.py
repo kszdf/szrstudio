@@ -1505,6 +1505,22 @@ def main():
 
     sb_path = out.with_suffix(".v4storyboard.json")
     out.parent.mkdir(parents=True, exist_ok=True)
+    # 对话组共享背景(用户永久要求, 2026-08-27): 女问男答必须同一场景——
+    # 否则每句独立背景, 女声短句幕切换密集 = "画面不停闪烁"
+    grp_img = None
+    for sc in sb:
+        if sc.get("role") == "F":
+            grp_img = sc.get("image_prompt") or grp_img     # 女声句开新组, 用她的背景
+        elif sc.get("role") == "M":
+            if grp_img:
+                sc["image_prompt"] = grp_img                # 男声句复用女声背景(同一对话场景)
+    # 兜底: 女声句仍无 image_prompt 时, 从紧随其后的男声句借用, 保证组内背景统一
+    for i, sc in enumerate(sb):
+        if sc.get("role") == "F" and not sc.get("image_prompt"):
+            for nxt in sb[i:]:
+                if nxt.get("image_prompt"):
+                    sc["image_prompt"] = nxt["image_prompt"]
+                    break
     sb_path.write_text(json.dumps(
         [{"idx": i, "start": tl[i][0], "end": tl[i][1], "sentence": sentences[i], **sb[i]}
          for i in range(len(sentences))], ensure_ascii=False, indent=2), encoding="utf-8")
