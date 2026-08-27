@@ -1470,15 +1470,20 @@ def main():
         need = []        # 生图任务 (i, prompt)
         vneed = []       # AI视频任务 (i, image_prompt, title)
         for i, sc in enumerate(sb):
-            if sc.get("visual_type") != "scene":
-                imgs.append(None)   # 非 scene 用代码绘制, 不联网生图
-            elif _pick_gif({**sc, "sentence": sentences[i]}, content_only=True) is not None:
+            if _pick_gif({**sc, "sentence": sentences[i]}, content_only=True) is not None:
                 imgs.append(None)   # 内容匹配动态GIF(如 仓库/账本)作底, 不烧钱生图
-            elif ai_video_on and sc.get("image_prompt"):
-                vneed.append((i, sc["image_prompt"], sc.get("title", "")))
+            elif ai_video_on:
+                # AI 动态视频背景覆盖**每一幕**（scene 用内容描述; dialog/无prompt 句用风景描述,
+                # 保证"讲发票就有发票画面、讲道理也有真实动态风景"，不再有幕落到静态照片兜底）
+                if sc.get("image_prompt"):
+                    vneed.append((i, sc["image_prompt"], sc.get("title", "")))
+                else:
+                    vneed.append((i, IMG_STYLES[i % len(IMG_STYLES)], sc.get("title", "")))
                 imgs.append(None)   # AI视频占位, 成功后 imgs[i] 存 mp4 路径
             elif stock_on:
                 imgs.append(None)   # 真实素材库优先: 渲染期取视频帧; 失败自动降级 real_bg
+            elif sc.get("visual_type") != "scene":
+                imgs.append(None)   # 非 scene 用代码绘制, 不联网生图
             else:
                 style = IMG_STYLES[i % len(IMG_STYLES)]
                 prompt = sc["image_prompt"] + ("，" + style + "，画面纯净无人物无文字无字母无数字，竖版9:16构图，真实摄影写实风格，禁止插画、禁止卡通、禁止扁平矢量")
@@ -1497,10 +1502,11 @@ def main():
                     print(f"      [{done}/{len(vneed)}] AI视频{'OK' if path else '失败, 补生图'}: {sb[i]['title']}")
             for i, _, _ in vneed:
                 sc = sb[i]
-                if imgs[i] is not None or not sc.get("image_prompt"):
+                if imgs[i] is not None:
                     continue
                 style = IMG_STYLES[i % len(IMG_STYLES)]
-                prompt = sc["image_prompt"] + ("，" + style + "，画面纯净无人物无文字无字母无数字，竖版9:16构图，真实摄影写实风格，禁止插画、禁止卡通、禁止扁平矢量")
+                base_p = sc.get("image_prompt") or style
+                prompt = base_p + ("，" + style + "，画面纯净无人物无文字无字母无数字，竖版9:16构图，真实摄影写实风格，禁止插画、禁止卡通、禁止扁平矢量")
                 need.append((i, prompt))
         # 2) 静态生图(兜底: AI视频失败幕 / 未启用AI视频的scene幕)
         print(f"[3/6] 通义万相生图 {len(need)} 张(并行) ...")
