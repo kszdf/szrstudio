@@ -250,8 +250,26 @@ def compose_cover(frame_bgr, out_path, title, subtitle, aspect="4:5",
         for y in range(top_h):
             a = int(150 * (1 - y / top_h))
             d.line([(0, y), (W, y)], fill=(tr, tg, tb, a))
-    # 底部标题面板：半透明深色渐变 + 金线 + 副标题(上) + 主标题(下)，保证任意画面可读。
-    # 面板从 54% 高度起，人脸构图区(上 1/3)保持干净。
+    _apply_panel(img, title, subtitle)
+
+    # 品牌水印（右上，圆角胶囊底 + 青色描边）
+    bf = _load_font(40)
+    bw = d.textlength(brand, font=bf) + 56
+    bx, by = W - bw - 36, 36
+    d.rounded_rectangle([bx, by, bx + bw, by + 76], radius=38,
+                        fill=(15, 23, 42, 175), outline=C_ACCENT + (255,), width=3)
+    d.text((bx + 28, by + 18), brand, font=bf, fill=(255, 255, 255))
+
+    img.convert("RGB").save(out_path, quality=95)
+    return out_path, 0, 0
+
+
+def _apply_panel(img, title, subtitle):
+    """底部标题面板（共用）：深色渐变 + 金线 + 副标题(上) + 主标题(下)。
+    面板从 54% 高度起，人脸构图区(上 1/3)保持干净。"""
+    from PIL import ImageDraw
+    W, H = img.size
+    d = ImageDraw.Draw(img, "RGBA")
     gold = (212, 175, 92)
     panel_top = int(H * 0.54)
     for y in range(panel_top, H):
@@ -285,16 +303,64 @@ def compose_cover(frame_bgr, out_path, title, subtitle, aspect="4:5",
     bf2 = _load_font(34)
     d.text((W // 2, H - 88), "追梦财税 · 每日干货", font=bf2, fill=(120, 128, 142), anchor="mm")
 
-    # 品牌水印（右上，圆角胶囊底 + 青色描边）
+
+def compose_from_photo(photo_path, out_path, title, subtitle, aspect="9:16", brand=BRAND):
+    """用个人形象照（海马体等专业肖像）合成封面：人脸居中裁到目标画幅 → 保持清晰 →
+    底部标题面板。照片是主角，不做模糊/去饱和，仅面板区压暗保证文字可读。"""
+    from PIL import Image, ImageDraw
+    W, H = ASPECTS.get(aspect, ASPECTS["9:16"])
+    src = Image.open(photo_path).convert("RGB")
+    iw, ih = src.size
+    tgt = W / H
+    # 人脸感知裁切：优先人脸中心，其次画面中心偏上；无拉伸
+    face = _detect_face(src)
+    if src_aspect := iw / ih > tgt:
+        cw, ch = int(ih * tgt), ih
+    else:
+        cw, ch = iw, int(iw / tgt)
+    if face:
+        cx, cy = face[0] + face[2] / 2, face[1] + face[3] / 2
+    else:
+        cx, cy = iw / 2, ih * 0.42
+    cx = min(max(cx, cw / 2), iw - cw / 2)
+    cy = min(max(cy, ch / 2), ih - ch / 2)
+    x0, y0 = int(cx - cw / 2), int(cy - ch / 2)
+    crop = src.crop((x0, y0, x0 + cw, y0 + ch)).resize((W, H), Image.LANCZOS)
+
+    # 底部压暗（仅面板区，过渡到照片），照片主体保持清晰
+    d = ImageDraw.Draw(crop, "RGBA")
+    panel_top = int(H * 0.50)
+    for y in range(panel_top, H):
+        t = (y - panel_top) / max(1, H - panel_top)
+        a = int(70 + 130 * t)
+        d.line([(0, y), (W, y)], fill=(6, 8, 14, a))
+    _apply_panel(crop, title, subtitle)
+    # 品牌水印
     bf = _load_font(40)
     bw = d.textlength(brand, font=bf) + 56
-    bx, by = W - bw - 36, 36
-    d.rounded_rectangle([bx, by, bx + bw, by + 76], radius=38,
+    d.rounded_rectangle([W - bw - 36, 36, W - 36, 112], radius=38,
                         fill=(15, 23, 42, 175), outline=C_ACCENT + (255,), width=3)
-    d.text((bx + 28, by + 18), brand, font=bf, fill=(255, 255, 255))
+    d.text((W - bw - 36 + 28, 54), brand, font=bf, fill=(255, 255, 255))
+    crop.convert("RGB").save(out_path, quality=95)
+    return out_path
 
-    img.convert("RGB").save(out_path, quality=95)
-    return out_path, 0, len(title_lines)
+
+def _detect_face(img):
+    """轻量人脸检测（cv2 级联）；无级联/未检出返回 None。"""
+    try:
+        import numpy as np
+        import cv2
+        gray = np.asarray(img.convert("L"))
+        cascade = _face_cascade()
+        if cascade is None:
+            return None
+        faces = cascade.detectMultiScale(gray, 1.1, 4, minSize=(int(img.width * 0.2), int(img.height * 0.2)))
+        if len(faces):
+            x, y, w, h = faces[0]
+            return (int(x), int(y), int(w), int(h))
+    except Exception:
+        return None
+    return None
 
 
 # ----------------------------------------------------------------- 封面 QC
