@@ -192,6 +192,15 @@ def _is_law_sentence_quota(match, text):
     return any(k in ctx for k in _LAW_CTX)
 
 
+def _is_listing_ordinal(match, text):
+    """'第一'为列举序数(如'第一，打款；第二，报税；第三，公示')而非广告最高级(行业第一) → 放行。
+    判定: 后跟列举分隔标点 且 全文成组出现'第二/第三'。"""
+    nxt = text[match.end():match.end() + 1]
+    if nxt not in ("，", ",", "、", "："):
+        return False
+    return ("第二" in text) or ("第三" in text)
+
+
 def scan(text: str, platform: str | None = None) -> list[dict]:
     """扫描文本，返回命中列表。每条：word/level/platforms/suggest/note/context/pos/need_human"""
     hits: list[dict] = []
@@ -201,6 +210,9 @@ def scan(text: str, platform: str | None = None) -> list[dict]:
         w = e["word"]
         if e.get("exact", True):
             for m in re.finditer(re.escape(w), text):
+                # 列举序数白名单: "第一，第二，第三"成组列举 → 放行(广告'行业第一'照拦)
+                if w == "第一" and _is_listing_ordinal(m, text):
+                    continue
                 s, en = m.start(), m.end()
                 ctx = text[max(0, s - 12): en + 12].replace("\n", " ")
                 hits.append({**e, "context": ctx, "pos": s, "need_human": False})
