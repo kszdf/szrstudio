@@ -747,7 +747,9 @@ def _real_bg_photo(sc, t_global=0.0):
 # 无 key / 断网 / 无命中时静默回退(万相生图 / real_bg 照片)，绝不阻塞出片。
 STOCK_ENABLED = None        # None=未判定; False=显式关闭(--no-stock)或无key
 AI_VIDEO_ENABLED = None     # None=未判定; False=显式关闭(--no-ai-video)或无阿里key
-_STOCK_FRAMES = {}          # query/path -> [RGBA帧...]（单槽缓存, 只留最近一段, 控内存）
+_STOCK_FRAMES = {}          # path -> [RGB帧...] (LRU多槽缓存)
+_STOCK_ORDER = []           # 最近使用顺序(转场时 prev/cur 双幕都要命中, 单槽会被反复清空重抽)
+_STOCK_MAX = 4              # 最多缓存 4 段素材帧(4×20帧×6MB≈480MB/worker, 控内存峰值)
 
 def _ai_video_enabled():
     """AI 动态视频背景(万相文生视频): 有阿里 DashScope key 即启用(复用配音/生图同一把key)。"""
@@ -771,8 +773,8 @@ def _stock_enabled():
             STOCK_ENABLED = False
     return STOCK_ENABLED
 
-def _video_frames(path, fps=10, max_sec=3.0):
-    """把素材视频抽成 1080x1920 等比裁切帧序列(10fps, 截前 max_sec 秒循环)；
+def _video_frames(path, fps=10, max_sec=2.0):
+    """把素材视频抽成 1080x1920 等比裁切帧序列(10fps, 截前 max_sec 秒循环, RGB省内存)；
     失败返回 None。"""
     d = TMP / ("stock_frames_" + uuid.uuid4().hex[:8])
     try:
@@ -786,7 +788,7 @@ def _video_frames(path, fps=10, max_sec=3.0):
         if r.returncode != 0:
             print(f"      [stock] 抽帧失败: {str(r.stderr)[-160:]}")
             return None
-        frames = [Image.open(p).convert("RGBA") for p in sorted(d.glob("f*.png"))]
+        frames = [Image.open(p).convert("RGB") for p in sorted(d.glob("f*.png"))]
         return frames or None
     except Exception as e:
         print(f"      [stock] 抽帧异常: {str(e)[:120]}")
@@ -795,16 +797,22 @@ def _video_frames(path, fps=10, max_sec=3.0):
         shutil.rmtree(d, ignore_errors=True)
 
 def _frames_from_path(path):
-    """按视频路径取帧序列(抽帧+单槽缓存, 控内存)。返回 None 表示失败。"""
+    """按视频路径取帧序列(LRU多槽缓存: 转场时 prev/cur 两幕同时命中, 不重复ffmpeg抽帧)。"""
     if path in _STOCK_FRAMES:
+        _STOCK_ORDER.remove(path)
+        _STOCK_ORDER.append(path)
         return _STOCK_FRAMES[path]
     try:
         frames = _video_frames(path)
         if not frames:
             _STOCK_FRAMES[path] = None
+            _STOCK_ORDER.append(path)
             return None
-        _STOCK_FRAMES.clear()          # 单槽: 只保留最近一段, 控内存峰值
+        while len(_STOCK_FRAMES) >= _STOCK_MAX:     # 满则淘汰最久未用
+            evict = _STOCK_ORDER.pop(0)
+            _STOCK_FRAMES.pop(evict, None)
         _STOCK_FRAMES[path] = frames
+        _STOCK_ORDER.append(path)
         return frames
     except Exception as e:
         print(f"      [stock] 素材帧失败: {str(e)[:120]}")
