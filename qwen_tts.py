@@ -42,8 +42,8 @@ except Exception:
 # ★ 张老师的"最终选中音色"（2026-07-23 用户亲耳选定 qwen_sample_cjps_f.wav）
 # 来源：cjps.mp4 茶桌视频中段 40s 去混响参考段重克隆（v2），叙事自然且像本人
 # 参数锁定：语速 1.0（贴原声）、pitch 1.0（保音色像本人）、音量 50
-# 来源：2026-08-28 用户录音样本(33s)重克隆 zhangvx —— 比旧 zhangc2 更自然, 经响度归一化补偿音量
-DEFAULT_VOICE_ID = "cosyvoice-v3-plus-zhangvx-83514aee05784e7cb77446de1f94cd41"
+# 来源：旧克隆音色 zhangc2(用户定夺: 新克隆 zhangvx 笔记本录音太低闷, 换回旧声)
+DEFAULT_VOICE_ID = "cosyvoice-v3-plus-zhangc2-28a7c3541e1c45518a03046c11baeb1d"
 DEFAULT_MODEL = "cosyvoice-v3-plus"
 # F 样品锁定语速：1.0（原速，最像本人；低于 1.0 会偏柔但不如原声稳）
 DEFAULT_SPEECH_RATE = 1.0
@@ -133,10 +133,10 @@ def _split_sentences(text):
     return [s for s in sents if s.strip()]
 
 
-def _sentence_pace(sent, base_rate=0.94):
+def _sentence_pace(sent, base_rate=0.90):
     """返回 (speech_rate, pause_after_ms, lead_ms, pitch_rate)。
-    v4(2026-08-27 用户反馈"男声一字一句读、偏慢"): 语速 0.88→0.94, 停顿大幅缩短,
-    按句类加音调起伏(警示低沉加重/疑问上扬/普通平稳) → 像讲课的抑扬顿挫。"""
+    v5(2026-08-28 用户定夺): 换回旧音色 zhangc2, 语速 0.94→0.90(旧声干净, 稍从容更自然),
+    保留 v4 音调起伏(警示低沉/疑问上扬) → 抑扬顿挫不读稿。"""
     slow_kw = ["先说清楚", "再提醒", "比如", "其实", "要注意", "还要提醒",
                "别", "不能", "不是", "红线", "谨慎", "务必", "别抱",
                "记住", "注意", "重点", "关键", "一定"]
@@ -144,27 +144,27 @@ def _sentence_pace(sent, base_rate=0.94):
     pitch = 1.0
     s = sent.rstrip()
     if any(k in sent for k in slow_kw):
-        rate, base = 0.90, 420     # 警示/结论句: 稍放慢加重 + 音调低沉一点
-        lead_ms = 150              # 句前吸气停顿(先顿一下再说)
-        pitch = 0.97               # 低沉=权威感
+        rate, base = 0.87, 400     # 警示/结论句: 稍放慢加重 + 音调低沉
+        lead_ms = 150
+        pitch = 0.97
     elif sent.count("、") >= 2:
-        rate, base = 1.02, 260     # 列举密集句: 正常偏快, 不停顿拖沓
+        rate, base = 0.98, 260     # 列举密集句: 正常偏快
     else:
         rate, base = base_rate, 320
     if s.endswith(("？", "?", "？")):
         base += 100
-        pitch = 1.03               # 疑问句音调上扬, 有问有答的交流感
+        pitch = 1.03               # 疑问句上扬
     elif s.endswith(("！", "!")):
         base += 120
-        pitch = 1.02               # 感叹句微扬, 强调
+        pitch = 1.02               # 感叹句微扬
     return rate, base, lead_ms, pitch
 
 
 # 注意: CosyVoice v3-plus 当前接口不接受 instruction 风格指令(实测返回 None, 2026-08-27),
 # 自然度/抑扬顿挫靠: 语速 + 停顿 + 警示前吸气 + 按句类音调起伏 实现。
-def synth_natural(text, voice, out_path, model=DEFAULT_MODEL, base_rate=0.94, retries=3):
+def synth_natural(text, voice, out_path, model=DEFAULT_MODEL, base_rate=0.90, retries=3):
     """分句合成 + 逐句语速/音调 + 句间静音, 解决'机械匀速无停顿'的 AI 痕迹。
-    警示句 0.90 低沉, 疑问句 1.03 上扬, 列举 1.02, 其余 0.94。"""
+    警示句 0.87 低沉, 疑问句 1.03 上扬, 列举 0.98, 其余 0.90。"""
     import wave, os
     if not voice:
         raise ValueError(

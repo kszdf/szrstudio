@@ -132,8 +132,8 @@ def _pop(local, appear, dur=0.20):
 WHITE = (250, 251, 253)
 MUTED = (200, 210, 222)
 
-# 双声对话音色: 男=张老师克隆音(zhangvx, 2026-08-28 录音样本重克隆, 更自然), 女=江老师克隆音(jiangnv3), 均 cosyvoice-v3-plus
-MALE_VOICE = "cosyvoice-v3-plus-zhangvx-83514aee05784e7cb77446de1f94cd41"
+# 双声对话音色: 男=张老师克隆音(zhangc2, 用户定夺: 新克隆zhangvx笔记本录音太低闷, 用回旧声), 女=江老师克隆音(jiangnv3), 均 cosyvoice-v3-plus
+MALE_VOICE = "cosyvoice-v3-plus-zhangc2-28a7c3541e1c45518a03046c11baeb1d"
 FEMALE_VOICE = "cosyvoice-v3-plus-jiangnv3-991b204c1d564ac7a60f0cb9a8fd78bd"
 
 # ============================== 缓动 ==============================
@@ -1505,16 +1505,24 @@ def main():
 
     sb_path = out.with_suffix(".v4storyboard.json")
     out.parent.mkdir(parents=True, exist_ok=True)
-    # 对话组共享背景(用户永久要求, 2026-08-27): 女问男答必须同一场景——
-    # 否则每句独立背景, 女声短句幕切换密集 = "画面不停闪烁"
+    # 对话背景切换点放在男声句(用户反馈女声画面闪, 2026-08-28):
+    # 之前女声句开新组 → 背景切换落在女声短句上, 转场占比大 = 女声画面闪烁;
+    # 改为: 男声句开新背景(转场在男声长句进行), 女声句复用上一男声句背景 → 女声说话时背景永远稳定
     grp_img = None
     for sc in sb:
-        if sc.get("role") == "F":
-            grp_img = sc.get("image_prompt") or grp_img     # 女声句开新组, 用她的背景
-        elif sc.get("role") == "M":
+        if sc.get("role") == "M":
+            grp_img = sc.get("image_prompt") or grp_img   # 男声句开新背景(切换点)
+        elif sc.get("role") == "F":
             if grp_img:
-                sc["image_prompt"] = grp_img                # 男声句复用女声背景(同一对话场景)
-    # 兜底: 女声句仍无 image_prompt 时, 从紧随其后的男声句借用, 保证组内背景统一
+                sc["image_prompt"] = grp_img              # 女声句复用上一男声背景
+    # 兜底: 男声句无 image_prompt 时从后续借用
+    for i, sc in enumerate(sb):
+        if sc.get("role") == "M" and not sc.get("image_prompt"):
+            for nxt in sb[i:]:
+                if nxt.get("image_prompt"):
+                    sc["image_prompt"] = nxt["image_prompt"]
+                    break
+    # 兜底: 女声句开头仍无背景(如首句)时, 用后续男声句的
     for i, sc in enumerate(sb):
         if sc.get("role") == "F" and not sc.get("image_prompt"):
             for nxt in sb[i:]:
