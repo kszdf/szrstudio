@@ -131,22 +131,22 @@ def _split_sentences(text):
     return [s for s in sents if s.strip()]
 
 
-def _sentence_pace(sent, base_rate=0.85):
+def _sentence_pace(sent, base_rate=0.88):
     """返回 (speech_rate, pause_after_ms, lead_ms)。
     lead_ms = 句前吸气停顿（重点/警示句前留白，制造"先顿一下再说"的真人感）。
     引导/结论/提醒句放慢并加长停顿, 列举密集句正常偏快。
-    v2(2026-08-27): 整体语速下调(用户反馈"男声太快太AI"): 普通 0.92→0.85, 警示 0.90→0.84。"""
+    v3(2026-08-27): 0.85 太慢像读稿 → 回调 0.88; 停顿适度(480→420/600→520)"""
     slow_kw = ["先说清楚", "再提醒", "比如", "其实", "要注意", "还要提醒",
                "别", "不能", "不是", "红线", "谨慎", "务必", "别抱",
                "记住", "注意", "重点", "关键", "一定"]
     lead_ms = 0
     if any(k in sent for k in slow_kw):
-        rate, base = 0.84, 600     # 警示/结论句: 放慢 + 更长的句后停顿
-        lead_ms = 200              # 警示/结论句前吸气停顿
+        rate, base = 0.86, 520     # 警示/结论句: 略放慢 + 适度停顿
+        lead_ms = 170              # 警示/结论句前吸气停顿
     elif sent.count("、") >= 2:
-        rate, base = 0.96, 340     # 列举密集句: 略快但仍有呼吸
+        rate, base = 0.98, 330     # 列举密集句: 正常略快
     else:
-        rate, base = base_rate, 480
+        rate, base = base_rate, 420
     s = sent.rstrip()
     if s.endswith(("？", "！", "?", "!")):
         base += 150
@@ -154,10 +154,10 @@ def _sentence_pace(sent, base_rate=0.85):
 
 
 # 注意: CosyVoice v3-plus 当前接口不接受 instruction 风格指令(实测返回 None, 2026-08-27),
-# 自然度靠: 语速放慢 + 句间停顿 + 警示句前吸气停顿 实现。
-def synth_natural(text, voice, out_path, model=DEFAULT_MODEL, base_rate=0.85, retries=3):
+# 自然度靠: 语速 + 句间停顿 + 警示句前吸气停顿 实现。
+def synth_natural(text, voice, out_path, model=DEFAULT_MODEL, base_rate=0.88, retries=3):
     """分句合成 + 逐句语速 + 句间静音, 解决'机械匀速无停顿'的 AI 痕迹。
-    引导/结论句放慢到 0.84 并加长停顿, 列举密集句 0.96, 其余 0.85。"""
+    引导/结论句 0.86, 列举密集句 0.98, 其余 0.88。"""
     import wave, os
     if not voice:
         raise ValueError(

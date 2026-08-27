@@ -1308,7 +1308,7 @@ def _synth_segment_subprocess(text, voice, out_path, timeout=90, retries=3):
     return False
 
 
-def build_dialogue_audio(segments, out_wav, gap_ms=350, tts_workers=4):
+def build_dialogue_audio(segments, out_wav, gap_ms=300, tts_workers=4):
     """逐轮用对应音色合成(子进程带超时, 支持并行) + 轮间静音, ffmpeg 拼接为单轨。
     断点续传: 已合成的 tN.wav 跳过(目录按 out 名确定, 重跑不重复烧额度)。
     tts_workers>1 时并行合成多段(每段独立子进程, 互不阻塞; 留意 dashscope 限流)。
@@ -1387,13 +1387,14 @@ def main():
     ap.add_argument("--workers", type=int, default=0, help="并行渲染进程数(0=自动: min(12, CPU核数-2); 1=串行)")
     ap.add_argument("--tts-workers", type=int, default=4, help="并行TTS段数(1=串行; 默认4, 留意API限流)")
     ap.add_argument("--no-stock", action="store_true", help="关闭真实素材库(Pexels/Pixabay/本地), 回到万相生图/照片库底图")
-    ap.add_argument("--no-ai-video", action="store_true", help="关闭AI动态视频背景(万相文生视频), 回到生图/素材库底图")
+    ap.add_argument("--ai-video", action="store_true",
+                    help="启用AI动态视频背景(万相文生视频)。注意: turbo档画面自带抖动/闪烁伪影(用户实测否决), 默认关闭, 背景走静态生图")
     args = ap.parse_args()
     global STYLE_NAME, GIF_DIR, GIF_ENABLED, MALE_VOICE, FEMALE_VOICE, STOCK_ENABLED, AI_VIDEO_ENABLED
     if args.no_stock:
         STOCK_ENABLED = False
-    if args.no_ai_video:
-        AI_VIDEO_ENABLED = False
+    # AI 动态视频背景默认关闭(用户实测 turbo 画面闪烁否决); 仅显式 --ai-video 时启用
+    AI_VIDEO_ENABLED = False if not args.ai_video else None
     if args.style in STYLE_PRESETS:
         STYLE_NAME = args.style
     else:
