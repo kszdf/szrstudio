@@ -608,27 +608,35 @@ def _render_scene(sc, pal, idx, local, scdur, base_img, t_global=0.0):
     """场景主视觉(动态画面版): 底图(动态GIF / AI生图 / 动画渐变) + 呼吸运镜 + 扫光 + 粒子,
     每一幕都像动态 GIF 一样持续运动, 取代静态图解卡。"""
     np_ = min(1.0, local / scdur) if scdur and scdur > 0 else 1.0
-    # 底图优先级: 内容匹配的动态GIF → AI 写实生图 → 真实照片库(实景动态) → 动画渐变
+    # 底图优先级: 内容匹配的动态GIF → 真实素材库视频(动态) → AI 写实生图 → 真实照片库 → 动画渐变
     gif_path = _pick_gif(sc, content_only=True)
     if gif_path is not None:
-        base = gif_frame_at(gif_path, t_global)
-    elif base_img is not None:
-        base = base_img
+        base, base_kind = gif_frame_at(gif_path, t_global), "gif"
     else:
-        base = _real_bg_photo(sc, t_global)
+        stock_base = _stock_bg(sc, t_global)
+        if stock_base is not None:
+            base, base_kind = stock_base, "video"
+        elif base_img is not None:
+            base, base_kind = base_img, "still"
+        else:
+            base, base_kind = _real_bg_photo(sc, t_global), "still"
     # 呼吸运镜(慢速振荡, 破解静态感) + 肯·伯恩斯漂移轮替
     breathe = 1.0 + 0.045 * math.sin(2 * math.pi * t_global / 7.0)
-    kb = idx % 5
-    if kb == 0:
-        sca, dx, dy = 1.0 + 0.07 * np_, 0, 0
-    elif kb == 1:
-        sca, dx, dy = 1.07 - 0.07 * np_, 0, 0
-    elif kb == 2:
-        sca, dx, dy = 1.14, int(70 * (0.5 - np_)), 0
-    elif kb == 3:
-        sca, dx, dy = 1.14, int(-70 * (0.5 - np_)), 0
+    if base_kind == "video":
+        # 真实视频本身在动: 只保留极轻微呼吸(防裁切字幕), 不做大范围漂移
+        sca, dx, dy = 1.0 + 0.022 * math.sin(2 * math.pi * t_global / 9.0), 0, 0
     else:
-        sca, dx, dy = 1.0, 0, 0
+        kb = idx % 5
+        if kb == 0:
+            sca, dx, dy = 1.0 + 0.07 * np_, 0, 0
+        elif kb == 1:
+            sca, dx, dy = 1.07 - 0.07 * np_, 0, 0
+        elif kb == 2:
+            sca, dx, dy = 1.14, int(70 * (0.5 - np_)), 0
+        elif kb == 3:
+            sca, dx, dy = 1.14, int(-70 * (0.5 - np_)), 0
+        else:
+            sca, dx, dy = 1.0, 0, 0
     img = kb_zoom(base, sca * breathe, dx, dy).convert("RGBA")
     # 动态化: 扫光 + 上浮粒子(仿动态GIF的流动高光/光点)
     img = _light_sweep(img, t_global)
@@ -722,6 +730,84 @@ def _real_bg_photo(sc, t_global=0.0):
             img = Image.open(picked).convert("RGB")
             return cover_resize(img, W, H)
     return _animated_gradient(get_palette(sc.get("tone", "neutral")), t_global)
+
+
+# ============================== 真实素材库(Pexels/Pixabay) ==============================
+# 配置 model_keys.env 的 PEXELS_API_KEY / PIXABAY_API_KEY 后自动启用；
+# 无 key / 断网 / 无命中时静默回退(万相生图 / real_bg 照片)，绝不阻塞出片。
+STOCK_ENABLED = None        # None=未判定; False=显式关闭(--no-stock)或无key
+_STOCK_FRAMES = {}          # query -> [RGBA帧...]（单槽缓存, 只留最近一段, 控内存）
+
+def _stock_enabled():
+    global STOCK_ENABLED
+    if STOCK_ENABLED is None:
+        try:
+            import stock_footage
+            STOCK_ENABLED = stock_footage.is_enabled()
+        except Exception:
+            STOCK_ENABLED = False
+    return STOCK_ENABLED
+
+def _video_frames(path, fps=10, max_sec=3.0):
+    """把素材视频抽成 1080x1920 等比裁切帧序列(10fps, 截前 max_sec 秒循环)；
+    失败返回 None。"""
+    d = TMP / ("stock_frames_" + uuid.uuid4().hex[:8])
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        n = max(1, int(max_sec * fps))
+        vf = (f"fps={fps},scale={W}:{H}:force_original_aspect_ratio=increase,"
+              f"crop={W}:{H}")
+        r = subprocess.run([FFMPEG, "-y", "-i", str(path), "-vf", vf,
+                            "-frames:v", str(n), str(d / "f%03d.png")],
+                           capture_output=True, text=True, timeout=180)
+        if r.returncode != 0:
+            print(f"      [stock] 抽帧失败: {str(r.stderr)[-160:]}")
+            return None
+        frames = [Image.open(p).convert("RGBA") for p in sorted(d.glob("f*.png"))]
+        return frames or None
+    except Exception as e:
+        print(f"      [stock] 抽帧异常: {str(e)[:120]}")
+        return None
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+def _stock_frames(query):
+    """按查询词取素材帧序列(下载+抽帧, 文件级/进程级缓存)。"""
+    if query in _STOCK_FRAMES:
+        return _STOCK_FRAMES[query]
+    try:
+        import stock_footage
+        clip = stock_footage.fetch_clip(query)
+        if not clip:
+            _STOCK_FRAMES[query] = None
+            return None
+        frames = _video_frames(clip)
+        if not frames:
+            _STOCK_FRAMES[query] = None
+            return None
+        _STOCK_FRAMES.clear()          # 单槽: 只保留最近一段, 控内存峰值
+        _STOCK_FRAMES[query] = frames
+        return frames
+    except Exception as e:
+        print(f"      [stock] 素材帧失败: {str(e)[:120]}")
+        return None
+
+def _stock_bg(sc, t_global=0.0):
+    """按场景取真实素材视频当前帧(循环播放)；未启用/无素材返回 None。"""
+    if not _stock_enabled():
+        return None
+    try:
+        import stock_footage
+        q = stock_footage.scene_query(sc)
+        if not q:
+            return None
+        frames = _stock_frames(q)
+        if not frames:
+            return None
+        i = int(t_global * 10) % len(frames)
+        return frames[i]
+    except Exception:
+        return None
 
 
 def _pick_gif(sc, content_only=False):
@@ -1232,8 +1318,11 @@ def main():
     ap.add_argument("--gif-dir", default="", help="动态GIF底图库目录(默认 gif_library/; 传 none 关闭)")
     ap.add_argument("--workers", type=int, default=0, help="并行渲染进程数(0=自动: min(12, CPU核数-2); 1=串行)")
     ap.add_argument("--tts-workers", type=int, default=4, help="并行TTS段数(1=串行; 默认4, 留意API限流)")
+    ap.add_argument("--no-stock", action="store_true", help="关闭真实素材库(Pexels/Pixabay), 回到万相生图/照片库底图")
     args = ap.parse_args()
-    global STYLE_NAME, GIF_DIR, GIF_ENABLED, MALE_VOICE, FEMALE_VOICE
+    global STYLE_NAME, GIF_DIR, GIF_ENABLED, MALE_VOICE, FEMALE_VOICE, STOCK_ENABLED
+    if args.no_stock:
+        STOCK_ENABLED = False
     if args.style in STYLE_PRESETS:
         STYLE_NAME = args.style
     else:
@@ -1348,12 +1437,17 @@ def main():
         from model_providers import ensure_env
         ensure_env()
         api_key = os.getenv("DASHSCOPE_API_KEY")
+        stock_on = _stock_enabled()
+        if stock_on:
+            print("[3/6] 真实素材库已启用(Pexels/Pixabay), 优先真实视频背景, 生图仅兜底")
         need = []
         for i, sc in enumerate(sb):
             if sc.get("visual_type") != "scene":
                 imgs.append(None)   # 非 scene 用代码绘制, 不联网生图
             elif _pick_gif({**sc, "sentence": sentences[i]}, content_only=True) is not None:
                 imgs.append(None)   # 内容匹配动态GIF(如 仓库/账本)作底, 不烧钱生图
+            elif stock_on:
+                imgs.append(None)   # 真实素材库优先: 渲染期取视频帧; 失败自动降级 real_bg
             else:
                 style = IMG_STYLES[i % len(IMG_STYLES)]
                 prompt = sc["image_prompt"] + ("，" + style + "，画面纯净无人物无文字无字母无数字，竖版9:16构图，真实摄影写实风格，禁止插画、禁止卡通、禁止扁平矢量")

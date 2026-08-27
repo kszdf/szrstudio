@@ -36,6 +36,7 @@ model_thumbs/
 *.gif
 output/
 qwen_out/
+storage/stock_videos/
 
 # ===== 临时 / 缓存 =====
 __pycache__/
