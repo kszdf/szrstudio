@@ -784,7 +784,7 @@ SHARED_FRAMES_DIR = BASE / "storage" / "wanx_videos" / "frames"
 def _frames_key(path):
     return hashlib.md5(str(path).encode("utf-8")).hexdigest()
 
-def _video_frames(path, fps=10, max_sec=3.5):
+def _video_frames(path, fps=10, max_sec=5.0):
     """把素材视频抽成 1080x1920 等比裁切帧序列(10fps, 截前 max_sec 秒, JPEG q92 省内存)；
     persist=True 时同时写共享盘缓存(幂等, 已存在则跳过), 供多进程渲染worker直接加载。
     失败返回 None。"""
