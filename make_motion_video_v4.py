@@ -68,9 +68,10 @@ TRANS = 0.7          # 转场时长(秒), 加长到能看清
 ENTR = 0.6           # 入场动画时长(秒)
 
 # 转场类型(按场景序号循环, 制造节奏变化, 破解"每幕都一样"的单调)
-# v5.2: 移除 flash(白闪)/glitch(故障抖) —— 真实视频背景+这些强闪转场="一直闪"(用户反馈)
-TRANS_TYPES = ["wipe_lr", "wipe_tb", "zoom", "fade", "slide_lr", "iris",
-               "blur_fade", "push", "soft_rotate", "luma"]
+# v5.3 定稿(用户永久要求): 只用柔和转场——fade淡入淡出/wipe软擦除/zoom微缩放;
+# 移除所有强动效转场(flash白闪/glitch故障/iris光圈/blur_fade模糊/push推拉/soft_rotate柔转/luma明度):
+# 男女对话女声短句幕切换频繁, 强转场="一直闪"; 柔和淡变画面才稳
+TRANS_TYPES = ["fade", "wipe_lr", "wipe_tb", "zoom"]
 # 插画风格轮替(每幕换一种观感, 但保持财税专业家族感, 不撞款)
 # 统一约束：真实摄影写实风(杜绝插画/卡通/扁平矢量), 深色专业底 + 自然光影
 # v5 定稿：背景一律「无人物风景/城市景观」(用户要求不要人物出镜背景)

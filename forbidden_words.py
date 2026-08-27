@@ -222,8 +222,8 @@ def scan(text: str, platform: str | None = None) -> list[dict]:
                 # 白名单1: 法条刑期引用(如"最高十年有期徒刑") → 放行
                 if w == "最" and _is_law_sentence_quota(m, text):
                     continue
-                # 白名单2: "最近"是时间副词, 非广告最高级修饰(如"最便宜/最好") → 放行
-                if w == "最" and text[m.start():m.start() + 2] == "最近":
+                # 白名单2: "最近"/"最后"是时间/顺序副词, 非广告最高级修饰(如"最便宜/最好") → 放行
+                if w == "最" and text[m.start():m.start() + 2] in ("最近", "最后"):
                     continue
                 s, en = m.start(), m.end()
                 ctx = text[max(0, s - 12): en + 12].replace("\n", " ")
