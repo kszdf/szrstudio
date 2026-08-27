@@ -17,6 +17,9 @@ v4 核心特性(相对 v3):
   · 暗化层保证可读: 顶部/底部渐变黑带, 让浮层文字在任何插画上都清晰。
   · 准确性: image_prompt 强制无文字; 数字/金额仍代码绘制, 不靠生图。
   · 生图缓存: 按 prompt 哈希缓存, 同稿重跑不重复烧钱/耗时; 失败自动降级为动画渐变占位。
+  · 真实素材库(v5.1): model_keys.env 填 PEXELS_API_KEY/PIXABAY_API_KEY 后,
+    底图优先取 Pexels/Pixabay 真实动态视频(风景/城市/内容相关, 无人物), 万相生图/照片库降为兜底;
+    --no-stock 可强制关闭, 无 key/断网自动回退, 绝不阻塞出片。
 
 接口:
   D:/heygem/py310/Scripts/python.exe make_motion_video_v4.py \
@@ -605,7 +608,7 @@ def gradient_bg(pal):
     return bg.convert("RGBA")
 
 def _render_scene(sc, pal, idx, local, scdur, base_img, t_global=0.0):
-    """场景主视觉(动态画面版): 底图(动态GIF / AI生图 / 动画渐变) + 呼吸运镜 + 扫光 + 粒子,
+    """场景主视觉(动态画面版): 底图(内容GIF / 真实素材库视频 / AI生图 / 真实照片 / 渐变) + 呼吸运镜 + 扫光 + 粒子,
     每一幕都像动态 GIF 一样持续运动, 取代静态图解卡。"""
     np_ = min(1.0, local / scdur) if scdur and scdur > 0 else 1.0
     # 底图优先级: 内容匹配的动态GIF → 真实素材库视频(动态) → AI 写实生图 → 真实照片库 → 动画渐变
