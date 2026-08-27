@@ -50,11 +50,11 @@ def main():
     total = float(r.stdout.strip() or 0)
     print(f"[0] 素材 {src.name} 总时长 {total:.1f}s")
 
-    # [1] 提取人声: 截取 12~28s 的干净中段(若总时长>35s 从 20% 处取 16s; 否则整段截 16s)
+    # [1] 提取人声: 截取干净中段(避开开头清嗓/结尾杂音; 总长>25s 从30%处取16s)
     seg_len = 16.0
     start = 0.0
-    if total > 35:
-        start = total * 0.2
+    if total > 25:
+        start = total * 0.3
     ref = out_dir / f"{prefix}_ref.wav"
     subprocess.run([FFMPEG, "-y", "-ss", f"{start:.1f}", "-i", str(src),
                     "-t", f"{seg_len:.1f}", "-vn", "-ac", "1", "-ar", "22050",

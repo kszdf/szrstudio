@@ -132,8 +132,8 @@ def _pop(local, appear, dur=0.20):
 WHITE = (250, 251, 253)
 MUTED = (200, 210, 222)
 
-# 双声对话音色: 男=张老师克隆音(zhangc2), 女=江老师克隆音(jiangnv3), 均 cosyvoice-v3-plus
-MALE_VOICE = "cosyvoice-v3-plus-zhangc2-28a7c3541e1c45518a03046c11baeb1d"
+# 双声对话音色: 男=张老师克隆音(zhangvx, 2026-08-28 录音样本重克隆, 更自然), 女=江老师克隆音(jiangnv3), 均 cosyvoice-v3-plus
+MALE_VOICE = "cosyvoice-v3-plus-zhangvx-83514aee05784e7cb77446de1f94cd41"
 FEMALE_VOICE = "cosyvoice-v3-plus-jiangnv3-991b204c1d564ac7a60f0cb9a8fd78bd"
 
 # ============================== 缓动 ==============================

@@ -27,6 +27,7 @@ import os
 import sys
 import time
 import argparse
+import subprocess
 from pathlib import Path
 
 # 让 model_keys.env 里的 key 自动灌进环境变量（dashscope SDK 直接读 env）
@@ -41,7 +42,8 @@ except Exception:
 # ★ 张老师的"最终选中音色"（2026-07-23 用户亲耳选定 qwen_sample_cjps_f.wav）
 # 来源：cjps.mp4 茶桌视频中段 40s 去混响参考段重克隆（v2），叙事自然且像本人
 # 参数锁定：语速 1.0（贴原声）、pitch 1.0（保音色像本人）、音量 50
-DEFAULT_VOICE_ID = "cosyvoice-v3-plus-zhangc2-28a7c3541e1c45518a03046c11baeb1d"
+# 来源：2026-08-28 用户录音样本(33s)重克隆 zhangvx —— 比旧 zhangc2 更自然, 经响度归一化补偿音量
+DEFAULT_VOICE_ID = "cosyvoice-v3-plus-zhangvx-83514aee05784e7cb77446de1f94cd41"
 DEFAULT_MODEL = "cosyvoice-v3-plus"
 # F 样品锁定语速：1.0（原速，最像本人；低于 1.0 会偏柔但不如原声稳）
 DEFAULT_SPEECH_RATE = 1.0
@@ -198,6 +200,7 @@ def synth_natural(text, voice, out_path, model=DEFAULT_MODEL, base_rate=0.94, re
         with wave.open(out_path, "wb") as w:
             w.setnchannels(params[0]); w.setsampwidth(params[1]); w.setframerate(params[2])
             w.writeframes(bytes(buf))
+        _normalize_volume(out_path, target_mean_db=-20.0)   # 响度归一化(新克隆音色基线低, 统一到 -20dB)
         return out_path
     finally:
         for t in tmp_files:
@@ -205,6 +208,34 @@ def synth_natural(text, voice, out_path, model=DEFAULT_MODEL, base_rate=0.94, re
                 os.remove(t)
             except OSError:
                 pass
+
+
+# 响度归一化: 不同克隆素材的 TTS 输出基线音量差异大(新录音样本比旧音色低~10dB),
+# 统一增益到目标响度, 带 limiter 防削波。参考段质量越差增益上限越高会爆音, 故设 12dB 上限。
+def _normalize_volume(path, target_mean_db=-20.0, max_gain_db=12.0):
+    import re as _re
+    ff = r"D:/ffmpeg/ffmpeg-8.1.2-full_build/bin/ffmpeg.exe"
+    try:
+        r = subprocess.run([ff, "-i", str(path), "-af", "volumedetect", "-f", "null", "-"],
+                           capture_output=True, text=True, timeout=60)
+        m = _re.search(r"mean_volume:\s*(-?[\d.]+) dB", r.stderr or r.stdout or "")
+        if not m:
+            return
+        mean = float(m.group(1))
+        gain = target_mean_db - mean
+        if gain > max_gain_db:
+            gain = max_gain_db
+        if gain < 0.5:
+            return
+        tmp = path + ".norm.wav"
+        rr = subprocess.run([ff, "-y", "-i", str(path), "-af",
+                             f"volume={gain:.1f}dB,alimiter=limit=0.95",
+                             "-ar", "22050", "-ac", "1", tmp],
+                            capture_output=True, text=True, timeout=120)
+        if rr.returncode == 0 and os.path.exists(tmp) and os.path.getsize(tmp) > 1000:
+            os.replace(tmp, path)
+    except Exception:
+        pass
 
 
 def batch(in_src, voice, outdir, model=DEFAULT_MODEL):
