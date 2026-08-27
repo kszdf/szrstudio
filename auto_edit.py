@@ -149,8 +149,8 @@ def _make_intro_card(path, title="追梦", subtitle="短视频智能生产平台
     img.convert("RGB").save(path)
 
 
-def _make_outro_card(path, title="关注追梦", subtitle="获取你的专属数字人"):
-    """片尾卡：CTA。"""
+def _make_outro_card(path, title="昆山老张讲财税", subtitle="评论区扣「方案」，清单发你"):
+    """片尾卡：留资 CTA（品牌 + 行动引导）。"""
     from PIL import Image, ImageDraw
     img = _make_gradient((W, H), (15, 23, 42), (30, 41, 59))
     d = ImageDraw.Draw(img)
@@ -306,20 +306,28 @@ def _build_kenburns_main(in_mp4, tmp, dry_run, log, transition="simple"):
 
 
 def _build_fast_simple(intro_m, main_kb, outro_m, in_mp4, out_mp4, dry_run, log):
-    """Simple 转场：concat（硬切但被 fade 掩盖）+ 音频接回。最可靠路径。"""
+    """Simple 转场：concat（硬切但被 fade 掩盖）+ 音频接回。最可靠路径。
+    intro_m=None 时跳过片头（主片 + 片尾卡 两段拼接）。"""
     silent = os.path.join(os.path.dirname(main_kb), "silent_concat.mp4")
-    # Video concat: intro + ken-burns-main + outro
-    rc = _run([FFMPEG, "-y", "-i", intro_m, "-i", main_kb, "-i", outro_m,
-                "-filter_complex",
-                "[0:v][1:v][2:v]concat=n=3:v=1:a=0[v]",
-                "-map", "[v]", "-c:v", "libx264", "-crf", str(CRF),
-                "-pix_fmt", "yuv420p", silent], dry_run, log)
+    if intro_m:
+        rc = _run([FFMPEG, "-y", "-i", intro_m, "-i", main_kb, "-i", outro_m,
+                    "-filter_complex",
+                    "[0:v][1:v][2:v]concat=n=3:v=1:a=0[v]",
+                    "-map", "[v]", "-c:v", "libx264", "-crf", str(CRF),
+                    "-pix_fmt", "yuv420p", silent], dry_run, log)
+    else:
+        rc = _run([FFMPEG, "-y", "-i", main_kb, "-i", outro_m,
+                    "-filter_complex",
+                    "[0:v][1:v]concat=n=2:v=1:a=0[v]",
+                    "-map", "[v]", "-c:v", "libx264", "-crf", str(CRF),
+                    "-pix_fmt", "yuv420p", silent], dry_run, log)
     if rc != 0:
         return rc
     # Mux original audio back (intro/outro silent, main audio plays through)
+    # 注意：不加 -shortest——否则音频(主片)短于拼接视频(主片+片尾卡)时片尾卡被截掉。
     return _run([FFMPEG, "-y", "-i", silent, "-i", in_mp4,
                 "-map", "0:v:0", "-map", "1:a:0?",
-                "-c:v", "copy", "-c:a", "aac", "-shortest", out_mp4], dry_run, log)
+                "-c:v", "copy", "-c:a", "aac", out_mp4], dry_run, log)
 
 
 def _build_fast_xfade(intro_m, main_kb, outro_m, in_mp4, out_mp4, dur, dry_run, log):
@@ -361,20 +369,25 @@ def _build_fast_xfade(intro_m, main_kb, outro_m, in_mp4, out_mp4, dur, dry_run, 
 
 
 def build_fast(in_mp4, out_mp4, tmp, dry_run, log,
-               title="追梦", subtitle="短视频智能生产平台", transition="simple"):
-    """Fast 风格：带真实标题的片头卡 + Ken Burns 主片 + 平滑转场 + CTA 片尾卡。"""
+               title="追梦", subtitle="短视频智能生产平台", transition="simple",
+               no_intro=False):
+    """Fast 风格：片头卡(可跳过) + Ken Burns 主片 + 平滑转场 + CTA 片尾卡。
+    no_intro=True 时跳过片头卡（用于已有自带片头的数字人/幕后音成片，避免双重片头）。"""
     intro_p = os.path.join(tmp, "intro.png")
     outro_p = os.path.join(tmp, "outro.png")
     intro_m = os.path.join(tmp, "intro.mp4")
     outro_m = os.path.join(tmp, "outro.mp4")
     if not dry_run:
-        _make_intro_card(intro_p, title=title, subtitle=subtitle)
+        if not no_intro:
+            _make_intro_card(intro_p, title=title, subtitle=subtitle)
         _make_outro_card(outro_p)
     else:
-        log.append(f"PIL: intro_card(title='{title}') -> {intro_p}")
+        log.append(f"PIL: intro_card(title='{title}') -> {intro_p}" if not no_intro else "PIL: intro skipped (no_intro)")
         log.append(f"PIL: outro_card -> {outro_p}")
 
-    rc = _card_to_mp4(intro_p, intro_m, dry_run, log)
+    rc = 0
+    if not no_intro:
+        rc |= _card_to_mp4(intro_p, intro_m, dry_run, log)
     rc |= _card_to_mp4(outro_p, outro_m, dry_run, log)
     if rc != 0:
         return rc
@@ -386,7 +399,10 @@ def build_fast(in_mp4, out_mp4, tmp, dry_run, log,
         log.append("KENBURNS_FALLBACK: 使用原始主片（无效果）")
         main_kb = in_mp4
 
-    if transition == "xfade":
+    if no_intro:
+        # 无片头：直接主片 + 片尾卡（intro_m=None）
+        rc = _build_fast_simple(None, main_kb, outro_m, in_mp4, out_mp4, dry_run, log)
+    elif transition == "xfade":
         rc = _build_fast_xfade(intro_m, main_kb, outro_m, in_mp4, out_mp4, dur, dry_run, log)
         if rc != 0:
             log.append("XFAD_FALLBACK: xfade 失败，降级为 simple 转场")
@@ -397,9 +413,9 @@ def build_fast(in_mp4, out_mp4, tmp, dry_run, log,
 
 
 # ----------------------------------------------------------------- 主流程
-def auto_edit(in_mp4, out_mp4, edit_style="fast", name_tag="追梦 · 数字人",
+def auto_edit(in_mp4, out_mp4, edit_style="fast", name_tag="昆山老张讲财税",
               overlay=None, dry_run=False, title="", subtitle="",
-              transition="simple"):
+              transition="simple", no_intro=False):
     assert edit_style in EDIT_STYLES, f"edit_style must be one of {EDIT_STYLES}"
     assert transition in TRANSITIONS, f"transition must be one of {TRANSITIONS}"
     if not dry_run:
@@ -408,9 +424,9 @@ def auto_edit(in_mp4, out_mp4, edit_style="fast", name_tag="追梦 · 数字人"
     tmp = tempfile.mkdtemp(prefix="auto_edit_")
     if edit_style == "fast":
         rc = build_fast(in_mp4, out_mp4, tmp, dry_run, log,
-                        title=title or "追梦",
-                        subtitle=subtitle or "短视频智能生产平台",
-                        transition=transition)
+                        title=title or "昆山老张讲财税",
+                        subtitle=subtitle or "财税干货 · 老板必看",
+                        transition=transition, no_intro=no_intro)
     elif edit_style == "vlog":
         rc = build_vlog(in_mp4, out_mp4, tmp, dry_run, log, name_tag=name_tag)
     elif edit_style == "pip":
@@ -432,18 +448,20 @@ def main():
     ap.add_argument("--input", required=True)
     ap.add_argument("--output", required=True)
     ap.add_argument("--edit-style", default="fast", choices=EDIT_STYLES)
-    ap.add_argument("--name-tag", default="追梦 · 数字人")
+    ap.add_argument("--name-tag", default="昆山老张讲财税")
     ap.add_argument("--overlay", default=None,
                     help="pip 画中画模式：叠加到主片的副视频路径")
     ap.add_argument("--title", default="", help="片头卡显示的真实视频标题（fast 风格）")
     ap.add_argument("--subtitle", default="", help="片头卡副标题")
     ap.add_argument("--transition", default="simple", choices=TRANSITIONS,
                     help="转场模式: simple(淡入淡出+concat, 可靠) | xfade(真交叉渐变, 高级)")
+    ap.add_argument("--no-intro", action="store_true",
+                    help="跳过片头卡（成片已自带片头时使用，避免双重片头）")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     rc, man = auto_edit(args.input, args.output, args.edit_style,
                          args.name_tag, args.overlay, args.dry_run,
-                         args.title, args.subtitle, args.transition)
+                         args.title, args.subtitle, args.transition, args.no_intro)
     if args.dry_run:
         print("\n".join(man["log"]))
     print(f"auto_edit[{args.edit_style}/{args.transition}] rc={rc} -> {args.output}")
