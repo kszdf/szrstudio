@@ -370,9 +370,10 @@ def _build_fast_xfade(intro_m, main_kb, outro_m, in_mp4, out_mp4, dur, dry_run, 
 
 def build_fast(in_mp4, out_mp4, tmp, dry_run, log,
                title="追梦", subtitle="短视频智能生产平台", transition="simple",
-               no_intro=False):
-    """Fast 风格：片头卡(可跳过) + Ken Burns 主片 + 平滑转场 + CTA 片尾卡。
-    no_intro=True 时跳过片头卡（用于已有自带片头的数字人/幕后音成片，避免双重片头）。"""
+               no_intro=False, no_kenburns=False):
+    """Fast 风格：片头卡(可跳过) + Ken Burns 主片(可跳过) + 平滑转场 + CTA 片尾卡。
+    no_intro=True 跳过片头卡（成片自带片头）；no_kenburns=True 跳过缩放动效
+    （数字人已自带运动，且缩放会裁切已烧录字幕导致 QC 贴边误判）。"""
     intro_p = os.path.join(tmp, "intro.png")
     outro_p = os.path.join(tmp, "outro.png")
     intro_m = os.path.join(tmp, "intro.mp4")
@@ -392,8 +393,8 @@ def build_fast(in_mp4, out_mp4, tmp, dry_run, log,
     if rc != 0:
         return rc
 
-    # Ken Burns 处理主片
-    main_kb, dur = _build_kenburns_main(in_mp4, tmp, dry_run, log, transition)
+    # Ken Burns 处理主片（可跳过：数字人已自带运动，缩放会裁字幕）
+    main_kb, dur = _build_kenburns_main(in_mp4, tmp, dry_run, log, transition) if not no_kenburns else (in_mp4, 0)
     if not main_kb:
         # Ken Burns 失败：降级为直通（不加效果，确保不阻断）
         log.append("KENBURNS_FALLBACK: 使用原始主片（无效果）")
@@ -415,7 +416,7 @@ def build_fast(in_mp4, out_mp4, tmp, dry_run, log,
 # ----------------------------------------------------------------- 主流程
 def auto_edit(in_mp4, out_mp4, edit_style="fast", name_tag="昆山老张讲财税",
               overlay=None, dry_run=False, title="", subtitle="",
-              transition="simple", no_intro=False):
+              transition="simple", no_intro=False, no_kenburns=False):
     assert edit_style in EDIT_STYLES, f"edit_style must be one of {EDIT_STYLES}"
     assert transition in TRANSITIONS, f"transition must be one of {TRANSITIONS}"
     if not dry_run:
@@ -426,7 +427,7 @@ def auto_edit(in_mp4, out_mp4, edit_style="fast", name_tag="昆山老张讲财�
         rc = build_fast(in_mp4, out_mp4, tmp, dry_run, log,
                         title=title or "昆山老张讲财税",
                         subtitle=subtitle or "财税干货 · 老板必看",
-                        transition=transition, no_intro=no_intro)
+                        transition=transition, no_intro=no_intro, no_kenburns=no_kenburns)
     elif edit_style == "vlog":
         rc = build_vlog(in_mp4, out_mp4, tmp, dry_run, log, name_tag=name_tag)
     elif edit_style == "pip":
@@ -457,11 +458,14 @@ def main():
                     help="转场模式: simple(淡入淡出+concat, 可靠) | xfade(真交叉渐变, 高级)")
     ap.add_argument("--no-intro", action="store_true",
                     help="跳过片头卡（成片已自带片头时使用，避免双重片头）")
+    ap.add_argument("--no-kenburns", action="store_true",
+                    help="跳过 Ken Burns 缩放（数字人已自带运动，且缩放会裁切已烧录字幕）")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     rc, man = auto_edit(args.input, args.output, args.edit_style,
                          args.name_tag, args.overlay, args.dry_run,
-                         args.title, args.subtitle, args.transition, args.no_intro)
+                         args.title, args.subtitle, args.transition,
+                         args.no_intro, args.no_kenburns)
     if args.dry_run:
         print("\n".join(man["log"]))
     print(f"auto_edit[{args.edit_style}/{args.transition}] rc={rc} -> {args.output}")
