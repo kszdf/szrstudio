@@ -305,8 +305,29 @@ def _build_kenburns_main(in_mp4, tmp, dry_run, log, transition="simple"):
     return (out, dur) if rc == 0 else (None, 0.0)
 
 
-def _build_fast_simple(intro_m, main_kb, outro_m, in_mp4, out_mp4, dry_run, log):
-    """Simple 转场：concat（硬切但被 fade 掩盖）+ 音频接回。最可靠路径。
+def _final_mux(silent, audio_src, out, bgm, dry_run, log):
+    """视频(silent，含片头/片尾卡拼接) + 原音频(audio_src) 合成。
+    可选 BGM：低音量(0.10≈-20dB)混入，开头淡入、成片结束前淡出，不盖人声。"""
+    if bgm and os.path.exists(bgm):
+        dur = _probe_duration(audio_src) or 30.0
+        fade_out = max(2.0, dur - 3.0)
+        fc = (
+            "[1:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[v0];"
+            f"[2:a]volume=0.10,afade=t=in:d=2,afade=t=out:st={fade_out:.2f}:d=3[bgm];"
+            "[v0][bgm]amix=inputs=2:duration=first:normalize=0[a]"
+        )
+        cmd = [FFMPEG, "-y", "-i", silent, "-i", audio_src, "-i", bgm,
+               "-filter_complex", fc, "-map", "0:v:0", "-map", "[a]",
+               "-c:v", "copy", "-c:a", "aac", out]
+    else:
+        cmd = [FFMPEG, "-y", "-i", silent, "-i", audio_src,
+               "-map", "0:v:0", "-map", "1:a:0?",
+               "-c:v", "copy", "-c:a", "aac", out]
+    return _run(cmd, dry_run, log)
+
+
+def _build_fast_simple(intro_m, main_kb, outro_m, in_mp4, out_mp4, dry_run, log, bgm=None):
+    """Simple 转场：concat（硬切但被 fade 掩盖）+ 音频接回 + 可选 BGM。
     intro_m=None 时跳过片头（主片 + 片尾卡 两段拼接）。"""
     silent = os.path.join(os.path.dirname(main_kb), "silent_concat.mp4")
     if intro_m:
@@ -323,11 +344,8 @@ def _build_fast_simple(intro_m, main_kb, outro_m, in_mp4, out_mp4, dry_run, log)
                     "-pix_fmt", "yuv420p", silent], dry_run, log)
     if rc != 0:
         return rc
-    # Mux original audio back (intro/outro silent, main audio plays through)
-    # 注意：不加 -shortest——否则音频(主片)短于拼接视频(主片+片尾卡)时片尾卡被截掉。
-    return _run([FFMPEG, "-y", "-i", silent, "-i", in_mp4,
-                "-map", "0:v:0", "-map", "1:a:0?",
-                "-c:v", "copy", "-c:a", "aac", out_mp4], dry_run, log)
+    # 合成音频（含可选 BGM）。注意：不用 -shortest——否则音频(主片)短于视频(主片+片尾卡)时片尾卡被截掉。
+    return _final_mux(silent, in_mp4, out_mp4, bgm, dry_run, log)
 
 
 def _build_fast_xfade(intro_m, main_kb, outro_m, in_mp4, out_mp4, dur, dry_run, log):
@@ -370,7 +388,7 @@ def _build_fast_xfade(intro_m, main_kb, outro_m, in_mp4, out_mp4, dur, dry_run, 
 
 def build_fast(in_mp4, out_mp4, tmp, dry_run, log,
                title="追梦", subtitle="短视频智能生产平台", transition="simple",
-               no_intro=False, no_kenburns=False):
+               no_intro=False, no_kenburns=False, bgm=None):
     """Fast 风格：片头卡(可跳过) + Ken Burns 主片(可跳过) + 平滑转场 + CTA 片尾卡。
     no_intro=True 跳过片头卡（成片自带片头）；no_kenburns=True 跳过缩放动效
     （数字人已自带运动，且缩放会裁切已烧录字幕导致 QC 贴边误判）。"""
@@ -402,21 +420,21 @@ def build_fast(in_mp4, out_mp4, tmp, dry_run, log,
 
     if no_intro:
         # 无片头：直接主片 + 片尾卡（intro_m=None）
-        rc = _build_fast_simple(None, main_kb, outro_m, in_mp4, out_mp4, dry_run, log)
+        rc = _build_fast_simple(None, main_kb, outro_m, in_mp4, out_mp4, dry_run, log, bgm=bgm)
     elif transition == "xfade":
         rc = _build_fast_xfade(intro_m, main_kb, outro_m, in_mp4, out_mp4, dur, dry_run, log)
         if rc != 0:
             log.append("XFAD_FALLBACK: xfade 失败，降级为 simple 转场")
-            rc = _build_fast_simple(intro_m, main_kb, outro_m, in_mp4, out_mp4, dry_run, log)
+            rc = _build_fast_simple(intro_m, main_kb, outro_m, in_mp4, out_mp4, dry_run, log, bgm=bgm)
     else:
-        rc = _build_fast_simple(intro_m, main_kb, outro_m, in_mp4, out_mp4, dry_run, log)
+        rc = _build_fast_simple(intro_m, main_kb, outro_m, in_mp4, out_mp4, dry_run, log, bgm=bgm)
     return rc
 
 
 # ----------------------------------------------------------------- 主流程
 def auto_edit(in_mp4, out_mp4, edit_style="fast", name_tag="昆山老张讲财税",
               overlay=None, dry_run=False, title="", subtitle="",
-              transition="simple", no_intro=False, no_kenburns=False):
+              transition="simple", no_intro=False, no_kenburns=False, bgm=None):
     assert edit_style in EDIT_STYLES, f"edit_style must be one of {EDIT_STYLES}"
     assert transition in TRANSITIONS, f"transition must be one of {TRANSITIONS}"
     if not dry_run:
@@ -427,7 +445,8 @@ def auto_edit(in_mp4, out_mp4, edit_style="fast", name_tag="昆山老张讲财�
         rc = build_fast(in_mp4, out_mp4, tmp, dry_run, log,
                         title=title or "昆山老张讲财税",
                         subtitle=subtitle or "财税干货 · 老板必看",
-                        transition=transition, no_intro=no_intro, no_kenburns=no_kenburns)
+                        transition=transition, no_intro=no_intro, no_kenburns=no_kenburns,
+                        bgm=bgm)
     elif edit_style == "vlog":
         rc = build_vlog(in_mp4, out_mp4, tmp, dry_run, log, name_tag=name_tag)
     elif edit_style == "pip":
@@ -460,12 +479,13 @@ def main():
                     help="跳过片头卡（成片已自带片头时使用，避免双重片头）")
     ap.add_argument("--no-kenburns", action="store_true",
                     help="跳过 Ken Burns 缩放（数字人已自带运动，且缩放会裁切已烧录字幕）")
+    ap.add_argument("--bgm", default=None, help="背景音乐 WAV 路径（可选，低音量混入）")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     rc, man = auto_edit(args.input, args.output, args.edit_style,
                          args.name_tag, args.overlay, args.dry_run,
                          args.title, args.subtitle, args.transition,
-                         args.no_intro, args.no_kenburns)
+                         args.no_intro, args.no_kenburns, args.bgm)
     if args.dry_run:
         print("\n".join(man["log"]))
     print(f"auto_edit[{args.edit_style}/{args.transition}] rc={rc} -> {args.output}")
