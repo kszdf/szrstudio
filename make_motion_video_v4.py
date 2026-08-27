@@ -68,8 +68,9 @@ TRANS = 0.7          # 转场时长(秒), 加长到能看清
 ENTR = 0.6           # 入场动画时长(秒)
 
 # 转场类型(按场景序号循环, 制造节奏变化, 破解"每幕都一样"的单调)
+# v5.2: 移除 flash(白闪)/glitch(故障抖) —— 真实视频背景+这些强闪转场="一直闪"(用户反馈)
 TRANS_TYPES = ["wipe_lr", "wipe_tb", "zoom", "fade", "slide_lr", "iris",
-               "blur_fade", "flash", "push", "soft_rotate", "glitch", "luma"]
+               "blur_fade", "push", "soft_rotate", "luma"]
 # 插画风格轮替(每幕换一种观感, 但保持财税专业家族感, 不撞款)
 # 统一约束：真实摄影写实风(杜绝插画/卡通/扁平矢量), 深色专业底 + 自然光影
 # v5 定稿：背景一律「无人物风景/城市景观」(用户要求不要人物出镜背景)
@@ -616,14 +617,15 @@ def _render_scene(sc, pal, idx, local, scdur, base_img, t_global=0.0):
     if gif_path is not None:
         base, base_kind = gif_frame_at(gif_path, t_global), "gif"
     elif isinstance(base_img, str):
-        # AI 文生视频背景(imgs 里存的是 mp4 路径): 抽帧循环当动态底图
+        # AI 文生视频背景(imgs 里存的是 mp4 路径): 抽帧按**幕内时间**播放(不循环硬切)
+        # 之前用全局时间取模循环, 15帧=1.5s就跳回第0帧, 首尾画面差异大 → 一直闪(用户反馈)
         frames = _frames_from_path(base_img)
         if frames:
-            base, base_kind = frames[int(t_global * 10) % len(frames)], "video"
+            base, base_kind = frames[min(int(local * 10), len(frames) - 1)], "video"
         else:
             base, base_kind = _real_bg_photo(sc, t_global), "still"
     else:
-        stock_base = _stock_bg(sc, t_global)
+        stock_base = _stock_bg(sc, local)
         if stock_base is not None:
             base, base_kind = stock_base, "video"
         elif base_img is not None:
@@ -782,8 +784,8 @@ SHARED_FRAMES_DIR = BASE / "storage" / "wanx_videos" / "frames"
 def _frames_key(path):
     return hashlib.md5(str(path).encode("utf-8")).hexdigest()
 
-def _video_frames(path, fps=10, max_sec=1.5):
-    """把素材视频抽成 1080x1920 等比裁切帧序列(10fps, 截前 max_sec 秒循环, JPEG q88 省内存)；
+def _video_frames(path, fps=10, max_sec=3.5):
+    """把素材视频抽成 1080x1920 等比裁切帧序列(10fps, 截前 max_sec 秒, JPEG q92 省内存)；
     persist=True 时同时写共享盘缓存(幂等, 已存在则跳过), 供多进程渲染worker直接加载。
     失败返回 None。"""
     d = TMP / ("stock_frames_" + uuid.uuid4().hex[:8])
@@ -807,7 +809,7 @@ def _video_frames(path, fps=10, max_sec=1.5):
                 try:
                     fdir.mkdir(parents=True, exist_ok=True)
                     for idx, f in enumerate(frames):
-                        f.save(fdir / f"f_{idx:03d}{_FRAME_EXT}", "JPEG", quality=88)
+                        f.save(fdir / f"f_{idx:03d}{_FRAME_EXT}", "JPEG", quality=92)
                 except Exception as e:
                     print(f"      [stock] 共享帧写盘失败: {str(e)[:80]}")
         return frames
@@ -856,8 +858,8 @@ def _frames_from_path(path):
         print(f"      [stock] 素材帧失败: {str(e)[:120]}")
         return None
 
-def _stock_bg(sc, t_global=0.0):
-    """按场景取真实素材视频当前帧(循环播放)；未启用/无素材返回 None。"""
+def _stock_bg(sc, local=0.0):
+    """按场景取真实素材视频当前帧(幕内时间播放, 不循环硬切)；未启用/无素材返回 None。"""
     if not _stock_enabled():
         return None
     try:
@@ -871,8 +873,7 @@ def _stock_bg(sc, t_global=0.0):
         frames = _frames_from_path(clip)
         if not frames:
             return None
-        i = int(t_global * 10) % len(frames)
-        return frames[i]
+        return frames[min(int(local * 10), len(frames) - 1)]
     except Exception:
         return None
 
