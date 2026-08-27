@@ -47,8 +47,9 @@ DEFAULT_MODEL = "cosyvoice-v3-plus"
 DEFAULT_SPEECH_RATE = 1.0
 
 
-def synth(text, voice, out_path, model=DEFAULT_MODEL, speech_rate=DEFAULT_SPEECH_RATE, pitch_rate=1.0, volume=50, retries=3, timeout=90):
-    """合成单条文本 -> 保存 wav。失败自动重试。带超时保护（防 dashscope 网络卡死无限阻塞）。"""
+def synth(text, voice, out_path, model=DEFAULT_MODEL, speech_rate=DEFAULT_SPEECH_RATE, pitch_rate=1.0, volume=50, retries=3, timeout=90, instruction=""):
+    """合成单条文本 -> 保存 wav。失败自动重试。带超时保护（防 dashscope 网络卡死无限阻塞）。
+    instruction: CosyVoice v3 风格指令(文本描述语气/语速/情感), 空则不注入(保持原行为)。"""
     if not voice:
         raise ValueError(
             "voice_id 为空：租户尚未克隆或选择声音。请先在「声音」页克隆专属音色或选择公开模板后再生成。"
@@ -59,7 +60,7 @@ def synth(text, voice, out_path, model=DEFAULT_MODEL, speech_rate=DEFAULT_SPEECH
     last_err = None
     for i in range(retries):
         try:
-            synth = SpeechSynthesizer(
+            kw = dict(
                 model=model,
                 voice=voice,
                 format=AudioFormat.WAV_22050HZ_MONO_16BIT,
@@ -68,11 +69,14 @@ def synth(text, voice, out_path, model=DEFAULT_MODEL, speech_rate=DEFAULT_SPEECH
                 volume=volume,
                 language_hints=["zh"],
             )
+            if instruction and instruction.strip():
+                kw["instruction"] = instruction.strip()
+            synth_ = SpeechSynthesizer(**kw)
             # 用守护线程 + 超时包裹 call，防止网络卡死时无限阻塞
             box = {}
             def _call():
                 try:
-                    box["audio"] = synth.call(text=text)
+                    box["audio"] = synth_.call(text=text)
                 except Exception as _e:  # noqa: BLE001
                     box["err"] = _e
             t = threading.Thread(target=_call, daemon=True)
@@ -92,7 +96,7 @@ def synth(text, voice, out_path, model=DEFAULT_MODEL, speech_rate=DEFAULT_SPEECH
                     "cwd": _os.getcwd(),
                     "has_key": bool(_os.environ.get("DASHSCOPE_API_KEY")),
                     "key_head": (_os.environ.get("DASHSCOPE_API_KEY") or "")[:8],
-                    "last_error": str(getattr(synth, "last_error", "") or ""),
+                    "last_error": str(getattr(synth_, "last_error", "") or ""),
                 }
                 raise RuntimeError(f"返回内容异常: type={type(audio_bytes).__name__}, len={len(audio_bytes) if hasattr(audio_bytes, '__len__') else '?'} DBG={_dbg}")
             Path(out_path).parent.mkdir(parents=True, exist_ok=True)
@@ -102,7 +106,7 @@ def synth(text, voice, out_path, model=DEFAULT_MODEL, speech_rate=DEFAULT_SPEECH
         except Exception as e:
             le = ""
             try:
-                le = str(getattr(synth, "last_error", "") or "")
+                le = str(getattr(synth_, "last_error", "") or "")
             except Exception:
                 pass
             last_err = f"{type(e).__name__}: {e}" + (f" | last_error={le}" if le else "")
@@ -127,30 +131,33 @@ def _split_sentences(text):
     return [s for s in sents if s.strip()]
 
 
-def _sentence_pace(sent, base_rate=0.92):
+def _sentence_pace(sent, base_rate=0.85):
     """返回 (speech_rate, pause_after_ms, lead_ms)。
     lead_ms = 句前吸气停顿（重点/警示句前留白，制造"先顿一下再说"的真人感）。
-    引导/结论/提醒句放慢并加长停顿, 列举密集句正常偏快。"""
+    引导/结论/提醒句放慢并加长停顿, 列举密集句正常偏快。
+    v2(2026-08-27): 整体语速下调(用户反馈"男声太快太AI"): 普通 0.92→0.85, 警示 0.90→0.84。"""
     slow_kw = ["先说清楚", "再提醒", "比如", "其实", "要注意", "还要提醒",
                "别", "不能", "不是", "红线", "谨慎", "务必", "别抱",
                "记住", "注意", "重点", "关键", "一定"]
     lead_ms = 0
     if any(k in sent for k in slow_kw):
-        rate, base = 0.90, 550     # 放慢但不过分拖（0.82 叠加情绪后≈0.85 太慢）
-        lead_ms = 180              # 警示/结论句前吸气停顿
+        rate, base = 0.84, 600     # 警示/结论句: 放慢 + 更长的句后停顿
+        lead_ms = 200              # 警示/结论句前吸气停顿
     elif sent.count("、") >= 2:
-        rate, base = 1.0, 320
+        rate, base = 0.96, 340     # 列举密集句: 略快但仍有呼吸
     else:
-        rate, base = base_rate, 450
+        rate, base = base_rate, 480
     s = sent.rstrip()
     if s.endswith(("？", "！", "?", "!")):
         base += 150
     return rate, base, lead_ms
 
 
-def synth_natural(text, voice, out_path, model=DEFAULT_MODEL, base_rate=0.92, retries=3):
+# 注意: CosyVoice v3-plus 当前接口不接受 instruction 风格指令(实测返回 None, 2026-08-27),
+# 自然度靠: 语速放慢 + 句间停顿 + 警示句前吸气停顿 实现。
+def synth_natural(text, voice, out_path, model=DEFAULT_MODEL, base_rate=0.85, retries=3):
     """分句合成 + 逐句语速 + 句间静音, 解决'机械匀速无停顿'的 AI 痕迹。
-    引导/结论句放慢到 0.82 并加长停顿, 列举密集句保持 1.0, 其余 0.92。"""
+    引导/结论句放慢到 0.84 并加长停顿, 列举密集句 0.96, 其余 0.85。"""
     import wave, os
     if not voice:
         raise ValueError(

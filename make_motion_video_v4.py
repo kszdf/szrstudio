@@ -648,9 +648,11 @@ def _render_scene(sc, pal, idx, local, scdur, base_img, t_global=0.0):
         else:
             sca, dx, dy = 1.0, 0, 0
     img = kb_zoom(base, sca * breathe, dx, dy).convert("RGBA")
-    # 动态化: 扫光 + 上浮粒子(仿动态GIF的流动高光/光点)
-    img = _light_sweep(img, t_global)
-    img = _particles(img, t_global, pal)
+    if base_kind == "still":
+        # 只有静态底图才叠人造动态(扫光+粒子): GIF/AI视频等真实动态底图自带运动,
+        # 再叠扫光粒子会变成"闪光一直闪不停"的廉价感(用户反馈, 2026-08-27 修复)
+        img = _light_sweep(img, t_global)
+        img = _particles(img, t_global, pal)
     img = _edge_vignette(img)
     dt, db = dark_overlay()
     img = Image.alpha_composite(img, dt)
