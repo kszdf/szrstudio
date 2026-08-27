@@ -38,7 +38,7 @@ if not os.path.exists(FONT_PATH):
             FONT_PATH = _fp
             break
 
-BRAND = "追梦 · 数字人"
+BRAND = "昆山老张讲财税"   # 封面品牌水印（平台可经 --brand / 租户设置覆盖）
 # 靛蓝主色 + 青色点缀（与 DESIGN.md token 一致）
 C_PRIMARY = (79, 70, 229)
 C_ACCENT = (6, 182, 212)
@@ -371,8 +371,8 @@ def _apply_panel(img, title, subtitle):
         d.line([(W // 2 - title_w / 2 + i, line_y), (W // 2 - title_w / 2 + i + 4, line_y)],
                fill=(212, 175, 92, a), width=3)
 
-    # 底部品牌小字（字距拉开，极浅）
-    _spaced_text(img, W // 2, H - 92, "追梦财税 · 每日干货", _load_font(32), (118, 126, 142), spacing=10)
+    # 底部品牌小字（字距拉开，极浅；品牌已在右上角水印，此处只留通用提示）
+    _spaced_text(img, W // 2, H - 92, "每日财税干货", _load_font(32), (118, 126, 142), spacing=10)
 
 
 def compose_from_photo(photo_path, out_path, title, subtitle, aspect="9:16", brand=BRAND):
@@ -457,14 +457,14 @@ def cover_qc(cover_path, target_w, target_h):
 
 
 # ----------------------------------------------------------------- 主流程
-def make_cover(video, out_path, title="", subtitle="", platform="", dry_run=False):
+def make_cover(video, out_path, title="", subtitle="", platform="", dry_run=False, brand=BRAND):
     assert os.path.exists(video), f"video not found: {video}"
     aspect = PLATFORM_ASPECT.get((platform or "").lower(), "4:5")
     W, H = ASPECTS.get(aspect, ASPECTS["4:5"])
     if dry_run:
         return 0, {"aspect": aspect, "output": out_path, "rc": 0,
                    "log": [f"CV2: select_best_frames({video}, n=16) -> score-sorted",
-                           f"PIL: compose_cover(aspect={aspect}, title='{title}') -> {out_path}",
+                           f"PIL: compose_cover(aspect={aspect}, title='{title}', brand='{brand}') -> {out_path}",
                            f"QC: cover_qc({out_path}) 分辨率 {W}x{H}"],
                    "dry_run": True}
     cands = select_best_frames(video, n=16)
@@ -477,7 +477,7 @@ def make_cover(video, out_path, title="", subtitle="", platform="", dry_run=Fals
         tint = dominant_color(cand["frame"])
         try:
             _, rlum, nlines = compose_cover(cand["frame"], out_path, title, subtitle,
-                                            aspect, face=cand["face"], tint=tint)
+                                            aspect, face=cand["face"], tint=tint, brand=brand)
         except Exception as e:
             last_qc = {"ok": False, "issues": [f"合成异常: {e}"]}
             continue
@@ -503,11 +503,12 @@ def main():
     ap.add_argument("--title", default="", help="封面主标题")
     ap.add_argument("--subtitle", default="", help="封面副标题")
     ap.add_argument("--platform", default="", help="douyin/video/xhs/red/square")
+    ap.add_argument("--brand", default=BRAND, help="封面品牌水印文字")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--json", action="store_true", help="以 JSON 输出完整质检报告（供服务端解析门禁）")
     args = ap.parse_args()
     rc, man = make_cover(args.input, args.output, args.title, args.subtitle,
-                         args.platform, args.dry_run)
+                         args.platform, args.dry_run, args.brand)
     if args.dry_run:
         print("\n".join(man["log"]))
     if args.json:
