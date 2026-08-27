@@ -1384,6 +1384,14 @@ def main():
         segs = parse_dialogue(raw, default_role=args.default_role)
         if not segs:
             sys.exit("对话模式未解析到对话(需以 女：/男： 开头)")
+        # 独白稿修复: 无角色前缀的整段文本会被 parse_dialogue 合并成 1 条(同角色相邻合并),
+        # 导致全片只有 1 幕 1 个背景。按句切分恢复多幕(保持同一角色, 多幕=多背景多画面)。
+        if len(segs) == 1 and segs[0]["role"] in ("M", "F"):
+            parts = split_sentences(segs[0]["text"])
+            segs = [{"role": segs[0]["role"], "text": p.strip()}
+                    for p in parts if p and p.strip()]
+        if not segs:
+            sys.exit("对话模式未解析到对话(需以 女：/男： 开头)")
         dlg_audio = out.with_suffix(".dialogue.wav")
         dur, tl = build_dialogue_audio(segs, str(dlg_audio), tts_workers=args.tts_workers)
         args.audio = str(dlg_audio)
