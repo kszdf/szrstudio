@@ -773,8 +773,15 @@ def _stock_enabled():
             STOCK_ENABLED = False
     return STOCK_ENABLED
 
-def _video_frames(path, fps=10, max_sec=2.0):
+# 共享帧缓存: 主进程渲染前预抽帧写盘, 12个渲染worker直接加载PNG(不再各自跑ffmpeg)
+SHARED_FRAMES_DIR = BASE / "storage" / "wanx_videos" / "frames"
+
+def _frames_key(path):
+    return hashlib.md5(str(path).encode("utf-8")).hexdigest()
+
+def _video_frames(path, fps=10, max_sec=2.0, persist=True):
     """把素材视频抽成 1080x1920 等比裁切帧序列(10fps, 截前 max_sec 秒循环, RGB省内存)；
+    persist=True 时同时写共享盘缓存(幂等, 已存在则跳过), 供多进程渲染worker直接加载。
     失败返回 None。"""
     d = TMP / ("stock_frames_" + uuid.uuid4().hex[:8])
     try:
@@ -789,21 +796,49 @@ def _video_frames(path, fps=10, max_sec=2.0):
             print(f"      [stock] 抽帧失败: {str(r.stderr)[-160:]}")
             return None
         frames = [Image.open(p).convert("RGB") for p in sorted(d.glob("f*.png"))]
-        return frames or None
+        if not frames:
+            return None
+        if persist:
+            fdir = SHARED_FRAMES_DIR / _frames_key(path)
+            if not (fdir.exists() and any(fdir.glob("f_*.png"))):
+                try:
+                    fdir.mkdir(parents=True, exist_ok=True)
+                    for idx, f in enumerate(frames):
+                        f.save(fdir / f"f_{idx:03d}.png")
+                except Exception as e:
+                    print(f"      [stock] 共享帧写盘失败: {str(e)[:80]}")
+        return frames
     except Exception as e:
         print(f"      [stock] 抽帧异常: {str(e)[:120]}")
         return None
     finally:
         shutil.rmtree(d, ignore_errors=True)
 
+def _warm_frames(path):
+    """主进程预热: 预生成共享帧缓存(只写盘, 不入内存), 渲染worker直接加载不再各自ffmpeg抽帧。"""
+    try:
+        fdir = SHARED_FRAMES_DIR / _frames_key(path)
+        if fdir.exists() and any(fdir.glob("f_*.png")):
+            return
+        _video_frames(path, persist=True)
+    except Exception:
+        pass
+
 def _frames_from_path(path):
-    """按视频路径取帧序列(LRU多槽缓存: 转场时 prev/cur 两幕同时命中, 不重复ffmpeg抽帧)。"""
+    """按视频路径取帧序列: 共享盘缓存优先(worker直接加载PNG), 否则抽帧; LRU多槽缓存。"""
     if path in _STOCK_FRAMES:
         _STOCK_ORDER.remove(path)
         _STOCK_ORDER.append(path)
         return _STOCK_FRAMES[path]
     try:
-        frames = _video_frames(path)
+        frames = None
+        fdir = SHARED_FRAMES_DIR / _frames_key(path)
+        if fdir.exists():
+            pngs = sorted(fdir.glob("f_*.png"))
+            if pngs:
+                frames = [Image.open(p).convert("RGB") for p in pngs]
+        if frames is None:
+            frames = _video_frames(path, persist=True)
         if not frames:
             _STOCK_FRAMES[path] = None
             _STOCK_ORDER.append(path)
@@ -1553,6 +1588,13 @@ def main():
                     imgs[i] = img
                     done += 1
                     print(f"      [{done}/{len(need)}] 生图OK: {sb[i]['title']}")
+
+    # AI 视频背景预热: 主进程预抽帧写共享盘缓存, 12个渲染worker直接加载PNG(不再各自跑ffmpeg)
+    video_paths = [p for p in imgs if isinstance(p, str)]
+    if video_paths:
+        print(f"[3.5/6] 预抽 AI 视频背景帧 {len(video_paths)} 段(共享缓存) ...")
+        for p in video_paths:
+            _warm_frames(p)
 
     frames_dir = TMP / f"frames_{uuid.uuid4().hex[:8]}"
     frames_dir.mkdir(parents=True, exist_ok=True)
