@@ -47,10 +47,11 @@ ASPECTS = {            # 画幅预设（宽,高）
     "4:5": (1080, 1350),
     "3:4": (1080, 1440),
     "1:1": (1080, 1080),
+    "9:16": (1080, 1920),   # 与出片画幅一致：零裁切零拉伸，杜绝变形
 }
 PLATFORM_ASPECT = {
-    "douyin": "4:5", "video": "4:5", "wechat": "4:5", "xhs": "3:4",
-    "red": "3:4", "redbook": "3:4", "square": "1:1", "": "4:5",
+    "douyin": "9:16", "video": "9:16", "wechat": "9:16", "xhs": "3:4",
+    "red": "3:4", "redbook": "3:4", "square": "1:1", "": "9:16",
 }
 
 # 人脸级联（优先用脚本同目录自带的 xml，离线可用；缺失则跳过，仅作软信号）
@@ -207,8 +208,10 @@ def compose_cover(frame_bgr, out_path, title, subtitle, aspect="4:5",
     src_aspect = iw / ih
     tgt_aspect = W / H
 
-    # 计算裁剪窗口（COVER，无拉伸）：横向不足则裁宽，纵向不足则裁高
-    if src_aspect < tgt_aspect:
+    # 计算裁剪窗口（COVER，无拉伸）：源更宽则裁左右，源更窄(竖屏)则裁上下。
+    # 注意分支方向：src_aspect < tgt_aspect 表示源更竖 → 裁上下（ch 变小），
+    # 此前写反导致 9:16 源配 4:5 目标时裁宽超源宽 → 非法区域 + 拉伸变形。
+    if src_aspect > tgt_aspect:
         cw = int(ih * tgt_aspect); ch = ih
     else:
         cw = iw; ch = int(iw / tgt_aspect)
@@ -247,51 +250,40 @@ def compose_cover(frame_bgr, out_path, title, subtitle, aspect="4:5",
         for y in range(top_h):
             a = int(150 * (1 - y / top_h))
             d.line([(0, y), (W, y)], fill=(tr, tg, tb, a))
-    # 底部暗渐变（保标题可读）
-    grad_h = int(H * 0.46)
-    for y in range(grad_h):
-        a = int(210 * (y / grad_h))
-        d.line([(0, H - grad_h + y), (W, H - grad_h + y)], fill=(0, 0, 0, a))
+    # 底部标题面板：半透明深色渐变 + 金线 + 副标题(上) + 主标题(下)，保证任意画面可读。
+    # 面板从 54% 高度起，人脸构图区(上 1/3)保持干净。
+    gold = (212, 175, 92)
+    panel_top = int(H * 0.54)
+    for y in range(panel_top, H):
+        t = (y - panel_top) / max(1, H - panel_top)
+        a = int(60 + 120 * t)
+        d.line([(0, y), (W, y)], fill=(8, 10, 16, a))
+    d.line([(60, panel_top), (W - 60, panel_top)], fill=gold, width=3)   # 顶部金线
 
-    # 采样标题区亮度 → 决定文字明暗（自动对比度，防看不清）
-    region = img.crop((0, H - grad_h, W, H))
-    rlum = float(np.asarray(region.convert("L")).mean())
-    if rlum > 150:
-        txt_fill, stroke_fill = (15, 23, 42), (255, 255, 255)
-    else:
-        txt_fill, stroke_fill = (255, 255, 255), (0, 0, 0)
+    # 副标题（浅灰，限 2 行，放主标题上方作引导）
+    sub_lines = []
+    if subtitle:
+        sf = _load_font(44)
+        sub_lines = _wrap(subtitle, d, sf, W - 200)[:2]
+    sy = int(H * 0.585)
+    for ln in sub_lines:
+        w = d.textlength(ln, font=sf)
+        d.text((W // 2 - w / 2, sy), ln, font=sf, fill=(208, 212, 222))
+        sy += int(sf.getbbox("测")[3] * 1.25)
 
-    # 中央播放按钮（半透明圆 + 三角，品牌暗示）
-    cxn, cyn = W // 2, int(H * 0.40)
-    r = int(min(W, H) * 0.11)
-    d.ellipse([cxn - r, cyn - r, cxn + r, cyn + r], fill=(255, 255, 255, 55),
-              outline=(255, 255, 255, 175), width=6)
-    tri = [(cxn - r * 0.42, cyn - r * 0.55), (cxn - r * 0.42, cyn + r * 0.55),
-           (cxn + r * 0.62, cyn)]
-    d.polygon(tri, fill=(255, 255, 255, 205))
-
-    # 标题（自适应字号，多行居中，带描边防错位/看不清）
-    tf, title_lines, lh = _fit_title(d, title or "", W - 110, grad_h - 110)
-    block_h = lh * len(title_lines)
-    ty = H - grad_h + 46
-    sw = max(2, tf.getbbox("测")[3] // 14)
+    # 主标题（自适应大字，≤2 行，居中，白字+深描边）
+    tf, title_lines, lh = _fit_title(d, title or "", W - 160, int(H * 0.30))
+    ty = int(H * 0.66)
+    sw = max(2, tf.getbbox("测")[3] // 13)
     for i, ln in enumerate(title_lines):
         y = ty + i * lh
         w = d.textlength(ln, font=tf)
         x = W // 2 - w / 2
-        # 描边：先画深色/浅色底字再画主字
-        d.text((x, y), ln, font=tf, fill=stroke_fill)
-        d.text((x, y), ln, font=tf, fill=txt_fill, stroke_width=sw, stroke_fill=stroke_fill)
+        d.text((x, y), ln, font=tf, fill=(255, 255, 255), stroke_width=sw, stroke_fill=(10, 14, 22))
 
-    # 副标题（浅灰，限 2 行）
-    if subtitle:
-        sf = _load_font(42)
-        sub_lines = _wrap(subtitle, d, sf, W - 150)[:2]
-        sy = ty + block_h + 16
-        for ln in sub_lines:
-            w = d.textlength(ln, font=sf)
-            d.text((W // 2 - w / 2, sy), ln, font=sf, fill=(226, 232, 240))
-            sy += sf.getbbox("测")[3] + 12
+    # 底部小字（品牌域提示，极浅）
+    bf2 = _load_font(34)
+    d.text((W // 2, H - 88), "追梦财税 · 每日干货", font=bf2, fill=(120, 128, 142), anchor="mm")
 
     # 品牌水印（右上，圆角胶囊底 + 青色描边）
     bf = _load_font(40)
@@ -302,7 +294,7 @@ def compose_cover(frame_bgr, out_path, title, subtitle, aspect="4:5",
     d.text((bx + 28, by + 18), brand, font=bf, fill=(255, 255, 255))
 
     img.convert("RGB").save(out_path, quality=95)
-    return out_path, rlum, len(title_lines)
+    return out_path, 0, len(title_lines)
 
 
 # ----------------------------------------------------------------- 封面 QC
