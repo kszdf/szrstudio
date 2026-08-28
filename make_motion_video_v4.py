@@ -312,15 +312,16 @@ def dark_overlay():
 
 # ============================== 文字浮层 ==============================
 def draw_title(img, text, cx, cy, size, fill, anchor="mm"):
-    """顶部标题渲染（带防溢出：按像素换行 + 超长自动缩字号，绝不溢出屏幕）。"""
+    """顶部标题渲染（带防溢出：按像素换行 + 超长自动缩字号，绝不溢出屏幕）。
+    2026-08-28 用户要求标题加粗: 衬线体 serif → 微软雅黑粗体(sans, msyhbd) + 宽描边。"""
     d = ImageDraw.Draw(img)
     max_w = W - 120          # 左右各留 60px 安全边距
     # 自适应字号：从 size 往下试，直到标题 ≤2 行且不超宽
-    f = font(size, "serif")
+    f = font(size, "sans")
     lines = _wrap_px(text, d, f, max_w)
     while (len(lines) > 2 or any(d.textlength(ln, font=f) > max_w for ln in lines)) and size > 40:
         size -= 6
-        f = font(size, "serif")
+        f = font(size, "sans")
         lines = _wrap_px(text, d, f, max_w)
     lines = lines[:2]        # 最多 2 行，超出截断
     line_h = int(size * 1.15)
@@ -329,7 +330,8 @@ def draw_title(img, text, cx, cy, size, fill, anchor="mm"):
     for i, ln in enumerate(lines):
         y = start_y + i * line_h
         d.text((cx + 4, y + 4), ln, font=f, fill=(0, 0, 0), anchor=anchor)
-        d.text((cx, y), ln, font=f, fill=fill, anchor=anchor)
+        d.text((cx, y), ln, font=f, fill=fill, anchor=anchor,
+               stroke_width=5, stroke_fill=(0, 0, 0))
 
 def _split_fragments(line, keywords):
     """把一行按关键词切成 [(文本, 是否关键词)] 片段, 关键词作为一个整体不拆开。"""
