@@ -219,7 +219,7 @@ def build_artistic(in_mp4, out_mp4, tmp, dry_run, log):
           "drawbox=x=0:y=0:w=1080:h=200:color=black:t=fill,"
           "drawbox=x=0:y=1720:w=1080:h=200:color=black:t=fill,"
           "colorbalance=rs=0.10:gs=-0.02:bs=-0.10,"
-          "vignette=0.28:0.5,format=yuv420p")
+          "vignette=0.10:0.35,format=yuv420p")   # 2026-08-28 用户反馈"右半圆"观感: vignette 0.28 暗角过强成弧形, 减弱为 0.10
     return _run([FFMPEG, "-y", "-i", in_mp4, "-vf", vf,
                  "-c:v", "libx264", "-crf", "22", "-pix_fmt", "yuv420p",
                  "-c:a", "copy", out_mp4], dry_run, log)
