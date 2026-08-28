@@ -358,6 +358,7 @@ def draw_text_fragments(d, text, cx, y, sz, pal, reveal=None, keywords=None,
     reveal 非空 = 卡拉OK逐字显亮: 整行全部显示, 未念到的字用暗色(灰), 念到的字才变亮;
     关键词未念时暗色文字, 念到才 accent 胶囊亮起(用户要求 2026-08-28)。"""
     KARA_DIM = (160, 162, 170)   # 未念字的暗色(预设可见但区分; 2026-08-28 提亮保证不费力)
+    KARA_LIT = (255, 219, 120)   # 念到的字: 浅黄色逐字高亮(用户要求 2026-08-28, 替代纯白更醒目)
     f = font(sz, "hei")
     line_w = d.textlength(text, font=f)
     x = (cx - line_w / 2) if align == "center" else cx
@@ -383,10 +384,10 @@ def draw_text_fragments(d, text, cx, y, sz, pal, reveal=None, keywords=None,
                     pos += len(seg); x += seg_w
                     continue
                 if vis < len(seg):
-                    # 半念: 已念部分亮白, 未念部分暗色
+                    # 半念: 已念部分浅黄高亮, 未念部分暗色
                     done_seg, todo_seg = seg[:vis], seg[vis:]
                     done_w = d.textlength(done_seg, font=f)
-                    d.text((x, y), done_seg, font=f, fill=WHITE, anchor="ls",
+                    d.text((x, y), done_seg, font=f, fill=KARA_LIT, anchor="ls",
                            stroke_width=8, stroke_fill=(0, 0, 0))
                     d.text((x + done_w, y), todo_seg, font=f, fill=KARA_DIM, anchor="ls",
                            stroke_width=6, stroke_fill=(0, 0, 0))
@@ -407,7 +408,8 @@ def draw_text_fragments(d, text, cx, y, sz, pal, reveal=None, keywords=None,
                    stroke_width=4, stroke_fill=(0, 0, 0))
             x += kw_w
         else:
-            d.text((x, y), seg, font=f, fill=WHITE, anchor="ls",
+            # 已念完的行: 浅黄高亮(与卡拉OK念到一致)
+            d.text((x, y), seg, font=f, fill=KARA_LIT, anchor="ls",
                    stroke_width=8, stroke_fill=(0, 0, 0))
             x += seg_w
         pos += len(seg)
@@ -728,7 +730,7 @@ def _render_scene(sc, pal, idx, local, scdur, base_img, t_global=0.0):
         img.alpha_composite(panel, (80, ty - 90))
         draw_title(img, title, W // 2, ty, 76, accent)
     else:
-        d.text((W // 2, 250), "财税干货", font=font(40, "hei"), fill=pal["accent2"], anchor="mm")
+        # 2026-08-28 用户要求: 去掉顶部"财税干货"四字, 版面更干净; 标题卡保留(居中偏上)
         card = Image.new("RGBA", (W - 200, 260), (8, 12, 22, 150))
         img.alpha_composite(card, (100, 320))
         draw_title(img, title, W // 2, 450, 84, accent)
