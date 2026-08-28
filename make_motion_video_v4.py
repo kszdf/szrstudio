@@ -1507,30 +1507,14 @@ def main():
 
     sb_path = out.with_suffix(".v4storyboard.json")
     out.parent.mkdir(parents=True, exist_ok=True)
-    # 对话背景切换点放在男声句(用户反馈女声画面闪, 2026-08-28):
-    # 之前女声句开新组 → 背景切换落在女声短句上, 转场占比大 = 女声画面闪烁;
-    # 改为: 男声句开新背景(转场在男声长句进行), 女声句复用上一男声句背景 → 女声说话时背景永远稳定
-    grp_img = None
-    for sc in sb:
-        if sc.get("role") == "M":
-            grp_img = sc.get("image_prompt") or grp_img   # 男声句开新背景(切换点)
-        elif sc.get("role") == "F":
-            if grp_img:
-                sc["image_prompt"] = grp_img              # 女声句复用上一男声背景
-    # 兜底: 男声句无 image_prompt 时从后续借用
-    for i, sc in enumerate(sb):
-        if sc.get("role") == "M" and not sc.get("image_prompt"):
-            for nxt in sb[i:]:
-                if nxt.get("image_prompt"):
-                    sc["image_prompt"] = nxt["image_prompt"]
-                    break
-    # 兜底: 女声句开头仍无背景(如首句)时, 用后续男声句的
-    for i, sc in enumerate(sb):
-        if sc.get("role") == "F" and not sc.get("image_prompt"):
-            for nxt in sb[i:]:
-                if nxt.get("image_prompt"):
-                    sc["image_prompt"] = nxt["image_prompt"]
-                    break
+    # 对话模式全片统一背景(用户最终定夺, 2026-08-28): 整条视频用同一张背景图, 不切换——
+    # 背景切换/短句入场是女声画面闪烁的根源, 反复调修后用户决定换画面方案:
+    # 全片统一背景, 只有字幕/标题在变, 从机制上彻底杜绝闪烁
+    if any(sc.get("role") for sc in sb):
+        unified = next((sc.get("image_prompt") for sc in sb if sc.get("image_prompt")), None)
+        if unified:
+            for sc in sb:
+                sc["image_prompt"] = unified
     sb_path.write_text(json.dumps(
         [{"idx": i, "start": tl[i][0], "end": tl[i][1], "sentence": sentences[i], **sb[i]}
          for i in range(len(sentences))], ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1568,9 +1552,12 @@ def main():
                 imgs.append(None)   # AI视频占位, 成功后 imgs[i] 存 mp4 路径
             elif stock_on:
                 imgs.append(None)   # 真实素材库优先: 渲染期取视频帧; 失败自动降级 real_bg
-            elif sc.get("visual_type") != "scene":
-                imgs.append(None)   # 非 scene 用代码绘制, 不联网生图
+            elif sc.get("visual_type") != "scene" and not sc.get("role"):
+                imgs.append(None)   # 非scene非对话句: 代码绘制, 不联网生图
             else:
+                # scene 句 或 对话句(带role, 全片统一背景): 生图
+                # 关键: 对话句之前不走生图落到 real_bg 照片库按句轮换 = 女声画面闪烁的隐藏根源;
+                # 全片统一背景后, 对话句也生成(缓存命中同一张)统一背景图
                 style = IMG_STYLES[i % len(IMG_STYLES)]
                 prompt = sc["image_prompt"] + ("，" + style + "，画面纯净无人物无文字无字母无数字，竖版9:16构图，真实摄影写实风格，禁止插画、禁止卡通、禁止扁平矢量")
                 need.append((i, prompt))
