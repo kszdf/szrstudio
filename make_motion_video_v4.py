@@ -295,7 +295,7 @@ def dark_overlay():
         top = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         ga = Image.new("L", (1, 680))
         for y in range(680):
-            ga.putpixel((0, y), int(130 * (1 - y / 680) ** 1.3))
+            ga.putpixel((0, y), int(160 * (1 - y / 680) ** 1.3))
         band = Image.new("RGBA", (W, 680), (0, 0, 0, 255))
         band.putalpha(ga.resize((W, 680)))
         top.paste(band, (0, 0))
@@ -303,7 +303,7 @@ def dark_overlay():
         bot = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         gb = Image.new("L", (1, 680))
         for y in range(680):
-            gb.putpixel((0, y), int(140 * (y / 680) ** 1.4))
+            gb.putpixel((0, y), int(170 * (y / 680) ** 1.4))
         bandb = Image.new("RGBA", (W, 680), (0, 0, 0, 255))
         bandb.putalpha(gb.resize((W, 680)))
         bot.paste(bandb, (0, H - 680))
@@ -357,7 +357,7 @@ def draw_text_fragments(d, text, cx, y, sz, pal, reveal=None, keywords=None,
     align='center' 整行居中; 'left' 从 cx 起向右排。返回本行占用宽度。
     reveal 非空 = 卡拉OK逐字显亮: 整行全部显示, 未念到的字用暗色(灰), 念到的字才变亮;
     关键词未念时暗色文字, 念到才 accent 胶囊亮起(用户要求 2026-08-28)。"""
-    KARA_DIM = (150, 152, 160)   # 未念字的暗色(预设可见但不抢)
+    KARA_DIM = (160, 162, 170)   # 未念字的暗色(预设可见但区分; 2026-08-28 提亮保证不费力)
     f = font(sz, "hei")
     line_w = d.textlength(text, font=f)
     x = (cx - line_w / 2) if align == "center" else cx
@@ -387,7 +387,7 @@ def draw_text_fragments(d, text, cx, y, sz, pal, reveal=None, keywords=None,
                     done_seg, todo_seg = seg[:vis], seg[vis:]
                     done_w = d.textlength(done_seg, font=f)
                     d.text((x, y), done_seg, font=f, fill=WHITE, anchor="ls",
-                           stroke_width=7, stroke_fill=(0, 0, 0))
+                           stroke_width=8, stroke_fill=(0, 0, 0))
                     d.text((x + done_w, y), todo_seg, font=f, fill=KARA_DIM, anchor="ls",
                            stroke_width=6, stroke_fill=(0, 0, 0))
                     pos += len(seg); x += seg_w
@@ -408,7 +408,7 @@ def draw_text_fragments(d, text, cx, y, sz, pal, reveal=None, keywords=None,
             x += kw_w
         else:
             d.text((x, y), seg, font=f, fill=WHITE, anchor="ls",
-                   stroke_width=7, stroke_fill=(0, 0, 0))
+                   stroke_width=8, stroke_fill=(0, 0, 0))
             x += seg_w
         pos += len(seg)
     return line_w
@@ -490,7 +490,7 @@ def draw_subtitle(img, text, pal, reveal=None, keywords=None, local=0.0, scdur=3
         by0 = y - base_size * 0.62 - pad_y
         by1 = y + base_size * 0.62 + pad_y
         ld.rounded_rectangle([bx0, by0, bx1, by1], radius=22,
-                             fill=(8, 12, 22, 150), outline=pal["accent"] + (70,), width=2)
+                             fill=(8, 12, 22, 195), outline=pal["accent"] + (90,), width=2)
         draw_text_fragments(ld, line, cx, y, base_size, pal,
                             reveal=seg_reveal, keywords=keywords, local=local,
                             scdur=scdur, total_chars=max(1, len(line)),
