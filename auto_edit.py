@@ -214,12 +214,13 @@ def _probe_duration(video):
 
 # ----------------------------------------------------------------- 三种风格（保持原有逻辑不变）
 def build_artistic(in_mp4, out_mp4, tmp, dry_run, log):
+    # 2026-08-28 用户反馈"外形半圆/梭形": vignette 暗角在竖屏上是椭圆衰减,
+    # 把画面左右两侧压暗成梭形 → 彻底去掉 vignette, 画面方方正正(letterbox+暖色调保留)
     vf = ("scale=1080:1920:force_original_aspect_ratio=decrease,"
           "pad=1080:1920:(ow-iw)/2:(oh-ih)/2,"
           "drawbox=x=0:y=0:w=1080:h=200:color=black:t=fill,"
           "drawbox=x=0:y=1720:w=1080:h=200:color=black:t=fill,"
-          "colorbalance=rs=0.10:gs=-0.02:bs=-0.10,"
-          "vignette=0.10:0.35,format=yuv420p")   # 2026-08-28 用户反馈"右半圆"观感: vignette 0.28 暗角过强成弧形, 减弱为 0.10
+          "colorbalance=rs=0.10:gs=-0.02:bs=-0.10,format=yuv420p")
     return _run([FFMPEG, "-y", "-i", in_mp4, "-vf", vf,
                  "-c:v", "libx264", "-crf", "22", "-pix_fmt", "yuv420p",
                  "-c:a", "copy", out_mp4], dry_run, log)
