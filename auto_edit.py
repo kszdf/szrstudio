@@ -152,21 +152,30 @@ def _make_intro_card(path, title="追梦", subtitle="短视频智能生产平台
     img.convert("RGB").save(path)
 
 
-def _make_outro_card(path, title="关注 昆山老张讲财税", subtitle="评论区扣「方案」，清单发你"):
-    """片尾卡：关注账号 + 留资 CTA。"""
+def _make_outro_card(path, title="昆山老张讲财税", subtitle="欢迎 关注 · 点赞 · 转发"):
+    """片尾卡：IP 名主标题 + 三连引导副标题（2026-08-28 用户要求:
+    取消'评论区扣XX，清单发你'，换'欢迎 关注·点赞·转发'，排版更科学）。"""
     from PIL import Image, ImageDraw
     img = _make_gradient((W, H), (15, 23, 42), (30, 41, 59)).convert("RGBA")
-    # 半透明面板画到透明层再合成（直接画 RGB 会成纯白实心方块, 2026-08-28 用户反馈"结尾白色方块"）
+    # 半透明面板画到透明层再合成（直接画 RGB 会成纯白实心方块）
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     ld = ImageDraw.Draw(layer)
-    ld.rounded_rectangle([W // 2 - 300, H // 2 - 300, W // 2 + 300, H // 2 + 300],
-                         radius=40, outline=(6, 182, 212), width=8, fill=(255, 255, 255, 14))
+    ld.rounded_rectangle([W // 2 - 320, H // 2 - 330, W // 2 + 320, H // 2 + 330],
+                         radius=44, outline=(6, 182, 212), width=8, fill=(255, 255, 255, 14))
     img = Image.alpha_composite(img, layer)
     d = ImageDraw.Draw(img)
-    _draw_centered(d, (120, H // 2 - 260, W - 120, H // 2 + 40),
-                   title, _load_font(150), (255, 255, 255))
-    _draw_centered(d, (120, H // 2 + 120, W - 120, H // 2 + 260),
-                   subtitle, _load_font(64), (203, 213, 225))
+    # 1) 主标题：IP 名（自动适配字号，居中略偏上，最醒目）
+    tf, lines, tlh = _fit_text(d, title, W // 2 + 280, 400, base=170)
+    ty = H // 2 - 200
+    for i, ln in enumerate(lines):
+        w = d.textlength(ln, font=tf)
+        d.text((W // 2 - w / 2, ty + i * tlh), ln, font=tf, fill=(255, 255, 255))
+    # 2) 装饰线（分隔主副标题）
+    d.line([(W // 2 - 180, H // 2 + 20), (W // 2 + 180, H // 2 + 20)],
+           fill=(6, 182, 212), width=5)
+    # 3) 副标题：三连引导（浅灰，主标题下方留白）
+    _draw_centered(d, (120, H // 2 + 80, W - 120, H // 2 + 200),
+                   subtitle, _load_font(60), (203, 213, 225))
     img.convert("RGB").save(path)
 
 
