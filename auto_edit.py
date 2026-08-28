@@ -241,7 +241,7 @@ def build_vlog(in_mp4, out_mp4, tmp, dry_run, log, name_tag="追梦 · 数字人
           "[r]pad=1108:1948:14:14:color=0x06B6D4[padded];"
           "[padded][2:v]overlay=40:(H-170)[out]")
     return _run([FFMPEG, "-y", "-i", in_mp4, "-i", mask_p, "-i", tag_p,
-                 "-filter_complex", fc, "-map", "[out]",
+                 "-filter_complex", fc, "-map", "[out]", "-map", "0:a?",
                  "-c:v", "libx264", "-crf", str(CRF), "-pix_fmt", "yuv420p",
                  "-c:a", "copy", out_mp4], dry_run, log)
 
@@ -261,7 +261,7 @@ def build_pip(in_mp4, out_mp4, tmp, dry_run, log, overlay=None):
           "[ovr][mask_s]alphamerge[ovrounded];"
           "[0:v][ovrounded]overlay=W-w-40:(H-h-40)[out]")
     return _run([FFMPEG, "-y", "-i", in_mp4, "-i", overlay, "-i", mask_p,
-                 "-filter_complex", fc, "-map", "[out]",
+                 "-filter_complex", fc, "-map", "[out]", "-map", "0:a?",
                  "-c:v", "libx264", "-crf", str(CRF), "-pix_fmt", "yuv420p",
                  "-c:a", "copy", out_mp4], dry_run, log)
 
