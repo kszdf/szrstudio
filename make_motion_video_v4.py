@@ -670,11 +670,10 @@ def _render_scene(sc, pal, idx, local, scdur, base_img, t_global=0.0):
         else:
             sca, dx, dy = 1.0, 0, 0
     img = kb_zoom(base, sca * breathe, dx, dy).convert("RGBA")
-    if base_kind == "still":
-        # 只有静态底图才叠人造动态(扫光+粒子): GIF/AI视频等真实动态底图自带运动,
-        # 再叠扫光粒子会变成"闪光一直闪不停"的廉价感(用户反馈, 2026-08-27 修复)
-        img = _light_sweep(img, t_global)
-        img = _particles(img, t_global, pal)
+    # 2026-08-28 用户最终定夺(换画面方案): 统一背景/静止画面——
+    # 扫光+粒子等"人造动效"全部移除: ①统一背景上叠加=又慢又是闪烁感;
+    # ②每帧两次全屏RGBA合成是渲染重负担(worker卡死诱因之一);
+    # ③也是之前"闪光一直闪不停"反馈的根源。画面只留静止背景+字幕+标题。
     img = _edge_vignette(img)
     dt, db = dark_overlay()
     img = Image.alpha_composite(img, dt)
