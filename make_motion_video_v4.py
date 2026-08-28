@@ -1057,7 +1057,9 @@ def render_scene_frame(idx, local, sentences, tl, sb, imgs, trans=False):
             moved.alpha_composite(img.convert("RGBA"), (off, 0))
             img = moved
         else:  # fade_scale
-            sca = 1.0 + (1 - a) * 0.04
+            # 短句(女声提问等 ≤4.5s)不做缩放入场, 只纯淡入:
+            # 女声短句幕频繁"缩放淡入"= 用户感知的画面闪烁(2026-08-28 根治)
+            sca = 1.0 + (1 - a) * 0.04 if scdur >= 4.5 else 1.0
             if sca != 1.0:
                 nw, nh = int(W * sca), int(H * sca)
                 resized = img.resize((nw, nh), Image.LANCZOS)
