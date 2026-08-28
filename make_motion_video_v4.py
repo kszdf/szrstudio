@@ -219,28 +219,44 @@ def _wrap_px_semantic(text, d, f, max_w):
     return lines
 
 # ============================== 万相生图 ==============================
+_WANX_LOCKS = {}   # prompt hash -> Lock: 同 prompt 并发时只放行一个生成, 其余等待缓存(防限流风暴/挂起)
+
 def wanx_image(prompt, api_key, size="720*1280", regen=False):
     """调通义万相生成插画, 返回本地 jpg 路径。命中缓存则跳过网络。
-    并发安全: 不同 prompt 哈希到不同缓存文件, 可并行调用(已去掉全局锁串行)。"""
+    并发安全: 不同 prompt 哈希到不同缓存文件, 可并行; 同 prompt 加 per-hash 锁
+    (全片统一背景时 12 句同 prompt, 之前并发全部 miss → 限流风暴 + 无超时下载挂起 = 渲染卡死)。"""
     WANX_CACHE.mkdir(parents=True, exist_ok=True)
     h = hashlib.md5(prompt.encode("utf-8")).hexdigest()
     cache = WANX_CACHE / f"{h}.jpg"
     if cache.exists() and not regen:
         return cache
-    from dashscope import ImageSynthesis
-    rsp = ImageSynthesis.call(model=WANX_MODEL, prompt=prompt, size=size, n=1,
-                              api_key=api_key)
-    if rsp.status_code == 200:
-        url = rsp.output.results[0].url
-        for _ in range(3):
-            try:
-                urllib.request.urlretrieve(url, cache)
-                if cache.stat().st_size > 1000:
-                    return cache
-            except Exception:
-                pass
-        raise RuntimeError("下载生图失败")
-    raise RuntimeError(f"wanx {rsp.status_code}: {rsp.message}")
+    lock = _WANX_LOCKS.setdefault(h, threading.Lock())
+    with lock:
+        if cache.exists() and not regen:        # 双重检查: 等待者直接命中缓存
+            return cache
+        from dashscope import ImageSynthesis
+        rsp = ImageSynthesis.call(model=WANX_MODEL, prompt=prompt, size=size, n=1,
+                                  api_key=api_key)
+        if rsp.status_code == 200:
+            url = rsp.output.results[0].url
+            for _ in range(3):
+                try:
+                    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                    with urllib.request.urlopen(req, timeout=60) as r, open(cache, "wb") as f:
+                        while True:
+                            chunk = r.read(1 << 20)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                    if cache.stat().st_size > 1000:
+                        return cache
+                except Exception:
+                    try:
+                        cache.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+            raise RuntimeError("下载生图失败")
+        raise RuntimeError(f"wanx {rsp.status_code}: {rsp.message}")
 
 def cover_resize(img, tw, th):
     iw, ih = img.size
