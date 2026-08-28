@@ -132,11 +132,14 @@ def _make_intro_card(path, title="追梦", subtitle="短视频智能生产平台
                      tag="AI 数字人 · 一键成片"):
     """片头卡：真实标题大字 + 品牌副标 + 标签。"""
     from PIL import Image, ImageDraw
-    img = _make_gradient((W, H), (79, 70, 229), (6, 182, 212))
+    img = _make_gradient((W, H), (79, 70, 229), (6, 182, 212)).convert("RGBA")
+    # 半透明白色圆角面板：必须画在透明 RGBA 层再合成（直接画 RGB 图会被当纯白实心, 2026-08-28 修复）
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    ld.rounded_rectangle([W // 2 - 380, H // 2 - 380, W // 2 + 380, H // 2 + 380],
+                         radius=48, fill=(255, 255, 255, 28))
+    img = Image.alpha_composite(img, layer)
     d = ImageDraw.Draw(img)
-    # 半透明白色圆角面板
-    d.rounded_rectangle([W // 2 - 380, H // 2 - 380, W // 2 + 380, H // 2 + 380],
-                        radius=48, fill=(255, 255, 255, 28))
     tf, title_lines, tlh = _fit_text(d, title, W // 2 + 340, H // 2 - 340, base=240)
     ty = H // 2 - 320
     for i, ln in enumerate(title_lines):
@@ -152,10 +155,14 @@ def _make_intro_card(path, title="追梦", subtitle="短视频智能生产平台
 def _make_outro_card(path, title="关注 昆山老张讲财税", subtitle="评论区扣「方案」，清单发你"):
     """片尾卡：关注账号 + 留资 CTA。"""
     from PIL import Image, ImageDraw
-    img = _make_gradient((W, H), (15, 23, 42), (30, 41, 59))
+    img = _make_gradient((W, H), (15, 23, 42), (30, 41, 59)).convert("RGBA")
+    # 半透明面板画到透明层再合成（直接画 RGB 会成纯白实心方块, 2026-08-28 用户反馈"结尾白色方块"）
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    ld.rounded_rectangle([W // 2 - 300, H // 2 - 300, W // 2 + 300, H // 2 + 300],
+                         radius=40, outline=(6, 182, 212), width=8, fill=(255, 255, 255, 14))
+    img = Image.alpha_composite(img, layer)
     d = ImageDraw.Draw(img)
-    d.rounded_rectangle([W // 2 - 300, H // 2 - 300, W // 2 + 300, H // 2 + 300],
-                        radius=40, outline=(6, 182, 212), width=8, fill=(255, 255, 255, 14))
     _draw_centered(d, (120, H // 2 - 260, W - 120, H // 2 + 40),
                    title, _load_font(150), (255, 255, 255))
     _draw_centered(d, (120, H // 2 + 120, W - 120, H // 2 + 260),
