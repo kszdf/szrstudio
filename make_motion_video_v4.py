@@ -355,7 +355,9 @@ def draw_text_fragments(d, text, cx, y, sz, pal, reveal=None, keywords=None,
                         local=0.0, scdur=3.0, total_chars=1, char_start=0, align="center"):
     """核心逐片段绘制: 非关键词白字黑描边; 关键词独立圆角胶囊(accent 底 + 白字), 二者不重叠。
     align='center' 整行居中; 'left' 从 cx 起向右排。返回本行占用宽度。
-    关键词支持 pop 弹入(_pop), 弹入时胶囊与文字同步缩放。"""
+    reveal 非空 = 卡拉OK逐字显亮: 整行全部显示, 未念到的字用暗色(灰), 念到的字才变亮;
+    关键词未念时暗色文字, 念到才 accent 胶囊亮起(用户要求 2026-08-28)。"""
+    KARA_DIM = (150, 152, 160)   # 未念字的暗色(预设可见但不抢)
     f = font(sz, "hei")
     line_w = d.textlength(text, font=f)
     x = (cx - line_w / 2) if align == "center" else cx
@@ -366,10 +368,30 @@ def draw_text_fragments(d, text, cx, y, sz, pal, reveal=None, keywords=None,
         seg_w = d.textlength(seg, font=f)
         if reveal is not None:
             vis = max(0, min(len(seg), int(reveal * total_chars) - pos))
-            if vis <= 0:
-                pos += len(seg); x += seg_w; continue
-            if vis < len(seg):
-                seg = seg[:vis]; seg_w = d.textlength(seg, font=f)
+            if is_kw:
+                # 关键词: 未念=暗色文字(无胶囊); 念到=accent胶囊亮起
+                if vis <= 0:
+                    d.text((x, y), seg, font=f, fill=KARA_DIM, anchor="ls",
+                           stroke_width=6, stroke_fill=(0, 0, 0))
+                    pos += len(seg); x += seg_w
+                    continue
+            else:
+                if vis <= 0:
+                    # 整段未念: 暗色预显(卡拉OK)
+                    d.text((x, y), seg, font=f, fill=KARA_DIM, anchor="ls",
+                           stroke_width=6, stroke_fill=(0, 0, 0))
+                    pos += len(seg); x += seg_w
+                    continue
+                if vis < len(seg):
+                    # 半念: 已念部分亮白, 未念部分暗色
+                    done_seg, todo_seg = seg[:vis], seg[vis:]
+                    done_w = d.textlength(done_seg, font=f)
+                    d.text((x, y), done_seg, font=f, fill=WHITE, anchor="ls",
+                           stroke_width=7, stroke_fill=(0, 0, 0))
+                    d.text((x + done_w, y), todo_seg, font=f, fill=KARA_DIM, anchor="ls",
+                           stroke_width=6, stroke_fill=(0, 0, 0))
+                    pos += len(seg); x += seg_w
+                    continue
         if is_kw:
             appear = (pos / total_chars) * min(scdur, 0.5) if total_chars else 0
             # 重点词: 放大 1.22x + accent 亮色文字(区别于常规白字) + 浅色描边胶囊
@@ -449,8 +471,11 @@ def draw_subtitle(img, text, pal, reveal=None, keywords=None, local=0.0, scdur=3
             continue
         st, en = spans[i]
         line = lines[i]
-        if reveal is not None and shown < en:          # 当前行: 只打已念部分
-            line = line[: max(0, shown - st)]
+        # 卡拉OK逐字显亮(2026-08-28 用户要求): 当前行整行显示(未念暗色/念到亮),
+        # 不再截断; 行内 reveal 进度 = (shown-st)/len(行), total_chars 传本行长度
+        seg_reveal = None
+        if reveal is not None and shown < en and i == cur_i:
+            seg_reveal = min(1.0, max(0.0, (shown - st) / max(1, len(line))))
         if not line:
             continue
         y = y_bot - (last_vis - i) * lh                # 已念完的行向上排
@@ -467,9 +492,9 @@ def draw_subtitle(img, text, pal, reveal=None, keywords=None, local=0.0, scdur=3
         ld.rounded_rectangle([bx0, by0, bx1, by1], radius=22,
                              fill=(8, 12, 22, 150), outline=pal["accent"] + (70,), width=2)
         draw_text_fragments(ld, line, cx, y, base_size, pal,
-                            reveal=None, keywords=keywords, local=local,
-                            scdur=scdur, total_chars=total_chars,
-                            char_start=st, align="center")
+                            reveal=seg_reveal, keywords=keywords, local=local,
+                            scdur=scdur, total_chars=max(1, len(line)),
+                            char_start=0, align="center")
         if alpha < 0.999:
             r, g, b, a = layer.split()
             a = a.point(lambda v: int(v * alpha))
@@ -687,30 +712,26 @@ def _render_scene(sc, pal, idx, local, scdur, base_img, t_global=0.0):
     layout = idx % 4
     title = sc.get("title", "")
     d = ImageDraw.Draw(img)
+    # 2026-08-28 用户要求: 标题用 accent 色(区别于字幕白字), 去顶部红竖条/装饰, 排版更干净协调
+    accent = pal["accent"]
     if layout == 0:
         ty = 360
-        draw_title(img, title, W // 2, ty, 88, WHITE)
-        d.line([(W // 2 - 150, ty + 80), (W // 2 + 150, ty + 80)], fill=pal["accent"], width=6)
+        draw_title(img, title, W // 2, ty, 88, accent)
+        d.line([(W // 2 - 150, ty + 80), (W // 2 + 150, ty + 80)], fill=pal["accent2"], width=4)
     elif layout == 1:
         tx, ty = 120, 330
-        draw_title(img, title, tx, ty, 82, WHITE, anchor="la")
+        draw_title(img, title, tx, ty, 82, accent, anchor="la")
         d.rectangle([tx - 28, ty - 70, tx - 14, ty + 70], fill=pal["accent"])
     elif layout == 2:
         ty = H - 430
         panel = Image.new("RGBA", (W - 160, 200), (8, 12, 22, 175))
         img.alpha_composite(panel, (80, ty - 90))
-        draw_title(img, title, W // 2, ty, 76, WHITE)
+        draw_title(img, title, W // 2, ty, 76, accent)
     else:
         d.text((W // 2, 250), "财税干货", font=font(40, "hei"), fill=pal["accent2"], anchor="mm")
         card = Image.new("RGBA", (W - 200, 260), (8, 12, 22, 150))
         img.alpha_composite(card, (100, 320))
-        draw_title(img, title, W // 2, 450, 84, WHITE)
-    # 角落装饰几何(accent 低透明), 交替方位增加节奏
-    if idx % 2 == 0:
-        d.ellipse([W - 230, 120, W - 90, 260], outline=pal["accent"], width=8)
-    else:
-        for k in range(3):
-            d.line([(90 + k * 26, H - 360), (90 + k * 26, H - 250)], fill=pal["accent"], width=6)
+        draw_title(img, title, W // 2, 450, 84, accent)
     return img
 
 # ============================== 动态画面(仿动态GIF) ==============================
