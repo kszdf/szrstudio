@@ -653,23 +653,28 @@ def _render_scene(sc, pal, idx, local, scdur, base_img, t_global=0.0):
         else:
             base, base_kind = _real_bg_photo(sc, t_global), "still"
     # 呼吸运镜(慢速振荡, 破解静态感) + 肯·伯恩斯漂移轮替
-    breathe = 1.0 + 0.045 * math.sin(2 * math.pi * t_global / 7.0)
-    if base_kind == "video":
-        # 真实视频本身在动: 只保留极轻微呼吸(防裁切字幕), 不做大范围漂移
-        sca, dx, dy = 1.0 + 0.022 * math.sin(2 * math.pi * t_global / 9.0), 0, 0
+    if sc.get("static_bg"):
+        # 对话模式统一背景: 完全静止——无运镜无漂移无呼吸, 背景定格(用户反复反馈"闪",
+        # 最终方案: 背景一个像素都不动, 只有字幕/标题在变)
+        img = base.convert("RGBA")
     else:
-        kb = idx % 5
-        if kb == 0:
-            sca, dx, dy = 1.0 + 0.07 * np_, 0, 0
-        elif kb == 1:
-            sca, dx, dy = 1.07 - 0.07 * np_, 0, 0
-        elif kb == 2:
-            sca, dx, dy = 1.14, int(70 * (0.5 - np_)), 0
-        elif kb == 3:
-            sca, dx, dy = 1.14, int(-70 * (0.5 - np_)), 0
+        breathe = 1.0 + 0.045 * math.sin(2 * math.pi * t_global / 7.0)
+        if base_kind == "video":
+            # 真实视频本身在动: 只保留极轻微呼吸(防裁切字幕), 不做大范围漂移
+            sca, dx, dy = 1.0 + 0.022 * math.sin(2 * math.pi * t_global / 9.0), 0, 0
         else:
-            sca, dx, dy = 1.0, 0, 0
-    img = kb_zoom(base, sca * breathe, dx, dy).convert("RGBA")
+            kb = idx % 5
+            if kb == 0:
+                sca, dx, dy = 1.0 + 0.07 * np_, 0, 0
+            elif kb == 1:
+                sca, dx, dy = 1.07 - 0.07 * np_, 0, 0
+            elif kb == 2:
+                sca, dx, dy = 1.14, int(70 * (0.5 - np_)), 0
+            elif kb == 3:
+                sca, dx, dy = 1.14, int(-70 * (0.5 - np_)), 0
+            else:
+                sca, dx, dy = 1.0, 0, 0
+        img = kb_zoom(base, sca * breathe, dx, dy).convert("RGBA")
     # 2026-08-28 用户最终定夺(换画面方案): 统一背景/静止画面——
     # 扫光+粒子等"人造动效"全部移除: ①统一背景上叠加=又慢又是闪烁感;
     # ②每帧两次全屏RGBA合成是渲染重负担(worker卡死诱因之一);
@@ -1064,7 +1069,7 @@ def render_scene_frame(idx, local, sentences, tl, sb, imgs, trans=False):
     # 取消原「上下分屏头像气泡」设计：用户要求背景不要人物(头像/人像)，问答句同样用风景底图。
     img = _render_scene(sc, pal, idx, local, scdur, imgs[idx], t_global)
     # 统一入场(转场进行中时跳过, 交给转场)
-    if not trans:
+    if not trans and not sc.get("static_bg"):
         estyle = STYLE_PRESETS.get(STYLE_NAME, STYLE_PRESETS["财经严谨"]).get("entrance", "fade_scale")
         if estyle == "slide_in":
             off = int((1 - a) * 60)
@@ -1524,12 +1529,13 @@ def main():
     out.parent.mkdir(parents=True, exist_ok=True)
     # 对话模式全片统一背景(用户最终定夺, 2026-08-28): 整条视频用同一张背景图, 不切换——
     # 背景切换/短句入场是女声画面闪烁的根源, 反复调修后用户决定换画面方案:
-    # 全片统一背景, 只有字幕/标题在变, 从机制上彻底杜绝闪烁
+    # 全片统一背景 + static_bg 标记(渲染时背景完全静止: 无运镜/无入场淡入), 只有字幕/标题在变
     if any(sc.get("role") for sc in sb):
         unified = next((sc.get("image_prompt") for sc in sb if sc.get("image_prompt")), None)
         if unified:
             for sc in sb:
                 sc["image_prompt"] = unified
+                sc["static_bg"] = True
     sb_path.write_text(json.dumps(
         [{"idx": i, "start": tl[i][0], "end": tl[i][1], "sentence": sentences[i], **sb[i]}
          for i in range(len(sentences))], ensure_ascii=False, indent=2), encoding="utf-8")
