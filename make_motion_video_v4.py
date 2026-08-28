@@ -1549,14 +1549,14 @@ def main():
     sb_path = out.with_suffix(".v4storyboard.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     # 对话模式全片统一背景(用户最终定夺, 2026-08-28): 整条视频用同一张背景图, 不切换——
-    # 背景切换/短句入场是女声画面闪烁的根源, 反复调修后用户决定换画面方案:
-    # 全片统一背景 + static_bg 标记(渲染时背景完全静止: 无运镜/无入场淡入), 只有字幕/标题在变
+    # 背景固定用「开阔风景/天际线远景」(IMG_STYLES), 不依赖 LLM image_prompt:
+    # 特写内景类描述(办公桌/单据/公章等)生成的图易出"半圆"怪构图(用户反馈), 远景永远干净开阔
     if any(sc.get("role") for sc in sb):
-        unified = next((sc.get("image_prompt") for sc in sb if sc.get("image_prompt")), None)
-        if unified:
-            for sc in sb:
-                sc["image_prompt"] = unified
-                sc["static_bg"] = True
+        import hashlib as _h
+        unified = IMG_STYLES[_h.md5(str(sb[0].get("title", "x")).encode("utf-8")).hexdigest() % len(IMG_STYLES)]
+        for sc in sb:
+            sc["image_prompt"] = unified
+            sc["static_bg"] = True
     sb_path.write_text(json.dumps(
         [{"idx": i, "start": tl[i][0], "end": tl[i][1], "sentence": sentences[i], **sb[i]}
          for i in range(len(sentences))], ensure_ascii=False, indent=2), encoding="utf-8")
