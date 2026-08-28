@@ -1553,7 +1553,8 @@ def main():
     # 特写内景类描述(办公桌/单据/公章等)生成的图易出"半圆"怪构图(用户反馈), 远景永远干净开阔
     if any(sc.get("role") for sc in sb):
         import hashlib as _h
-        unified = IMG_STYLES[_h.md5(str(sb[0].get("title", "x")).encode("utf-8")).hexdigest() % len(IMG_STYLES)]
+        _dig = _h.md5(str(sb[0].get("title", "x")).encode("utf-8")).hexdigest()
+        unified = IMG_STYLES[int(_dig, 16) % len(IMG_STYLES)]
         for sc in sb:
             sc["image_prompt"] = unified
             sc["static_bg"] = True
