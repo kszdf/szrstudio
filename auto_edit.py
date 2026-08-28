@@ -45,7 +45,7 @@ if not os.path.exists(FONT_PATH):
 
 W, H = 1080, 1920          # 竖屏 9:16
 CARD_T = 1.3               # 片头/片尾卡时长(秒)
-CRF = 23
+CRF = 19   # 2026-08-28 用户要求清晰度提升: 23→19(更低=更清晰, 体积略增可接受)
 XF_DUR = 0.40              # 转场时长（秒），用于 xfade / 淡入淡出
 
 EDIT_STYLES = ("fast", "artistic", "vlog", "pip")
@@ -222,7 +222,7 @@ def build_artistic(in_mp4, out_mp4, tmp, dry_run, log):
           "drawbox=x=0:y=1720:w=1080:h=200:color=black:t=fill,"
           "colorbalance=rs=0.10:gs=-0.02:bs=-0.10,format=yuv420p")
     return _run([FFMPEG, "-y", "-i", in_mp4, "-vf", vf,
-                 "-c:v", "libx264", "-crf", "22", "-pix_fmt", "yuv420p",
+                 "-c:v", "libx264", "-crf", "17", "-pix_fmt", "yuv420p",
                  "-c:a", "copy", out_mp4], dry_run, log)
 
 
