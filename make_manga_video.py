@@ -24,7 +24,7 @@ FFPROBE = FFMPEG.replace("ffmpeg.exe", "ffprobe.exe")
 W, H, FPS = 1080, 1920, 30
 TRANS = 0.6      # 幕间淡入时长
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont
 
 _F = {}
 def font(size):
@@ -102,8 +102,8 @@ def add_subtitle(frame, text, show_ratio=1.0):
 
 
 def add_steps(img, steps, cur_idx):
-    """画面下部(角色区下方): 步骤流程卡(序号圆+文字+箭头连接, 当前高亮/完成绿勾/未到暗显)。
-    2026-08-28 用户要求: 讲解式过程要在画面中展示, 不能只在底部字幕。"""
+    """画面下部(角色区下方): 步骤流程卡(序号圆+卡片+箭头连接, 当前高亮/完成绿勾/未到灰)。
+    2026-08-29 样式改版: 明亮卡片(白底+深字)+彩色序号圆, 解决"画面太暗/步骤卡不醒目"。"""
     img = img.convert("RGBA")
     d = ImageDraw.Draw(img)
     n = len(steps)
@@ -117,24 +117,39 @@ def add_steps(img, steps, cur_idx):
             state = 2
         else:
             state = 0
-        col = (255, 200, 60) if state == 1 else ((16, 185, 129) if state == 2 else (82, 90, 104))
+        col = (255, 180, 40) if state == 1 else ((30, 190, 120) if state == 2 else (150, 158, 170))
         cy = y + card_h // 2
-        # 序号圆
-        d.ellipse([150 - 32, cy - 32, 150 + 32, cy + 32],
-                  fill=col if state else (58, 64, 76))
-        d.text((150, cy), str(i + 1), font=font(40), fill=(255, 255, 255), anchor="mm")
-        # 卡片
-        d.rounded_rectangle([216, y + 5, W - 56, y + card_h - 5], radius=18,
-                            outline=col, width=4 if state else 2,
-                            fill=(20, 28, 45, 210) if state else (20, 24, 34, 150))
-        d.text((242, cy), st, font=font(34), fill=(255, 255, 255) if state else (150, 152, 160),
-               anchor="lm")
+        # 序号圆(彩色实心 + 白字)
+        d.ellipse([140 - 46, cy - 46, 140 + 46, cy + 46], fill=col)
+        d.ellipse([140 - 46, cy - 46, 140 + 46, cy + 46], outline=(255, 255, 255, 210), width=5)
+        d.text((140, cy), str(i + 1), font=font(52), fill=(255, 255, 255), anchor="mm")
+        # 卡片(白底 + 彩色描边 + 深色文字) + 柔和浅阴影
+        d.rounded_rectangle([224, y + 8, W - 44, y + card_h], radius=22,
+                            fill=(168, 178, 196, 140))
+        d.rounded_rectangle([220, y + 2, W - 48, y + card_h - 6], radius=22,
+                            outline=col, width=6 if state else 3,
+                            fill=(255, 253, 248, 252) if state else (240, 243, 248, 240))
+        if state == 1:
+            d.rounded_rectangle([220, y + 2, W - 48, y + card_h - 6], radius=22,
+                                outline=(255, 190, 60), width=6)
+            d.rounded_rectangle([232, y + 14, W - 60, y + card_h - 18], radius=14,
+                                outline=(255, 210, 110), width=2)
+        # 文字(超宽自动缩字号防溢出)
+        fsize = 46
+        while fsize > 26 and d.textlength(st, font=font(fsize)) > (W - 48 - 256 - 60):
+            fsize -= 2
+        d.text((256, cy), st, font=font(fsize), fill=(30, 38, 52) if state else (115, 123, 136),
+               anchor="lm", stroke_width=2, stroke_fill=(255, 255, 255))
         if state == 2:
-            d.line([(W - 118, cy - 16), (W - 102, cy), (W - 76, cy - 30)],
-                   fill=(16, 185, 129), width=8)
+            d.line([(W - 132, cy - 20), (W - 112, cy), (W - 78, cy - 38)],
+                   fill=(30, 190, 120), width=11)
+            d.line([(W - 132, cy - 20), (W - 112, cy), (W - 78, cy - 38)],
+                   fill=(255, 255, 255), width=4)
         if i < n - 1:
-            d.line([(150, cy + card_h // 2 - 4), (150, y + card_h + 6)],
-                   fill=(110, 120, 135), width=7)
+            d.line([(140, cy + card_h // 2 - 4), (140, y + card_h + 10)],
+                   fill=(150, 160, 175), width=8)
+            d.polygon([(140 - 11, y + card_h + 6), (140 + 11, y + card_h + 6), (140, y + card_h + 20)],
+                      fill=(150, 160, 175))
         y += card_h
     return img.convert("RGB")
 
@@ -193,24 +208,40 @@ def main():
         n = len(frames)
         for fi, frame in enumerate(frames):
             ratio = fi / n
+            # 2026-08-29 用户反馈: 画面太暗 → 全片轻微提亮(AI生图普遍偏暗)
+            frame = ImageEnhance.Brightness(frame).enhance(1.08)
             if steps:
-                # 讲解式: 角色区取上部62%, 下部深色承接 + 步骤流程卡
-                top = frame.crop((0, 0, W, int(H * 0.62)))
-                grad = Image.new("RGB", (W, H - int(H * 0.62)), (18, 24, 36))
+                # 讲解式: 角色区取上部58%(完整角色) + 提亮, 下部浅色渐变承接 + 步骤流程卡
+                # 2026-08-29 用户反馈 1'3: 画面太暗/步骤卡样式不好 → 提亮画面 + 亮色卡片
+                top = frame.crop((0, 0, W, int(H * 0.58)))
+                # 角色图底部 140px 柔化过渡进浅色渐变, 避免硬边
+                top = top.convert("RGBA")
+                fade = Image.new("RGBA", (W, 140), (250, 246, 236, 0))
+                df = ImageDraw.Draw(fade)
+                for yy in range(140):
+                    df.line([(0, yy), (W, yy)], fill=(250, 246, 236, int(255 * yy / 140)))
+                top.alpha_composite(fade, (0, top.height - 140))
+                top = top.convert("RGB")
+                top = ImageEnhance.Brightness(top).enhance(1.10)
+                top = ImageEnhance.Contrast(top).enhance(1.05)
+                top = ImageEnhance.Color(top).enhance(1.06)
+                grad_h = H - int(H * 0.58)
+                grad = Image.new("RGB", (W, grad_h), (250, 246, 236))
                 dg = ImageDraw.Draw(grad)
                 for yy in range(grad.height):
                     tt = yy / grad.height
-                    c = tuple(int(a + (b - a) * tt) for a, b in zip((18, 24, 36), (10, 14, 22)))
+                    c = tuple(int(a + (b - a) * tt) for a, b in zip((250, 246, 236), (222, 236, 250)))
                     dg.line([(0, yy), (W, yy)], fill=c)
                 canvas = Image.new("RGB", (W, H))
                 canvas.paste(top, (0, 0))
-                canvas.paste(grad, (0, int(H * 0.62)))
+                canvas.paste(grad, (0, int(H * 0.58)))
                 frame = canvas
                 frame = add_steps(frame, steps, min(i, len(steps) - 1))
             # 幕间淡入
             if fi < int(TRANS * FPS):
                 a = fi / (TRANS * FPS)
-                frame = Image.blend(Image.new("RGB", (W, H), (8, 10, 16)), frame, a)
+                base = (240, 242, 248) if steps else (8, 10, 16)
+                frame = Image.blend(Image.new("RGB", (W, H), base), frame, a)
             # 2026-08-29 用户要求: 漫剧去掉语音字幕(语音已讲解清楚, 字幕会遮挡下方步骤卡/画面内容)
             frame.save(frames_dir / f"f_{gidx:05d}.png")
             gidx += 1

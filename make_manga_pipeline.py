@@ -40,7 +40,8 @@ def main():
     shots = []
     h = hashlib.md5(args.text.encode("utf-8")).hexdigest()[:8]
     for i, s in enumerate(r["shots"]):
-        prompt = f"{ROLE}，{s['shot']}，表情{s['emotion']}，竖版构图"
+        prompt = (f"{ROLE}，{s['shot']}，表情{s['emotion']}，竖版构图，"
+                  f"明亮通透的背景，高调布光，整体画面明亮鲜艳，儿童绘本亮色系")
         print(f"[2/5] 生图 幕{i+1} ({s['emotion']}) ...")
         rsp = ImageSynthesis.call(model="wanx2.1-t2i-turbo", prompt=prompt,
                                   size="720*1280", n=1,
