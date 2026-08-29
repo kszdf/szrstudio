@@ -101,6 +101,44 @@ def add_subtitle(frame, text, show_ratio=1.0):
     return img.convert("RGB")
 
 
+def add_steps(img, steps, cur_idx):
+    """画面下部(角色区下方): 步骤流程卡(序号圆+文字+箭头连接, 当前高亮/完成绿勾/未到暗显)。
+    2026-08-28 用户要求: 讲解式过程要在画面中展示, 不能只在底部字幕。"""
+    img = img.convert("RGBA")
+    d = ImageDraw.Draw(img)
+    n = len(steps)
+    area_y0, area_y1 = 1210, 1830
+    card_h = int((area_y1 - area_y0) / max(1, n))
+    y = area_y0
+    for i, st in enumerate(steps):
+        if i == cur_idx:
+            state = 1
+        elif i < cur_idx:
+            state = 2
+        else:
+            state = 0
+        col = (255, 200, 60) if state == 1 else ((16, 185, 129) if state == 2 else (82, 90, 104))
+        cy = y + card_h // 2
+        # 序号圆
+        d.ellipse([150 - 32, cy - 32, 150 + 32, cy + 32],
+                  fill=col if state else (58, 64, 76))
+        d.text((150, cy), str(i + 1), font=font(40), fill=(255, 255, 255), anchor="mm")
+        # 卡片
+        d.rounded_rectangle([216, y + 5, W - 56, y + card_h - 5], radius=18,
+                            outline=col, width=4 if state else 2,
+                            fill=(20, 28, 45, 210) if state else (20, 24, 34, 150))
+        d.text((242, cy), st, font=font(34), fill=(255, 255, 255) if state else (150, 152, 160),
+               anchor="lm")
+        if state == 2:
+            d.line([(W - 118, cy - 16), (W - 102, cy), (W - 76, cy - 30)],
+                   fill=(16, 185, 129), width=8)
+        if i < n - 1:
+            d.line([(150, cy + card_h // 2 - 4), (150, y + card_h + 6)],
+                   fill=(110, 120, 135), width=7)
+        y += card_h
+    return img.convert("RGB")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--shots", required=True, help="逗号分隔分镜图路径")
@@ -108,8 +146,10 @@ def main():
     ap.add_argument("--voice", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--title", default="")
+    ap.add_argument("--steps", default="", help="讲解式步骤清单(逗号分隔): 画面下部逐步展示")
     args = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
+    steps = [s.strip() for s in args.steps.split(",") if s.strip()]
 
     shots = [s.strip() for s in args.shots.split(",") if s.strip()]
     narrs = [s.strip() for s in args.narration.split("|") if s.strip()]
@@ -153,6 +193,20 @@ def main():
         n = len(frames)
         for fi, frame in enumerate(frames):
             ratio = fi / n
+            if steps:
+                # 讲解式: 角色区取上部62%, 下部深色承接 + 步骤流程卡
+                top = frame.crop((0, 0, W, int(H * 0.62)))
+                grad = Image.new("RGB", (W, H - int(H * 0.62)), (18, 24, 36))
+                dg = ImageDraw.Draw(grad)
+                for yy in range(grad.height):
+                    tt = yy / grad.height
+                    c = tuple(int(a + (b - a) * tt) for a, b in zip((18, 24, 36), (10, 14, 22)))
+                    dg.line([(0, yy), (W, yy)], fill=c)
+                canvas = Image.new("RGB", (W, H))
+                canvas.paste(top, (0, 0))
+                canvas.paste(grad, (0, int(H * 0.62)))
+                frame = canvas
+                frame = add_steps(frame, steps, min(i, len(steps) - 1))
             # 幕间淡入
             if fi < int(TRANS * FPS):
                 a = fi / (TRANS * FPS)

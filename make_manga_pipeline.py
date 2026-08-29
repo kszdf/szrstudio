@@ -58,6 +58,8 @@ def main():
     cmd = [sys.executable, str(BASE / "make_manga_video.py"),
            "--shots", ",".join(shots), "--narration", narration,
            "--voice", args.voice, "--out", args.out]
+    if r.get("steps"):
+        cmd += ["--steps", ",".join(r["steps"])]
     if args.title:
         cmd += ["--title", args.title]
     subprocess.run(cmd, cwd=str(BASE))

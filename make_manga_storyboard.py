@@ -45,14 +45,15 @@ EXPLAIN_TEMPLATE = """你是财税科普漫剧分镜导演。把下面的财税�
 - 3~5 幕, 每幕 = 画面描述 + 旁白
 - 讲解式: 角色面对观众讲解, 可配黑板/图示/箭头/卡片等视觉元素, 表情随内容(轻松→严肃→肯定)
 - 旁白口语化, 讲清逻辑(是什么→为什么→怎么办)
-- 只输出 JSON 数组: [{{"emotion":"...","shot":"画面描述(中文)","narration":"旁白"}}]
+- 额外输出 steps: 整个知识点的核心步骤清单(2~5 条, 每条≤10字), 供画面逐步展示
+- 只输出 JSON 对象: {{"steps": ["第1步: 账结清", ...], "shots": [{{"emotion":"...","shot":"画面描述(中文)","narration":"旁白"}}]}}
 内容: {text}"""
 
 
 def generate(text):
     ctype = classify(text)
     if ctype == "lecture":
-        return {"form": "lecture", "reason": "法条/政策类: 保持口播精确呈现, 不漫剧化", "shots": []}
+        return {"form": "lecture", "reason": "法条/政策类: 保持口播精确呈现, 不漫剧化", "shots": [], "steps": []}
     prompt = (SCENE_TEMPLATE if ctype == "scene" else EXPLAIN_TEMPLATE).format(role=ROLE, text=text)
     cfg = get_text_config()
     raw = deepseek_chat(prompt, cfg["model"], cfg["key"], cfg.get("base_url"), timeout=90)
@@ -61,14 +62,20 @@ def generate(text):
         content = content.strip("`")
         if content[:4].lower() == "json":
             content = content[4:]
-    arr = json.loads(content) if content.startswith("[") else None
-    if not arr:
+    data = json.loads(content) if (content.startswith("[") or content.startswith("{")) else None
+    if isinstance(data, list):
+        arr = data
+        steps = []
+    elif isinstance(data, dict):
+        arr = data.get("shots") or []
+        steps = data.get("steps") or []
+    else:
         raise ValueError(f"分镜解析失败: {content[:200]}")
     shots = [{"emotion": s.get("emotion", "normal"), "shot": s.get("shot", ""),
               "narration": s.get("narration", "")} for s in arr if s.get("shot")]
     return {"form": "scene" if ctype == "scene" else "explain",
             "reason": "场景剧情类→场景剧" if ctype == "scene" else "流程/概念类→讲解式",
-            "shots": shots}
+            "shots": shots, "steps": steps}
 
 
 if __name__ == "__main__":
