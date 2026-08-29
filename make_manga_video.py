@@ -211,8 +211,8 @@ def main():
             if fi < int(TRANS * FPS):
                 a = fi / (TRANS * FPS)
                 frame = Image.blend(Image.new("RGB", (W, H), (8, 10, 16)), frame, a)
-            framed = add_subtitle(frame, ntxt, ratio)
-            framed.save(frames_dir / f"f_{gidx:05d}.png")
+            # 2026-08-29 用户要求: 漫剧去掉语音字幕(语音已讲解清楚, 字幕会遮挡下方步骤卡/画面内容)
+            frame.save(frames_dir / f"f_{gidx:05d}.png")
             gidx += 1
         print(f"  幕{i+1}: {secs:.1f}s ({n}帧)")
     print("  渲染完成")
