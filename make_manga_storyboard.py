@@ -44,7 +44,8 @@ SCENE_TEMPLATE = """你是财税漫剧分镜导演。把下面的财税故事改
 - 3~5 幕, 每幕 = 画面描述(含角色+场景+情绪) + 旁白(口语化, 一~二句, 讲清这幕要点)
 - 画面描述要具体可生图: 场景(办公室/税局/家里…)、角色动作、表情、环境细节
 - 情绪: 正常/疑惑/惊恐/无奈/开心 选一
-- 只输出 JSON 数组: [{{"emotion":"...","shot":"画面描述(中文)","narration":"旁白"}}]
+- 每幕额外输出画面信息层: tag=顶部知识点标签(≤8字, 如"公转私风险")、card=中部信息卡主文字(≤18字, 该幕核心要点)、num=关键数字或词(≤8字, 如"补税2万", 无则空串)
+- 只输出 JSON 数组: [{{"emotion":"...","shot":"画面描述(中文)","narration":"旁白","tag":"...","card":"...","num":"..."}}]
 内容: {text}"""
 
 EXPLAIN_TEMPLATE = """你是财税科普漫剧分镜导演。把下面的财税知识点改写成「讲解式」分镜(角色像老师一样讲解, 配图示)。
@@ -53,7 +54,8 @@ EXPLAIN_TEMPLATE = """你是财税科普漫剧分镜导演。把下面的财税�
 - 讲解式: 角色面对观众讲解, 可配黑板/图示/箭头/卡片等视觉元素, 表情随内容(轻松→严肃→肯定)
 - 旁白口语化, 讲清逻辑(是什么→为什么→怎么办)
 - 额外输出 steps: 整个知识点的核心步骤清单(2~5 条, 每条≤10字), 供画面逐步展示
-- 只输出 JSON 对象: {{"steps": ["第1步: 账结清", ...], "shots": [{{"emotion":"...","shot":"画面描述(中文)","narration":"旁白"}}]}}
+- 每幕额外输出画面信息层: tag=顶部知识点标签(≤8字, 如"第一步：账结清")、card=中部信息卡主文字(≤18字, 该幕讲解要点)、num=关键数字或词(≤8字, 如"45天", 无则空串)
+- 只输出 JSON 对象: {{"steps": ["第1步: 账结清", ...], "shots": [{{"emotion":"...","shot":"画面描述(中文)","narration":"旁白","tag":"...","card":"...","num":"..."}}]}}
 内容: {text}"""
 
 
@@ -79,7 +81,9 @@ def generate(text):
     else:
         raise ValueError(f"分镜解析失败: {content[:200]}")
     shots = [{"emotion": s.get("emotion", "normal"), "shot": s.get("shot", ""),
-              "narration": s.get("narration", "")} for s in arr if s.get("shot")]
+              "narration": s.get("narration", ""),
+              "tag": s.get("tag", ""), "card": s.get("card", ""), "num": s.get("num", "")}
+             for s in arr if s.get("shot")]
     return {"form": "scene" if ctype == "scene" else "explain",
             "reason": "场景剧情类→场景剧" if ctype == "scene" else "流程/概念类→讲解式",
             "shots": shots, "steps": steps}

@@ -18,6 +18,8 @@ def main():
     ap.add_argument("--voice", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--title", default="")
+    ap.add_argument("--i2v", action="store_true",
+                    help="AI 图生视频动效模式(每幕约0.24元/秒, 惊艳; 缺省用 Ken Burns 代码动效)")
     args = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
 
@@ -55,10 +57,22 @@ def main():
 
     # 3) 成片(复用 make_manga_video)
     narration = "|".join(s["narration"] for s in r["shots"])
-    print(f"[3/5] 成片({len(shots)} 幕) ...")
+    print(f"[3/5] 成片({len(shots)} 幕, {'i2v图生视频' if args.i2v else 'Ken Burns代码动效'}) ...")
     cmd = [sys.executable, str(BASE / "make_manga_video.py"),
            "--shots", ",".join(shots), "--narration", narration,
            "--voice", args.voice, "--out", args.out]
+    if args.i2v:
+        cmd += ["--i2v"]
+        # 信息层字段: 优先 LLM 分镜输出, 缺省由 make_manga_video 自动派生
+        tags = [s.get("tag", "") for s in r["shots"]]
+        cards = [s.get("card", "") for s in r["shots"]]
+        nums = [s.get("num", "") for s in r["shots"]]
+        if any(tags):
+            cmd += ["--tags", ",".join(tags)]
+        if any(cards):
+            cmd += ["--cards", ",".join(cards)]
+        if any(nums):
+            cmd += ["--nums", ",".join(nums)]
     if r.get("steps"):
         cmd += ["--steps", ",".join(r["steps"])]
     if args.title:
