@@ -104,6 +104,59 @@ def rough_arrow(d, p1, p2, width=4, color=INK, seed=None):
         rough_line(d, (x2, y2), (tx, ty), width, color, (seed or 1) + int(da * 10))
 
 
+# ============ 手绘图标(rough 风格, 内容语义化) ============
+def draw_icon(d, kind, cx, cy, size=90, color=INK, seed=21):
+    """在 (cx,cy) 画一个手绘风格小图标。kind: ledger/calendar/stamp/coin/check/warn/calculator/flag"""
+    r = size / 2
+    s = random.Random(seed)
+    col = color
+    if kind == "ledger":        # 账本: 竖矩形 + 中缝 + 横线
+        rough_rect(d, (cx - r * 0.7, cy - r * 0.85, cx + r * 0.7, cy + r * 0.85), 4, col, seed)
+        rough_line(d, (cx, cy - r * 0.85), (cx, cy + r * 0.85), 3, col, seed + 1)
+        for k in range(3):
+            yy = cy - r * 0.4 + k * r * 0.42
+            rough_line(d, (cx + r * 0.12, yy), (cx + r * 0.55, yy), 3, col, seed + 2 + k)
+    elif kind == "calendar":    # 日历: 矩形 + 顶部两小环 + 横线 + 圈出日期
+        rough_rect(d, (cx - r * 0.8, cy - r * 0.75, cx + r * 0.8, cy + r * 0.8), 4, col, seed)
+        rough_line(d, (cx - r * 0.8, cy - r * 0.25), (cx + r * 0.8, cy - r * 0.25), 3, col, seed + 1)
+        for dx in (-r * 0.45, r * 0.45):
+            rough_line(d, (cx + dx, cy - r * 0.75), (cx + dx, cy - r * 1.0), 3, col, seed + 2)
+        rough_circle(d, cx + r * 0.3, cy + r * 0.25, r * 0.28, 3, col, seed + 3)
+    elif kind == "stamp":       # 印章: 圆 + 中心字
+        rough_circle(d, cx, cy, r * 0.85, 5, col, seed)
+        rough_circle(d, cx, cy, r * 0.55, 3, col, seed + 1)
+        f = font(int(size * 0.5), "kai")
+        d.text((cx, cy), "章", font=f, fill=col, anchor="mm")
+    elif kind == "coin":        # 钱袋/硬币: 圆 + ¥
+        rough_circle(d, cx, cy, r * 0.85, 5, col, seed)
+        rough_circle(d, cx, cy, r * 0.55, 3, col, seed + 1)
+        f = font(int(size * 0.5), "hei")
+        d.text((cx, cy), "¥", font=f, fill=col, anchor="mm")
+    elif kind == "check":       # 对勾
+        rough_line(d, (cx - r * 0.6, cy + r * 0.1), (cx - r * 0.15, cy + r * 0.55), 6, col, seed)
+        rough_line(d, (cx - r * 0.15, cy + r * 0.55), (cx + r * 0.7, cy - r * 0.6), 6, col, seed + 1)
+    elif kind == "warn":        # 感叹号三角
+        pts = [(cx, cy - r * 0.9), (cx + r * 0.7, cy + r * 0.8), (cx - r * 0.7, cy + r * 0.8)]
+        for i in range(3):
+            a, b = pts[i], pts[(i + 1) % 3]
+            rough_line(d, a, b, 4, col, seed + i)
+        f = font(int(size * 0.55), "hei")
+        d.text((cx, cy + r * 0.15), "!", font=f, fill=col, anchor="mm")
+    elif kind == "calculator":  # 计算器
+        rough_rect(d, (cx - r * 0.75, cy - r * 0.85, cx + r * 0.75, cy + r * 0.85), 4, col, seed)
+        rough_rect(d, (cx - r * 0.55, cy - r * 0.6, cx + r * 0.55, cy - r * 0.2), 3, col, seed + 1)
+        for k in range(6):
+            gx = cx - r * 0.45 + (k % 3) * r * 0.45
+            gy = cy + r * 0.02 + (k // 3) * r * 0.42
+            rough_circle(d, gx, gy, r * 0.09, 2, col, seed + 2 + k)
+    elif kind == "flag":        # 旗帜/目标
+        rough_line(d, (cx - r * 0.8, cy + r * 0.85), (cx - r * 0.8, cy - r * 0.85), 4, col, seed)
+        rough_line(d, (cx - r * 0.8, cy - r * 0.8), (cx + r * 0.8, cy - r * 0.2), 4, col, seed + 1)
+        rough_line(d, (cx + r * 0.8, cy - r * 0.2), (cx - r * 0.8, cy + r * 0.3), 4, col, seed + 2)
+    else:                       # 默认: 小圆点
+        rough_circle(d, cx, cy, r * 0.5, 4, col, seed)
+
+
 # ============ 白板内容(注销三步, 智能配色) ============
 # 每个元素: (类型, 参数, 标签, 时长比例)
 def build_elements(layout=None):
@@ -113,10 +166,10 @@ def build_elements(layout=None):
     els = []
     cx = W // 2
     if layout is None:
-        layout = {"title": "公司注销三步走", "items": [
-            {"main": "账结清", "sub": "补税 / 报报表", "num": "第 1 步"},
-            {"main": "公示 45 天", "sub": "公告债权债务", "num": "第 2 步"},
-            {"main": "注销登记", "sub": "先税务后工商", "num": "第 3 步"},
+        layout = {"title": "公司注销三步走", "warn": "缺一步都注销不了", "items": [
+            {"main": "账结清", "sub": "补税 / 报报表", "num": "第 1 步", "icon": "ledger"},
+            {"main": "公示 45 天", "sub": "公告债权债务", "num": "第 2 步", "icon": "calendar"},
+            {"main": "注销登记", "sub": "先税务后工商", "num": "第 3 步", "icon": "stamp"},
         ]}
     title = layout.get("title", "财税知识")
     items = layout.get("items", [])[:4]
@@ -147,6 +200,11 @@ def build_elements(layout=None):
         els.append(("circle", {"cx": x - 210, "cy": y, "r": 42, "color": col}, tag + "_c", 0.02))
         els.append(("text", {"xy": (x - 210, y), "text": item.get("num", str(i + 1)),
                              "size": 46, "role": role}, tag + "_n", 0.02))
+        # 手绘图标(内容语义化, 语义色)
+        icon = item.get("icon", "")
+        if icon:
+            els.append(("icon", {"kind": icon, "cx": x - 330, "cy": y + 60, "size": 70, "color": col},
+                        tag + "_icon", 0.02))
         # 主文字(语义色 + 楷体)
         els.append(("text", {"xy": (x + 20, y + 45), "text": item.get("main", ""),
                              "size": 66, "role": role, "style": "kai"}, tag + "_m", 0.02))
@@ -248,6 +306,19 @@ def draw_frame(els, prog):
                            (xy[0] + tw / 2, xy[1] + f.size * 0.55), 3,
                            COLOR_THEME.get("warn", RED), seed=e[1].get("seed", 3))
             dl.text(xy, txt, font=f, fill=color + (alpha,), anchor="mm")
+            img = Image.alpha_composite(img.convert("RGBA"), lay).convert("RGB")
+            d = ImageDraw.Draw(img)
+        elif kind == "icon":
+            # 手绘图标: 淡入出现
+            alpha = int(255 * min(1.0, p_local * 4))
+            if alpha <= 0:
+                continue
+            lay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+            dl = ImageDraw.Draw(lay)
+            draw_icon(dl, e[1]["kind"], e[1]["cx"], e[1]["cy"], e[1].get("size", 70),
+                      e[1].get("color", INK), seed=e[1].get("seed", 21))
+            # 按 alpha 混合: 简单做法是画完整体后整层降透明
+            lay = lay.point(lambda p: p * alpha // 255)
             img = Image.alpha_composite(img.convert("RGBA"), lay).convert("RGB")
             d = ImageDraw.Draw(img)
     return img
