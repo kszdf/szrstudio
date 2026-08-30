@@ -380,8 +380,12 @@ def main():
                     "第二步公示四十五天，公告债权债务。第三步注销登记，先税务后工商。"
                     "拿到注销通知书，公司才算真正注销完。")
         synth(text, args.voice, wav, speech_rate=0.90, pitch_rate=1.0, volume=50)
+        # 画面时长为主, 配音不足处尾部静音补齐(apad), 保证元素逐笔画完不截断
         subprocess.run([FFMPEG, "-y", "-framerate", str(FPS), "-i", str(tmp / "f_%04d.png"),
-                        "-i", wav, "-vf", "format=yuv420p", "-profile:v", "high",
+                        "-i", wav, "-filter_complex",
+                        "[1:a]apad,aresample=44100,aformat=channel_layouts=stereo[a]",
+                        "-map", "0:v", "-map", "[a]",
+                        "-vf", "format=yuv420p", "-profile:v", "high",
                         "-c:v", "libx264", "-crf", "19", "-c:a", "aac", "-shortest", args.out],
                        capture_output=True, text=True)
     else:
