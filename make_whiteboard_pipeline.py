@@ -18,7 +18,7 @@ def main():
     ap.add_argument("--text", required=True, help="财税内容/文案")
     ap.add_argument("--voice", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--duration", type=float, default=20.0, help="成片时长(秒)")
+    ap.add_argument("--duration", type=float, default=0, help="成片时长(秒, 0=按语音自动同步)")
     ap.add_argument("--title", default="", help="标题提示(可选, 布局生成参考)")
     args = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
