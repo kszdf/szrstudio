@@ -119,10 +119,11 @@ def main():
         for fp in frames:
             im = add_info(Image.open(fp), tags[i], cards[i], nums[i])
             im.save(fp)
-        # 2) 重编码回视频
+        # 2) 重编码回视频 (强制 yuv420p + High profile, 否则 4:4:4 多数播放器打不开)
         seg = tmp / f"seg{i}.mp4"
         subprocess.run([FFMPEG, "-y", "-framerate", "30", "-i", str(frames_dir / "f_%04d.png"),
-                        "-vf", f"scale={W}:{H},fps={FPS}",
+                        "-vf", f"scale={W}:{H},fps={FPS},format=yuv420p",
+                        "-profile:v", "high", "-level", "4.0",
                         "-c:v", "libx264", "-preset", "fast", "-crf", "19", "-an", str(seg)],
                        capture_output=True)
         segs.append(str(seg))
@@ -151,9 +152,9 @@ def main():
         synth(NARR[i], "cosyvoice-v3-plus-zhangc2-28a7c3541e1c45518a03046c11baeb1d",
               str(wav), speech_rate=0.90, pitch_rate=1.0, volume=50)
         segv = tmp / f"segv{i}.mp4"
-        # 以画面时长为准, 配音不足处尾部静音补齐(apad), 保证音画不截断
+        # 以画面时长为准, 配音不足处尾部静音补齐(apad), 保证音画不截断; 音频统一 44100 立体声
         subprocess.run([FFMPEG, "-y", "-i", s, "-i", str(wav),
-                        "-filter_complex", "[1:a]apad[a]",
+                        "-filter_complex", "[1:a]apad,aresample=44100,aformat=channel_layouts=stereo[a]",
                         "-map", "0:v", "-map", "[a]",
                         "-c:v", "copy", "-c:a", "aac", "-shortest", str(segv)],
                        capture_output=True)
