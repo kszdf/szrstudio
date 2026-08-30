@@ -286,10 +286,15 @@ def build_i2v(shots, narrs, steps, title, voice, out, tmp, tags=None, cards=None
     n = len(narrs)
     cost = I2V_SECS * I2V_COST_PER_SEC * n
     print(f"[i2v] 模式: 图生视频动效, {n} 幕 x {I2V_SECS}s, 预计费用 ≈ {cost:.1f} 元")
-    tags = tags or ([steps[i] if i < len(steps) and steps[i] else (title or "财税科普")
-                     for i in range(n)] if steps else [title or "财税科普"] * n)
-    cards = cards or narrs
-    nums = nums or [_extract_num(x) for x in narrs]
+
+    # 信息层字段按幕数补齐(LLM 可能只输出部分或空串, 避免越界)
+    def _pad(lst, i, default):
+        return lst[i] if lst and i < len(lst) and lst[i].strip() else default
+
+    tags = [_pad(tags, i, (steps[i] if i < len(steps) and steps[i] else (title or "财税科普")))
+            for i in range(n)]
+    cards = [_pad(cards, i, narrs[i]) for i in range(n)]
+    nums = [_pad(nums, i, _extract_num(narrs[i])) for i in range(n)]
 
     # 1) 每幕: i2v 动效 + 信息层叠加
     print(f"[1/3] 生成 {n} 幕图生视频动效(每幕约2分钟) ...")
