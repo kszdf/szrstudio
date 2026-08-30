@@ -268,6 +268,8 @@ def main():
         try:
             lp = Path(args.layout)
             raw = lp.read_text(encoding="utf-8") if lp.exists() else args.layout
+            if raw.startswith("\ufeff"):   # 兼容 PowerShell Out-File 的 BOM
+                raw = raw[1:]
             layout = _json.loads(raw)
         except Exception as e:  # noqa: BLE001
             print(f"[警告] 布局解析失败, 用示例: {e}")
