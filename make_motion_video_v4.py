@@ -1333,6 +1333,15 @@ def _synth_segment_subprocess(text, voice, out_path, timeout=90, retries=3):
     fixed2 = _re.sub(r"那[，。…、：；\s]*我", "那个，我", text)
     if fixed2 != text and fixed2 not in candidates:
         candidates.append(fixed2)
+    # 2026-08-31 新增坑：jiangnv3 女声对句首"张老师，/张老师："称呼也返回异常小音频，
+    # 去掉称呼再合成（称呼保留在字幕/上下文，不影响语义）
+    fixed3 = _re.sub(r"^张老师[，。：、…；\s]*", "", text)
+    if fixed3 != text and fixed3 and fixed3 not in candidates:
+        candidates.append(fixed3)
+    # 组合处理："张老师，"+"那"开头同时存在时
+    fixed4 = _re.sub(r"^张老师[，。：、…；\s]*那?", "", text)
+    if fixed4 != text and fixed4 and fixed4 not in candidates:
+        candidates.append(fixed4)
     last = ""
     for cand in candidates:
         code = (

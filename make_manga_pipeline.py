@@ -45,12 +45,46 @@ def main():
         prompt = (f"{ROLE}，{s['shot']}，表情{s['emotion']}，竖版构图，"
                   f"明亮通透的背景，高调布光，整体画面明亮鲜艳，儿童绘本亮色系")
         print(f"[2/5] 生图 幕{i+1} ({s['emotion']}) ...")
-        rsp = ImageSynthesis.call(model="wanx2.1-t2i-turbo", prompt=prompt,
-                                  size="720*1280", n=1,
-                                  api_key=os.environ.get("DASHSCOPE_API_KEY"))
-        if rsp.status_code != 200:
-            print(f"  生图失败: {rsp.message}")
-            return 1
+        # 2026-08-31 修复：生图容错——①审核拦截(DataInspectionFailed)换措辞重试 2 次；②重试仍失败降级为渐变占位图，
+        # 不让整条任务失败(此前单幕被审核拦截即整条failed, 浪费已生成图和费用)
+        rsp = None
+        for attempt in range(3):
+            try:
+                rsp = ImageSynthesis.call(model="wanx2.1-t2i-turbo", prompt=prompt,
+                                          size="720*1280", n=1,
+                                          api_key=os.environ.get("DASHSCOPE_API_KEY"))
+                if rsp.status_code == 200:
+                    break
+                msg = str(getattr(rsp, "message", "") or "")
+                if "DataInspectionFailed" in msg or "inappropriate" in msg.lower():
+                    # 审核拦截：弱化措辞重试(去掉可能触发审核的敏感词, 用中性描述)
+                    print(f"  幕{i+1} 审核拦截(尝试{attempt+2}/3): 换中性措辞重试")
+                    prompt = (f"{ROLE}，{s['shot']}，表情{s['emotion']}，竖版构图，"
+                              f"明亮背景，色彩明快，儿童绘本风格")
+                else:
+                    print(f"  幕{i+1} 生图失败(尝试{attempt+2}/3): {msg}")
+            except Exception as e:  # noqa: BLE001
+                print(f"  幕{i+1} 生图异常(尝试{attempt+2}/3): {e}")
+            rsp = None
+        if rsp is None or rsp.status_code != 200:
+            # 降级：生成渐变占位图(纯色+文字提示该幕生成失败)，不阻断整条出片
+            print(f"  ⚠ 幕{i+1} 生图重试仍失败，使用占位图(该幕画面为占位, 可重跑)")
+            try:
+                from PIL import Image, ImageDraw, ImageFont
+                ph = Image.new("RGB", (720, 1280), (235, 238, 245))
+                d = ImageDraw.Draw(ph)
+                try:
+                    f = ImageFont.truetype(str(BASE / "fonts/simhei.ttf"), 40)
+                except Exception:  # noqa: BLE001
+                    f = ImageFont.load_default()
+                d.text((360, 640), f"该幕画面生成失败\n内容审核未通过或服务异常", font=f,
+                       fill=(120, 128, 140), anchor="mm")
+                dest = BASE / "cartoon_assets" / f"manga_{h}_{i}.jpg"
+                ph.save(dest)
+                shots.append(str(dest))
+            except Exception:  # noqa: BLE001
+                return 1
+            continue
         dest = BASE / "cartoon_assets" / f"manga_{h}_{i}.jpg"
         urllib.request.urlretrieve(rsp.output.results[0].url, dest)
         shots.append(str(dest))
