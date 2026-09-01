@@ -44,9 +44,10 @@ except Exception as e:  # pragma: no cover
 
 # 角色音色（定稿）
 MALE_VOICE = ""   # 新租户初始无自带声音；须由租户克隆/选择后显式传入
-MALE_MODEL = "cosyvoice-v3-plus"
+# 2026-09-01: 模型默认空 → qwen_tts.resolve_model 按音色自动推断（_v3→v3-flash 预置音色 / 克隆音→v3-plus）
+MALE_MODEL = ""
 FEMALE_VOICE = ""   # 新租户初始无自带声音；须由租户克隆/选择后显式传入
-FEMALE_MODEL = "cosyvoice-v3-plus"
+FEMALE_MODEL = ""
 
 # 情绪→韵律映射表（D 基调：专家味 + 自然起伏，男女声分设相对倍率 + 句后停顿）
 # rel = (语速倍率, 音高倍率, 音量倍率)，作用在 CLI 传入的男女声基准之上；pause = 句后静音秒数

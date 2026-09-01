@@ -49,13 +49,33 @@ DEFAULT_MODEL = "cosyvoice-v3-plus"
 DEFAULT_SPEECH_RATE = 1.0
 
 
-def synth(text, voice, out_path, model=DEFAULT_MODEL, speech_rate=DEFAULT_SPEECH_RATE, pitch_rate=1.0, volume=50, retries=3, timeout=90, instruction=""):
+def resolve_model(voice: str, model: str = "") -> str:
+    """按音色自动推断 TTS 模型（2026-09-01 平台预置音色接入）：
+    - 官方预置音色（long*_v3 结尾）→ cosyvoice-v3-flash（更快更便宜，实测 1.5~2.2s）
+    - 克隆音色（cosyvoice-v3-plus-* 前缀）→ cosyvoice-v3-plus（保持原模型）
+    显式传入 model 时优先使用显式值。
+    """
+    if model:
+        return model
+    v = (voice or "").strip()
+    if v.endswith("_v3"):
+        return "cosyvoice-v3-flash"
+    if v.startswith("cosyvoice-v3-plus-"):
+        return "cosyvoice-v3-plus"
+    # 未知格式：默认 v3-plus（兼容历史）
+    return "cosyvoice-v3-plus"
+
+
+def synth(text, voice, out_path, model="", speech_rate=DEFAULT_SPEECH_RATE, pitch_rate=1.0, volume=50, retries=3, timeout=90, instruction=""):
     """合成单条文本 -> 保存 wav。失败自动重试。带超时保护（防 dashscope 网络卡死无限阻塞）。
-    instruction: CosyVoice v3 风格指令(文本描述语气/语速/情感), 空则不注入(保持原行为)。"""
+    instruction: CosyVoice v3 风格指令(文本描述语气/语速/情感), 空则不注入(保持原行为)。
+    model: 传入则强制使用；空字符串则按 voice_id 自动推断（resolve_model：_v3 后缀→v3-flash，克隆音→v3-plus）。"""
     if not voice:
         raise ValueError(
             "voice_id 为空：租户尚未克隆或选择声音。请先在「声音」页克隆专属音色或选择公开模板后再生成。"
         )
+    # 模型跟随音色自动选择（v3-flash 预置音色 vs v3-plus 克隆音色）
+    model = resolve_model(voice, model)
     import threading
     from dashscope.audio.tts_v2 import SpeechSynthesizer, AudioFormat
 
@@ -162,9 +182,10 @@ def _sentence_pace(sent, base_rate=0.90):
 
 # 注意: CosyVoice v3-plus 当前接口不接受 instruction 风格指令(实测返回 None, 2026-08-27),
 # 自然度/抑扬顿挫靠: 语速 + 停顿 + 警示前吸气 + 按句类音调起伏 实现。
-def synth_natural(text, voice, out_path, model=DEFAULT_MODEL, base_rate=0.90, retries=3):
+def synth_natural(text, voice, out_path, model="", base_rate=0.90, retries=3):
     """分句合成 + 逐句语速/音调 + 句间静音, 解决'机械匀速无停顿'的 AI 痕迹。
-    警示句 0.87 低沉, 疑问句 1.03 上扬, 列举 0.98, 其余 0.90。"""
+    警示句 0.87 低沉, 疑问句 1.03 上扬, 列举 0.98, 其余 0.90。
+    model: 传入则强制；空则按 voice_id 自动推断（同 synth）。"""
     import wave, os
     if not voice:
         raise ValueError(
