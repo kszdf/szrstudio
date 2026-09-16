@@ -22,6 +22,7 @@
 """
 import os
 import sys
+import re
 import argparse
 import subprocess
 import wave
@@ -140,9 +141,9 @@ HIST_SIZE = 70     # 历史句
 STROKE_W = 7       # 白字黑描边(2026-08-28 用户规则: 所有幕后音字幕须与背景强对比醒目, 5→7 对齐 motion)
 STROKE_FILL = (0, 0, 0)   # 黑边
 
-# 颜色：还原 8385 经典「白字黑边」清晰风格（全网规范首推：任何背景都清晰），关键词红色高亮
-SUB_DONE = (255, 255, 255)   # 当前句已读：纯白（卡拉OK 高亮扫过，最清晰）
-SUB_TODO = (205, 212, 226)   # 当前句未读：浅蓝灰，提示"待读"，与纯白形成逐字高亮对比
+# 颜色：2026-09-16 用户规则——卡拉OK逐字显亮改黄色（不再整行白字），关键词仍红色高亮
+SUB_DONE = (255, 205, 64)    # 当前句已读：亮黄（卡拉OK 高亮扫过，逐字点亮）
+SUB_TODO = (205, 212, 226)   # 当前句未读：浅蓝灰，提示"待读"，与亮黄形成逐字高亮对比
 HIST_RGB = (190, 198, 214)   # 历史句基础：淡蓝灰（配合 alpha 逐渐淡出）
 BRAND_RGB = (255, 201, 64)   # 品牌条（金色，与标题金呼应，深色背景上更高级）
 
@@ -580,7 +581,7 @@ def tts_one(text, role, out_wav, dry, female_voice, female_model, male_voice, ma
     """逐句合成。支持分声线独立调感情/快慢，并按情绪映射表施加韵律起伏。
     speech_rate 越低越慢；pitch_rate 越高越亮/尖；volume 为音量(0-100)。
     emotion 取值见 EMOTION_PROSODY：narrate/emphasis/warn/query/light/ending。"""
-    voice = female_voice if role == "F" else male_voice
+    voice = (female_voice or _DEFAULT_MALE) if role == "F" else (male_voice or _DEFAULT_MALE)
     model = female_model if role == "F" else male_model
     prof = EMOTION_PROSODY.get(emotion, EMOTION_PROSODY["narrate"])
     role_key = "F" if role == "F" else "M"
@@ -860,31 +861,74 @@ def _draw_bubble(draw, chars, y, font, alpha=200):
 
 
 def _draw_brand(draw):
-    from PIL import ImageFont
-    f = ImageFont.truetype(FONT_PATH, 38)
-    txt = "追梦 · 老张讲财税"
-    x = (W - draw.textlength(txt, font=f)) / 2
-    _draw_text_with_stroke(draw, (x, H - 96), txt, f, BRAND_RGB, stroke_w=2)
+    """底部品牌落款已按用户要求移除（2026-09-16）：不再绘制「追梦 · 老张讲财税」。
+    保留函数体为空以兼容三处既有调用点（片头帧/静态帧/字幕帧）。"""
+    return
+
+
+_SALUTATION_WORDS = ("老板", "各位老板", "企业老板", "老板们", "大家好", "朋友们", "各位朋友",
+                     "你好", "您好", "哈喽")
+_ADDR_START = ("你", "您", "我", "咱", "这", "那")
 
 
 def _auto_title(segs):
-    """自动生成 ≤10 字标题：取首句核心短语（去开场客套、截到首个断句标点前）。"""
+    """自动生成 ≤10 字标题（2026-09-16 重写）：跳过称呼客套，按内容类型取形。
+
+    修的坑：旧版截首句到第一个逗号，稿子以「老板，」开场时标题只剩「老板」两个字。
+
+    取形优先级（不同类型内容用不同标题形式）：
+      ① 数据型：含数字/百分比且 ≤10 字的短句（数据戳痛点，适合科普/稽查类）；
+      ② 问句型：会不会/能不能/是不是…开头或以 吗/呢/？ 收尾（钩子反问，适合观点讨论类）；
+      ③ 陈述型：6-10 字完整短语（适合叙事类）；
+      ④ 兜底：第一条非称呼短语。
+    """
     leadins = ["张老师，", "张老师:", "老师，", "老师:", "我想请教一下", "我想问一下",
-               "我想咨询", "啊，", "哎，", "那个", "请问", "您说", "是这样的"]
+               "我想咨询", "啊，", "哎，", "那个", "请问", "您说", "是这样的",
+               "老板，", "老板:", "老板们，", "各位老板，", "大家好，", "朋友们，"]
+    clauses = []
     for role, text in segs:
         t = _clean_markers(text).strip()
         for p in leadins:
             if t.startswith(p):
                 t = t[len(p):].strip()
-        # 截到首个断句标点前，得到核心短语
-        for sep in ["，", "？", "?", "。", "！"]:
-            if sep in t:
-                t = t.split(sep)[0]
-                break
-        t = t.strip().rstrip("呢吗吧啊呀哦呃")
-        if t:
-            return t[:TITLE_MAX_CHARS]
-    return "追梦短视频"
+        # 切短句（不用半角 . , 以免拆碎 18.25% 这类数字）
+        for c in re.split(r"[，。！？；：!?!;；\n]", t):
+            c = c.strip().strip("\u201c\u201d\"'\u2018\u2019「」《》")
+            if len(c) >= 4:
+                clauses.append(c)
+    if not clauses:
+        return "追梦短视频"
+
+    def _is_addr(c):
+        if c.startswith(_ADDR_START):
+            return True
+        return any(c == s or (c.startswith(s) and len(c) <= len(s) + 2)
+                   for s in _SALUTATION_WORDS)
+
+    has_digit = re.compile(r"[0-9０-９%％]")
+    # ① 数据型：短而带数字，直接当标题
+    for c in clauses:
+        if has_digit.search(c) and not _is_addr(c) and 4 <= len(c) <= TITLE_MAX_CHARS:
+            return c
+    # ② 问句型：反问钩子
+    for c in clauses:
+        if _is_addr(c):
+            continue
+        if c.endswith(("吗", "呢", "么")) or c.startswith(
+                ("会不会", "能不能", "是不是", "要不要", "该不该", "为什么", "凭什么", "怎么")):
+            return c[:TITLE_MAX_CHARS]
+    # ③ 陈述型：去掉语气尾字后的 6-10 字完整短语
+    for c in clauses:
+        if _is_addr(c):
+            continue
+        c2 = c.rstrip("呢吗吧啊呀哦呃")
+        if 6 <= len(c2) <= TITLE_MAX_CHARS:
+            return c2
+    # ④ 兜底：第一条非称呼短语
+    for c in clauses:
+        if not _is_addr(c):
+            return c[:TITLE_MAX_CHARS]
+    return clauses[0][:TITLE_MAX_CHARS]
 
 
 def _draw_title(draw, title, subtitle=""):
@@ -1151,7 +1195,7 @@ def naturalize_dialogue(text):
         print(f"[WARN] 获取文本模型配置失败，跳过自然化: {e}")
         return text
     prompt = (
-        "你是一位资深财税短视频脚本编辑。下面的双声对话稿由两位财税专家出镜讲解：\n"
+        "你是一位财税短视频脚本编辑。下面的双声对话稿由两位财税专家出镜讲解：\n"
         "女声=江老师（专业财税顾问，负责替企业主抛出常见的疑问与真实场景）；\n"
         "男声=张老师（实战派税务顾问，负责耐心、通俗地逐一解答）。\n"
         "任务：把生硬的书面稿，改写成「真实财税咨询室里，江老师替客户发问、张老师娓娓道来解答」的自然对话——专业可信、有来有回、像真人在交谈，彻底去除 AI 播音腔与机械朗读感。\n"
