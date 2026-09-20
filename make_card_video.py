@@ -687,7 +687,7 @@ def main():
     else:
         from model_providers import ensure_env
         ensure_env()
-        from qwen_tts import synth, DEFAULT_VOICE_ID
+        from qwen_tts import synth_natural, synth, DEFAULT_VOICE_ID
         sys.path.insert(0, str(BASE))
         from tts_text_rules import normalize_for_tts
         voice = args.voice or DEFAULT_VOICE_ID

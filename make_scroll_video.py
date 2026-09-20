@@ -37,7 +37,7 @@ FFMPEG = r"D:\ffmpeg\ffmpeg-8.1.2-full_build\bin\ffmpeg.exe"
 
 # 让 qwen_tts 在导入时就把 DASHSCOPE_API_KEY 灌进环境变量
 try:
-    from qwen_tts import synth as _qwen_synth, DEFAULT_VOICE_ID as _DEFAULT_MALE
+    from qwen_tts import synth_natural as _qwen_synth_natural, synth as _qwen_synth, DEFAULT_VOICE_ID as _DEFAULT_MALE
 except Exception as e:  # pragma: no cover
     print(f"[WARN] 无法导入 qwen_tts: {e}")
     _qwen_synth = None
