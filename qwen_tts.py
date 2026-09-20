@@ -66,10 +66,22 @@ def resolve_model(voice: str, model: str = "") -> str:
     return "cosyvoice-v3-plus"
 
 
-def synth(text, voice, out_path, model="", speech_rate=DEFAULT_SPEECH_RATE, pitch_rate=1.0, volume=50, retries=3, timeout=90, instruction=""):
+def synth(text, voice, out_path, model="", speech_rate=DEFAULT_SPEECH_RATE, pitch_rate=1.0, volume=50, retries=6, timeout=90, instruction=""):
     """合成单条文本 -> 保存 wav。失败自动重试。带超时保护（防 dashscope 网络卡死无限阻塞）。
     instruction: CosyVoice v3 风格指令(文本描述语气/语速/情感), 空则不注入(保持原行为)。
     model: 传入则强制使用；空字符串则按 voice_id 自动推断（resolve_model：_v3 后缀→v3-flash，克隆音→v3-plus）。"""
+    # ★ 数字朗读规范化（2026-09-11）：政策文号 / 年份转中文读法。
+    #   稿子里「苏地税规20121号文」是〔2012〕1号 的括号被吃掉造成年份与序号粘连，
+    #   直接送 TTS 会被读成「二万零一百二十一号文」。在此处兜底 →
+    #   六种出片形式（card/scroll/motion/whiteboard/cartoon/manga）的所有调用自动受益。
+    #   设 HGT_TTS_RAW_TEXT=1 可关闭（确有需要保留原始阿拉伯数字时）。
+    import os as _os_norm
+    if not _os_norm.environ.get("HGT_TTS_RAW_TEXT"):
+        try:
+            from tts_text_rules import normalize_for_tts
+            text = normalize_for_tts(text)
+        except Exception:  # noqa: BLE001 —— 规范化属增强，失败不阻断配音
+            pass
     if not voice:
         raise ValueError(
             "voice_id 为空：租户尚未克隆或选择声音。请先在「声音」页克隆专属音色或选择公开模板后再生成。"
@@ -132,7 +144,7 @@ def synth(text, voice, out_path, model="", speech_rate=DEFAULT_SPEECH_RATE, pitc
             except Exception:
                 pass
             last_err = f"{type(e).__name__}: {e}" + (f" | last_error={le}" if le else "")
-        time.sleep(2 * (i + 1))
+        time.sleep(min(20, 3 * (i + 1)))
     raise RuntimeError(f"合成失败（已重试 {retries} 次）: {last_err}")
 
 
@@ -153,36 +165,46 @@ def _split_sentences(text):
     return [s for s in sents if s.strip()]
 
 
-def _sentence_pace(sent, base_rate=0.90):
+def _sentence_pace(sent, base_rate=0.92):
     """返回 (speech_rate, pause_after_ms, lead_ms, pitch_rate)。
-    v5(2026-08-28 用户定夺): 换回旧音色 zhangc2, 语速 0.94→0.90(旧声干净, 稍从容更自然),
-    保留 v4 音调起伏(警示低沉/疑问上扬) → 抑扬顿挫不读稿。"""
+    v6(2026-09-20 用户反馈"声音闷/要情绪感"):
+    - 整体提亮基频(1.0→1.05)，去"闷"；
+    - 加大高低落差：警示/结论句压低到 0.94(重读但不闷)；雷点/稽查类高扬到 1.10(警觉);
+      疑问 1.07、感叹 1.06 上扬；
+    - 语速整体略快(0.90→0.92)去拖沓感，句间留白制造呼吸；
+    - 形成明显抑扬顿挫与情绪起伏，告别平铺直叙的播音腔。"""
     slow_kw = ["先说清楚", "再提醒", "比如", "其实", "要注意", "还要提醒",
                "别", "不能", "不是", "红线", "谨慎", "务必", "别抱",
-               "记住", "注意", "重点", "关键", "一定"]
+               "记住", "注意", "重点", "关键", "一定", "千万别", "一定要"]
+    alarm_kw = ["雷", "罚", "亏", "稽查", "税局", "补税", "滞纳金", "黑名单",
+                "吊销", "查封", "判刑", "坐牢", "偷税", "虚开", "入罪", "查处", "约谈", "调账"]
     lead_ms = 0
-    pitch = 1.0
+    pitch = 1.05
     s = sent.rstrip()
-    if any(k in sent for k in slow_kw):
-        rate, base = 0.87, 400     # 警示/结论句: 稍放慢加重 + 音调低沉
+    if any(k in sent for k in alarm_kw):
+        rate, base = 0.86, 440     # 雷点/稽查类：高扬警觉 + 稍放慢加重
         lead_ms = 150
-        pitch = 0.97
+        pitch = 1.10
+    elif any(k in sent for k in slow_kw):
+        rate, base = 0.85, 410     # 警示/结论句：压低重读(重但不闷)
+        lead_ms = 180
+        pitch = 0.94
     elif sent.count("、") >= 2:
-        rate, base = 0.98, 260     # 列举密集句: 正常偏快
+        rate, base = 1.00, 260     # 列举密集句：正常偏快
     else:
         rate, base = base_rate, 320
     if s.endswith(("？", "?", "？")):
         base += 100
-        pitch = 1.03               # 疑问句上扬
+        pitch = 1.07               # 疑问句上扬
     elif s.endswith(("！", "!")):
         base += 120
-        pitch = 1.02               # 感叹句微扬
+        pitch = 1.06               # 感叹句微扬
     return rate, base, lead_ms, pitch
 
 
 # 注意: CosyVoice v3-plus 当前接口不接受 instruction 风格指令(实测返回 None, 2026-08-27),
 # 自然度/抑扬顿挫靠: 语速 + 停顿 + 警示前吸气 + 按句类音调起伏 实现。
-def synth_natural(text, voice, out_path, model="", base_rate=0.90, retries=3):
+def synth_natural(text, voice, out_path, model="", base_rate=0.90, retries=3, volume=50):
     """分句合成 + 逐句语速/音调 + 句间静音, 解决'机械匀速无停顿'的 AI 痕迹。
     警示句 0.87 低沉, 疑问句 1.03 上扬, 列举 0.98, 其余 0.90。
     model: 传入则强制；空则按 voice_id 自动推断（同 synth）。"""
@@ -200,7 +222,7 @@ def synth_natural(text, voice, out_path, model="", base_rate=0.90, retries=3):
             rate, pause, lead_ms, pitch = _sentence_pace(s, base_rate)
             tmp = out_path + f".part{i}.wav"
             synth(s, voice, tmp, model=model, speech_rate=rate,
-                  pitch_rate=pitch, volume=50, retries=retries)
+                  pitch_rate=pitch, volume=volume, retries=retries)
             with wave.open(tmp, "rb") as w:
                 if params is None:
                     params = (w.getnchannels(), w.getsampwidth(), w.getframerate())

@@ -104,13 +104,13 @@ def build_timeline(sents, voice):
     """逐句 TTS → (wav_path, start, end) 时间轴。"""
     from model_providers import ensure_env
     ensure_env()
-    from qwen_tts import synth
+    from qwen_tts import synth, synth_natural
     tmp = Path(tempfile.mkdtemp(prefix="diag_"))
     tl = []
     cur = 0.0
     for i, s in enumerate(sents):
         p = str(tmp / f"t{i}.wav")
-        synth(s, voice, p, speech_rate=0.94, pitch_rate=1.0, volume=50)
+        synth_natural(s, voice, p, base_rate=0.94)
         dur = float(subprocess.run([FFPROBE, "-v", "error", "-show_entries", "format=duration",
                                     "-of", "default=noprint_wrappers=1:nokey=1", p],
                                    capture_output=True, text=True).stdout.strip())

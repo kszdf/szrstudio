@@ -605,8 +605,8 @@ def tts_one(text, role, out_wav, dry, female_voice, female_model, male_voice, ma
         return 2.4
     try:
         # 分声线参数：男声基准 speech_rate 稍快、叠加长短句快慢节奏；女声略快亲和；pitch 微调冷暖
-        _qwen_synth(_clean_markers(text), voice, out_wav, model=model,
-                    speech_rate=speech_rate, pitch_rate=pitch_rate, volume=volume)
+        _qwen_synth_natural(_clean_markers(text), voice, out_wav, model=model,
+                           base_rate=speech_rate, volume=volume)
     except SystemExit:
         raise
     return _wav_duration(out_wav)

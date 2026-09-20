@@ -281,7 +281,7 @@ def build_i2v(shots, narrs, steps, title, voice, out, tmp, tags=None, cards=None
     """i2v 模式主流程: 每幕图生视频动效 → 信息层叠加 → 配音对齐 → 拼接成片。"""
     from model_providers import ensure_env
     ensure_env()
-    from qwen_tts import synth
+    from qwen_tts import synth, synth_natural, DEFAULT_VOICE_ID
 
     n = len(narrs)
     cost = I2V_SECS * I2V_COST_PER_SEC * n
@@ -344,7 +344,7 @@ def build_i2v(shots, narrs, steps, title, voice, out, tmp, tags=None, cards=None
     voiced = []
     for i, s in enumerate(segs):
         wav = tmp / f"v{i}.wav"
-        synth(narrs[i], voice, str(wav), speech_rate=0.90, pitch_rate=1.0, volume=50)
+        synth_natural(narrs[i], voice or DEFAULT_VOICE_ID, str(wav), base_rate=0.90)
         segv = tmp / f"segv{i}.mp4"
         subprocess.run([FFMPEG, "-y", "-i", s, "-i", str(wav),
                         "-filter_complex", "[1:a]apad,aresample=44100,aformat=channel_layouts=stereo[a]",
@@ -404,14 +404,14 @@ def main():
     # 1) TTS 每幕旁白
     from model_providers import ensure_env
     ensure_env()
-    from qwen_tts import synth
+    from qwen_tts import synth, synth_natural, DEFAULT_VOICE_ID
     print(f"[1/4] 配音 {len(narrs)} 句 ...")
     tmp = Path(tempfile.mkdtemp(prefix="manga_"))
     tl = []
     cur = 0.0
     for i, ntxt in enumerate(narrs):
         p = str(tmp / f"n{i}.wav")
-        synth(ntxt, args.voice, p, speech_rate=0.95, pitch_rate=1.0, volume=50)
+        synth_natural(ntxt, args.voice or DEFAULT_VOICE_ID, p, base_rate=0.95)
         dur = float(subprocess.run([FFPROBE, "-v", "error", "-show_entries", "format=duration",
                                     "-of", "default=noprint_wrappers=1:nokey=1", p],
                                    capture_output=True, text=True).stdout.strip())
