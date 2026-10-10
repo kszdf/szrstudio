@@ -26,6 +26,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
@@ -147,9 +148,9 @@ def classify(items):
         "请把每条分类，只保留两类题材：\n"
         "1) category=\"finance\"：财税**直接相关**（税收/发票/稽查/申报/汇算/社保/会计处理/企业合规/税率/政策等）\n"
         "2) category=\"event\"：重大热点事件（社会/经济/民生/财经大事），并给出**财税切入角度**（该事件能引出什么财税话题）\n"
-        "其余一律 category=\"other\"（不入选）。\n"
+        "其余一律丢弃（不要出现在输出里，也不要输出 category=\"other\"）。\n"
         "要求：宁可少选，不要硬凑；event 必须真是有热度的大事件且能自然切到财税。\n"
-        "严格输出 JSON 数组（不要解释、不要 markdown 代码块）：\n"
+        "严格输出 JSON 数组（不要解释、不要 markdown 代码块），**只包含入选的 finance/event 条目**：\n"
         '[{"title":"原题","source":"微博热搜","category":"finance|event|other","reason":"分类理由(≤20字)","angle":"财税切入角度(仅event需要, ≤30字; finance可空)"}]\n\n'
         f"【今日热榜汇总】\n{listing}\n"
     )
@@ -242,15 +243,22 @@ def run_daily(finance_top=4, event_top=4, per_source=30, out=None):
         for it in fetch_finance_supplement(finance_top - len(finance)):
             finance.append({"title": it["title"], "source": it["source"], "category": "finance",
                             "reason": "财税最新动态检索", "angle": "", "url": it.get("url", "")})
-    print(f"[3/3] 爆款方案创作({len(finance)} 财税 + {len(event)} 重大热点) ...", flush=True)
+    print(f"[3/3] 爆款方案创作({len(finance)} 财税 + {len(event)} 重大热点，并行) ...", flush=True)
     plans = []
-    for k in finance + event:
-        try:
-            plan = viral_plan(k, k["category"])
-            plans.append({**k, "plan": plan})
-            print(f"  [方案] [{k['category']}] {k['title'][:24]} -> {plan.get('title', '')[:24]}", flush=True)
-        except Exception as e:
-            print(f"  [方案] 失败({k['title'][:20]}): {str(e)[:80]}", flush=True)
+    # 2026-10-10：原为逐条串行调 LLM（8 条 × 10-20s ≈ 2 分钟），改为线程池并行后约 20-30s
+    def _plan_one(k):
+        return k, viral_plan(k, k["category"])
+
+    with ThreadPoolExecutor(max_workers=min(4, max(1, len(finance) + len(event)))) as pool:
+        futs = {pool.submit(_plan_one, k): k for k in finance + event}
+        for fut in as_completed(futs):
+            k = futs[fut]
+            try:
+                _, plan = fut.result()
+                plans.append({**k, "plan": plan})
+                print(f"  [方案] [{k['category']}] {k['title'][:24]} -> {plan.get('title', '')[:24]}", flush=True)
+            except Exception as e:
+                print(f"  [方案] 失败({k['title'][:20]}): {str(e)[:80]}", flush=True)
     result = {
         "date": time.strftime("%Y-%m-%d"),
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
